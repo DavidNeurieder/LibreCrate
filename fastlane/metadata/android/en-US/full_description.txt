@@ -1,0 +1,13 @@
+DocWallet is a secure document vault that stores, views, organizes, and searches PDFs, EPUBs, Apple Wallet passes (PKPass), comic archives (CBZ/CBR), images, and personal Markdown notes — all encrypted at rest.
+
+All documents are encrypted with AES-256-GCM. An optional password wraps the master key via Argon2id + AES-256-KW, so content stays protected even when the phone is unlocked. There is no internet permission — documents never leave the device.
+
+Features:
+• Six supported types: PDF, EPUB, PKPass, CBZ/CBR, images, and notes
+• Per-file AES-256-GCM encryption
+• Optional password protection (Argon2id key derivation)
+• Grid and list library views with search
+• Collections and tags for organization
+• Share intent and SAF file picker import
+• Encrypted backup export/import via SAF
+• Zero network access — no Google Play Services, Firebase, or ads
