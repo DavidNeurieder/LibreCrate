@@ -68,6 +68,8 @@ android {
 dependencies {
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
+    testImplementation(composeBom)
+    androidTestImplementation(composeBom)
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
@@ -102,8 +104,7 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.arch.core.testing)
     testImplementation(libs.robolectric)
-    testImplementation("androidx.compose.ui:ui-test-android:1.6.0")
-    testImplementation("androidx.compose.ui:ui-test-junit4-android:1.6.0")
+    testImplementation(libs.compose.ui.test)
 
     androidTestImplementation(libs.compose.ui.test)
     androidTestImplementation(libs.compose.ui.test.manifest)
