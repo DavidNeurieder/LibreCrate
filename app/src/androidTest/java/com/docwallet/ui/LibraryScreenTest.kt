@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import com.docwallet.DocWalletApplication
 import com.docwallet.ui.library.LibraryScreen
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -26,6 +27,7 @@ class LibraryScreenTest {
     @After
     fun tearDown() {
         val app = ApplicationProvider.getApplicationContext<DocWalletApplication>()
+        runBlocking { app.documentDao.deleteAll() }
         app.encryptionManager.lock()
         app.filesDir.resolve("encryption").deleteRecursively()
     }

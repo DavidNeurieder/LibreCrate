@@ -25,6 +25,9 @@ interface DocumentDao {
     @Query("DELETE FROM documents WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    @Query("DELETE FROM documents")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM documents WHERE mime_type LIKE :mimeType ORDER BY imported_at DESC")
     fun getDocumentsByType(mimeType: String): Flow<List<Document>>
 
