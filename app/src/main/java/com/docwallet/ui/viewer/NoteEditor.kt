@@ -54,7 +54,6 @@ import java.io.File
 
 @Composable
 fun NoteEditor(
-    file: File,
     document: Document,
     onSaved: () -> Unit,
 ) {

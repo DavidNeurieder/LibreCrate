@@ -27,17 +27,13 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.docwallet.data.model.Document
 import com.docwallet.ui.common.BarcodeImage
 import org.json.JSONObject
 import java.io.File
 import java.util.zip.ZipFile
 
 @Composable
-fun PkPassViewer(
-    file: File,
-    document: Document,
-) {
+fun PkPassViewer(file: File) {
     val passData = remember(file) { parsePkPass(file) }
 
     Column(

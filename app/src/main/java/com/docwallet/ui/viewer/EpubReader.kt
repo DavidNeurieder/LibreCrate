@@ -27,17 +27,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.docwallet.data.model.Document
 import java.io.File
 import java.util.zip.ZipFile
 import javax.xml.parsers.DocumentBuilderFactory
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun EpubReader(
-    file: File,
-    document: Document,
-) {
+fun EpubReader(file: File) {
     val spineItems = remember(file) { parseSpineItems(file) }
     var currentIndex by remember { mutableIntStateOf(0) }
     val htmlContent by remember(currentIndex, file, spineItems) {

@@ -154,11 +154,10 @@ fun ViewerScreen(
                     val file = decryptedFile!!
                     when (viewModel.getDocumentType()) {
                         DocumentType.PDF -> PdfViewer(file = file, document = doc)
-                        DocumentType.EPUB -> EpubReader(file = file, document = doc)
-                        DocumentType.PKPASS -> PkPassViewer(file = file, document = doc)
-                        DocumentType.CBZ, DocumentType.CBR -> ComicViewer(file = file, document = doc)
+                        DocumentType.EPUB -> EpubReader(file = file)
+                        DocumentType.PKPASS -> PkPassViewer(file = file)
+                        DocumentType.CBZ, DocumentType.CBR -> ComicViewer(file = file)
                         DocumentType.NOTE -> NoteEditor(
-                            file = file,
                             document = doc,
                             onSaved = { viewModel.loadDocument(documentId) },
                         )

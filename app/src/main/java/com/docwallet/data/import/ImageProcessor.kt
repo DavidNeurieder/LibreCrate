@@ -14,13 +14,11 @@ class ImageProcessor : DocumentProcessor {
 
         val pageCount = 1
 
-        val (exifTitle, exifDescription) = try {
+        val exifTitle = try {
             val exif = ExifInterface(input.absolutePath)
-            val desc = exif.getAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION) ?: ""
-            val dt = exif.getAttribute(ExifInterface.TAG_DATETIME) ?: ""
-            Pair(desc, dt)
+            exif.getAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION) ?: ""
         } catch (_: Exception) {
-            Pair("", "")
+            ""
         }
 
         val title = exifTitle.takeIf { it.isNotBlank() } ?: input.nameWithoutExtension

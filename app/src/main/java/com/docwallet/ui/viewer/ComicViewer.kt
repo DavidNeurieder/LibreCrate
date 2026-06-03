@@ -35,17 +35,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import com.docwallet.data.model.Document
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipFile
 
 @Composable
-fun ComicViewer(
-    file: File,
-    document: Document,
-) {
+fun ComicViewer(file: File) {
     val pageImages = remember(file) { loadComicPages(file) }
     var showFullPage by remember { mutableStateOf(false) }
     var currentPageIndex by remember { mutableIntStateOf(0) }
