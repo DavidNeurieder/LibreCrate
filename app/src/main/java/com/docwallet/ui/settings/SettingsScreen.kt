@@ -1,7 +1,11 @@
 package com.docwallet.ui.settings
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +41,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -59,6 +64,7 @@ fun SettingsScreen(
     val confirmPassword by viewModel.confirmPassword.collectAsState()
     val message by viewModel.message.collectAsState()
 
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -298,31 +304,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            SectionHeader("About")
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                ),
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    AboutRow("App version", "1.0.0")
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    AboutRow("License", "GPL-3.0")
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    TextButton(
-                        onClick = { /* TODO: open source code URL */ },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Source code on GitHub")
-                    }
-                }
-            }
+            AboutSection(context)
         }
     }
 }
@@ -339,15 +321,43 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun AboutRow(label: String, value: String) {
+private fun AboutSection(context: Context) {
+    val versionName = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        } catch (_: Exception) {
+            "?"
+        }
+    }
+
     Text(
-        text = label,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        text = "About",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
     )
-    Text(
-        text = value,
-        style = MaterialTheme.typography.bodyLarge,
-        fontWeight = FontWeight.Medium,
-    )
+    Spacer(Modifier.height(8.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Version $versionName",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "GPL-3.0-only",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "github.com/DavidNeurieder/DocWallet",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/DavidNeurieder/DocWallet"))
+                    context.startActivity(intent)
+                },
+            )
+        }
+    }
 }
