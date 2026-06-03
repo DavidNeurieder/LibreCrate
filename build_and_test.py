@@ -45,7 +45,7 @@ def build():
 
 def unit_tests():
     step("Running unit tests...")
-    code = run(["./gradlew", "test"], timeout=300)
+    code = run(["./gradlew", "testDebugUnitTest"], timeout=300)
     if code != 0:
         print("  UNIT TESTS FAILED")
         return 1

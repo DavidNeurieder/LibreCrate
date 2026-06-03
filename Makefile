@@ -7,7 +7,7 @@ build-release:
 	./gradlew assembleRelease
 
 test:
-	./gradlew test
+	./gradlew testDebugUnitTest
 
 lint:
 	./gradlew lint
