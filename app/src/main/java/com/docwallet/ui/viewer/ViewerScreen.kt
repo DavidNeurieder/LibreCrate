@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.docwallet.data.model.DocumentType
@@ -154,7 +155,13 @@ fun ViewerScreen(
                     val file = decryptedFile!!
                     when (viewModel.getDocumentType()) {
                         DocumentType.PDF -> PdfViewer(file = file, document = doc)
-                        DocumentType.EPUB -> EpubReader(file = file)
+                        DocumentType.EPUB -> {
+                            val context = LocalContext.current
+                            LaunchedEffect(file) {
+                                EpubReaderActivity.start(context, file.absolutePath)
+                                onBack()
+                            }
+                        }
                         DocumentType.PKPASS -> PkPassViewer(file = file)
                         DocumentType.CBZ, DocumentType.CBR -> ComicViewer(file = file)
                         DocumentType.NOTE -> NoteEditor(

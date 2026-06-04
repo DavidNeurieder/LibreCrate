@@ -45,6 +45,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -102,6 +103,11 @@ dependencies {
     implementation(libs.preference.ktx)
     implementation(libs.coil.core)
     implementation(libs.coil.compose)
+    val readiumVersion = "3.0.0"
+    implementation("org.readium.kotlin-toolkit:readium-shared:$readiumVersion")
+    implementation("org.readium.kotlin-toolkit:readium-streamer:$readiumVersion")
+    implementation("org.readium.kotlin-toolkit:readium-navigator:$readiumVersion")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)
