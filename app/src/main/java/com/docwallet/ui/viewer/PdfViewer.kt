@@ -1,6 +1,7 @@
 package com.docwallet.ui.viewer
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
@@ -41,7 +42,8 @@ fun PdfViewer(
         if (document.pageCount > 0) document.pageCount
         else try {
             PDDocument.load(file).use { doc -> doc.numberOfPages }
-        } catch (_: Exception) {
+        }         catch (e: Exception) {
+            Log.w("PdfViewer", "Failed to load page count", e)
             0
         }
     }
@@ -59,10 +61,11 @@ fun PdfViewer(
                 try {
                     PDDocument.load(file).use { doc ->
                         val renderer = PDFRenderer(doc)
-                        val bitmap = renderer.renderImage(i, 150f)
+                        val bitmap = renderer.renderImageWithDPI(i, 150f)
                         renderedPages[i] = bitmap
                     }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    Log.e("PdfViewer", "Failed to render page $i", e)
                 }
             }
         }

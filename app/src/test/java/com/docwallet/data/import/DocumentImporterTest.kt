@@ -16,6 +16,7 @@ import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
+import com.tom_roush.pdfbox.text.PDFTextStripper
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
@@ -246,6 +247,44 @@ class DocumentImporterTest {
         val extractedTitle = decryptedPdf.documentInformation.title
         assertEquals("Round Trip", extractedTitle)
         decryptedPdf.close()
+    }
+
+    @Test
+    fun `decrypted PDF retains full body text after import and decrypt`() = runTest {
+        val bodyText = "This is the body text that should survive encryption and decryption."
+        val pdfFile = createPdf(
+            title = "Body Text Test",
+            author = "Test",
+            body = bodyText,
+        )
+        val uri = android.net.Uri.fromFile(pdfFile)
+
+        val document = importer.importDocument(uri, "application/pdf")
+        assertNotNull(document)
+        val doc = document!!
+
+        val masterKey = encryptionManager.getMasterKeyForSession()
+        assertNotNull(masterKey)
+
+        val decryptedFile = File(context.cacheDir, "bodytext_test.pdf")
+        fileEncryptor.decrypt(
+            input = File(doc.filePath),
+            output = decryptedFile,
+            key = masterKey!!,
+            iv = doc.encryptionIv!!,
+        )
+
+        assertTrue("Decrypted file should exist", decryptedFile.exists())
+        assertTrue("Decrypted file should have content", decryptedFile.length() > 0)
+
+        PDDocument.load(decryptedFile).use { pdf ->
+            val stripper = PDFTextStripper()
+            val extractedText = stripper.getText(pdf)
+            assertTrue(
+                "Decrypted PDF body text should contain the original body text",
+                extractedText.contains(bodyText),
+            )
+        }
     }
 
     @Test

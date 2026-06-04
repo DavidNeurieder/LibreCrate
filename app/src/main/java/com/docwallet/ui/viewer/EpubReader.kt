@@ -1,6 +1,7 @@
 package com.docwallet.ui.viewer
 
 import android.annotation.SuppressLint
+import android.util.Log
 import android.webkit.WebView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -44,7 +45,7 @@ fun EpubReader(file: File) {
         AndroidView(
             factory = { context ->
                 WebView(context).apply {
-                    settings.javaScriptEnabled = false
+                    settings.javaScriptEnabled = true
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
                 }
@@ -117,12 +118,12 @@ fun EpubReader(file: File) {
     }
 }
 
-private data class SpineItem(
+internal data class SpineItem(
     val id: String?,
     val href: String,
 )
 
-private fun parseSpineItems(epubFile: File): List<SpineItem> {
+internal fun parseSpineItems(epubFile: File): List<SpineItem> {
     try {
         ZipFile(epubFile).use { zip ->
             val opfEntry = findOpfEntry(zip) ?: return emptyList()
@@ -154,9 +155,10 @@ private fun parseSpineItems(epubFile: File): List<SpineItem> {
 
             return spineItems
         }
-    } catch (_: Exception) {
-        return emptyList()
-    }
+        } catch (e: Exception) {
+            Log.e("EpubReader", "parseSpineItems error", e)
+            return emptyList()
+        }
 }
 
 private fun findOpfEntry(zip: ZipFile): java.util.zip.ZipEntry? {
@@ -186,7 +188,7 @@ private fun findOpfEntry(zip: ZipFile): java.util.zip.ZipEntry? {
     return null
 }
 
-private fun loadSpineContent(epubFile: File, spineItems: List<SpineItem>, index: Int): String? {
+internal fun loadSpineContent(epubFile: File, spineItems: List<SpineItem>, index: Int): String? {
     if (index < 0 || index >= spineItems.size) return null
     try {
         ZipFile(epubFile).use { zip ->
@@ -195,12 +197,13 @@ private fun loadSpineContent(epubFile: File, spineItems: List<SpineItem>, index:
             val body = extractBody(html)
             return body ?: html
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        Log.e("EpubReader", "loadSpineContent error for index=$index href=${spineItems.getOrNull(index)?.href}", e)
         return null
     }
 }
 
-private fun extractBody(html: String): String? {
+internal fun extractBody(html: String): String? {
     val bodyStart = html.indexOf("<body", ignoreCase = true)
     if (bodyStart == -1) return null
     val tagEnd = html.indexOf('>', bodyStart)
