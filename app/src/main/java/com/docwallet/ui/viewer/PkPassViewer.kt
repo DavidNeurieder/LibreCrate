@@ -100,6 +100,17 @@ fun PkPassViewer(file: File) {
 
                 Spacer(Modifier.height(16.dp))
 
+                passData.thumbnailBitmap?.let { thumb ->
+                    Image(
+                        bitmap = thumb.asImageBitmap(),
+                        contentDescription = "Thumbnail",
+                        modifier = Modifier
+                            .height(48.dp)
+                            .padding(bottom = 8.dp),
+                        contentScale = ContentScale.Fit,
+                    )
+                }
+
                 passData.stripBitmap?.let { strip ->
                     Image(
                         bitmap = strip.asImageBitmap(),
@@ -113,6 +124,8 @@ fun PkPassViewer(file: File) {
                     Spacer(Modifier.height(12.dp))
                 }
 
+                renderFields(passData.headerFields, fgColor, labelColor)
+                Spacer(Modifier.height(8.dp))
                 renderFields(passData.primaryFields, fgColor, labelColor)
                 Spacer(Modifier.height(8.dp))
                 renderFields(passData.secondaryFields, fgColor, labelColor)
@@ -123,12 +136,42 @@ fun PkPassViewer(file: File) {
 
         Spacer(Modifier.height(24.dp))
 
-        if (passData.barcodeFormat != null && passData.barcodeValue != null) {
-            BarcodeImage(
-                format = passData.barcodeFormat,
-                value = passData.barcodeValue,
-                modifier = Modifier.fillMaxWidth(),
+        passData.relevantDate?.let { date ->
+            Text(
+                text = "Relevant date: $date",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(4.dp))
+        }
+
+        passData.expirationDate?.let { date ->
+            Text(
+                text = "Expires: $date",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+
+        if (passData.barcodes.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            passData.barcodes.forEachIndexed { index, barcode ->
+                if (index > 0) Spacer(Modifier.height(16.dp))
+                BarcodeImage(
+                    format = barcode.format,
+                    value = barcode.message,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                barcode.altText?.let { alt ->
+                    Text(
+                        text = alt,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    )
+                }
+            }
         }
 
         if (passData.backFields.isNotEmpty()) {
@@ -187,6 +230,12 @@ private fun renderFields(
     }
 }
 
+private data class PassBarcode(
+    val format: String,
+    val message: String,
+    val altText: String?,
+)
+
 private data class PassData(
     val description: String?,
     val organizationName: String?,
@@ -194,13 +243,16 @@ private data class PassData(
     val foregroundColor: String?,
     val backgroundColor: String?,
     val labelColor: String?,
+    val headerFields: List<PassField>,
     val primaryFields: List<PassField>,
     val secondaryFields: List<PassField>,
     val auxiliaryFields: List<PassField>,
     val backFields: List<PassField>,
-    val barcodeFormat: String?,
-    val barcodeValue: String?,
+    val barcodes: List<PassBarcode>,
+    val relevantDate: String?,
+    val expirationDate: String?,
     val logoBitmap: Bitmap?,
+    val thumbnailBitmap: Bitmap?,
     val stripBitmap: Bitmap?,
 )
 
@@ -220,11 +272,43 @@ private fun parsePkPass(file: File): PassData? {
             val logoBitmap = loadImage(zip, "logo.png")
                 ?: loadImage(zip, "icon.png")
             val stripBitmap = loadImage(zip, "strip.png")
-            loadImage(zip, "thumbnail.png")
-            loadImage(zip, "background.png")
+            val thumbnailBitmap = loadImage(zip, "thumbnail.png")
 
             val barcode = json.optJSONObject("barcode")
                 ?: json.optJSONObject("barCode")
+            val barcodesArray = json.optJSONArray("barcodes")
+            val barcodes = mutableListOf<PassBarcode>()
+
+            if (barcode != null) {
+                val fmt = barcode.optString("format").takeIf { it.isNotEmpty() }
+                val msg = barcode.optString("message").takeIf { it.isNotEmpty() }
+                if (fmt != null && msg != null) {
+                    barcodes.add(
+                        PassBarcode(
+                            format = fmt,
+                            message = msg,
+                            altText = barcode.optString("altText").takeIf { it.isNotEmpty() },
+                        )
+                    )
+                }
+            }
+
+            if (barcodesArray != null) {
+                for (i in 0 until barcodesArray.length()) {
+                    val obj = barcodesArray.getJSONObject(i)
+                    val fmt = obj.optString("format").takeIf { it.isNotEmpty() }
+                    val msg = obj.optString("message").takeIf { it.isNotEmpty() }
+                    if (fmt != null && msg != null) {
+                        barcodes.add(
+                            PassBarcode(
+                                format = fmt,
+                                message = msg,
+                                altText = obj.optString("altText").takeIf { it.isNotEmpty() },
+                            )
+                        )
+                    }
+                }
+            }
 
             return PassData(
                 description = json.optString("description").takeIf { it.isNotEmpty() },
@@ -233,13 +317,16 @@ private fun parsePkPass(file: File): PassData? {
                 foregroundColor = json.optString("foregroundColor").takeIf { it.isNotEmpty() },
                 backgroundColor = json.optString("backgroundColor").takeIf { it.isNotEmpty() },
                 labelColor = json.optString("labelColor").takeIf { it.isNotEmpty() },
+                headerFields = parseFields(json.optJSONArray("headerFields")),
                 primaryFields = parseFields(json.optJSONArray("primaryFields")),
                 secondaryFields = parseFields(json.optJSONArray("secondaryFields")),
                 auxiliaryFields = parseFields(json.optJSONArray("auxiliaryFields")),
                 backFields = parseFields(json.optJSONArray("backFields")),
-                barcodeFormat = barcode?.optString("format")?.takeIf { it.isNotEmpty() },
-                barcodeValue = barcode?.optString("message")?.takeIf { it.isNotEmpty() },
+                barcodes = barcodes,
+                relevantDate = json.optString("relevantDate").takeIf { it.isNotEmpty() },
+                expirationDate = json.optString("expirationDate").takeIf { it.isNotEmpty() },
                 logoBitmap = logoBitmap,
+                thumbnailBitmap = thumbnailBitmap,
                 stripBitmap = stripBitmap,
             )
         }
@@ -271,17 +358,33 @@ private fun loadImage(zip: ZipFile, name: String): Bitmap? {
     }
 }
 
-private fun parseColorString(hex: String): Color {
+private fun parseColorString(colorStr: String): Color? {
+    val trimmed = colorStr.trim()
     return try {
-        val colorString = hex.removePrefix("#")
-        val colorLong = colorString.toLong(16)
-        Color(
-            alpha = if (colorString.length == 8) ((colorLong shr 24) and 0xFF) / 255f else 1f,
-            red = ((colorLong shr 16) and 0xFF) / 255f,
-            green = ((colorLong shr 8) and 0xFF) / 255f,
-            blue = (colorLong and 0xFF) / 255f,
-        )
+        if (trimmed.startsWith("rgb")) {
+            val rgb = trimmed.removePrefix("rgba").removePrefix("rgb")
+                .trimStart('(').trimEnd(')').split(",").map { it.trim() }
+            val r = rgb[0].toFloatOrNull() ?: return null
+            val g = rgb[1].toFloatOrNull() ?: return null
+            val b = rgb[2].toFloatOrNull() ?: return null
+            val a = rgb.getOrNull(3)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 1f
+            Color(
+                red = r.coerceIn(0f, 255f) / 255f,
+                green = g.coerceIn(0f, 255f) / 255f,
+                blue = b.coerceIn(0f, 255f) / 255f,
+                alpha = a,
+            )
+        } else {
+            val hex = trimmed.removePrefix("#")
+            val colorLong = hex.toLong(16)
+            Color(
+                alpha = if (hex.length == 8) ((colorLong shr 24) and 0xFF) / 255f else 1f,
+                red = ((colorLong shr 16) and 0xFF) / 255f,
+                green = ((colorLong shr 8) and 0xFF) / 255f,
+                blue = (colorLong and 0xFF) / 255f,
+            )
+        }
     } catch (e: Exception) {
-        Color.Unspecified
+        null
     }
 }

@@ -17,6 +17,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -39,12 +41,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
@@ -138,24 +143,44 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        var newPasswordVisible by remember { mutableStateOf(false) }
+
                         OutlinedTextField(
                             value = newPassword,
                             onValueChange = { viewModel.newPassword.value = it },
                             label = { Text("New password") },
                             singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (newPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
+                                    Icon(
+                                        imageVector = if (newPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (newPasswordVisible) "Hide password" else "Show password",
+                                    )
+                                }
+                            },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             modifier = Modifier.fillMaxWidth(),
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        var confirmPasswordVisible by remember { mutableStateOf(false) }
+
                         OutlinedTextField(
                             value = confirmPassword,
                             onValueChange = { viewModel.confirmPassword.value = it },
                             label = { Text("Confirm password") },
                             singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                    Icon(
+                                        imageVector = if (confirmPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (confirmPasswordVisible) "Hide password" else "Show password",
+                                    )
+                                }
+                            },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -177,36 +202,66 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        var currentPasswordVisible by remember { mutableStateOf(false) }
+
                         OutlinedTextField(
                             value = currentPassword,
                             onValueChange = { viewModel.currentPassword.value = it },
                             label = { Text("Current password") },
                             singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (currentPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
+                                    Icon(
+                                        imageVector = if (currentPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (currentPasswordVisible) "Hide password" else "Show password",
+                                    )
+                                }
+                            },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             modifier = Modifier.fillMaxWidth(),
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
+
+                        var changeNewPasswordVisible by remember { mutableStateOf(false) }
 
                         OutlinedTextField(
                             value = newPassword,
                             onValueChange = { viewModel.newPassword.value = it },
                             label = { Text("New password") },
                             singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (changeNewPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { changeNewPasswordVisible = !changeNewPasswordVisible }) {
+                                    Icon(
+                                        imageVector = if (changeNewPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (changeNewPasswordVisible) "Hide password" else "Show password",
+                                    )
+                                }
+                            },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             modifier = Modifier.fillMaxWidth(),
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        var changeConfirmPasswordVisible by remember { mutableStateOf(false) }
+
                         OutlinedTextField(
                             value = confirmPassword,
                             onValueChange = { viewModel.confirmPassword.value = it },
                             label = { Text("Confirm new password") },
                             singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (changeConfirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { changeConfirmPasswordVisible = !changeConfirmPasswordVisible }) {
+                                    Icon(
+                                        imageVector = if (changeConfirmPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (changeConfirmPasswordVisible) "Hide password" else "Show password",
+                                    )
+                                }
+                            },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             modifier = Modifier.fillMaxWidth(),
                         )

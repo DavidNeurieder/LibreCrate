@@ -75,6 +75,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun disablePassword() {
+        val pwd = currentPassword.value
+        if (pwd.isBlank()) {
+            _message.value = "Enter your current password to disable"
+            return
+        }
+        if (!encryptionManager.verifyPassword(pwd)) {
+            _message.value = "Wrong password"
+            return
+        }
         if (encryptionManager.disablePassword()) {
             _message.value = "Password disabled. Using device-level encryption."
             clearFields()

@@ -27,14 +27,14 @@ fun BarcodeImage(
     modifier: Modifier = Modifier,
 ) {
     val barcodeFormat = remember(format) {
-        when (format.uppercase()) {
-            "QR_CODE" -> BarcodeFormat.QR_CODE
+        when (format.uppercase().removePrefix("PK").removePrefix("BARCODEFORMAT")) {
+            "QR" -> BarcodeFormat.QR_CODE
             "AZTEC" -> BarcodeFormat.AZTEC
-            "PDF_417" -> BarcodeFormat.PDF_417
-            "CODE_128" -> BarcodeFormat.CODE_128
-            "CODE_39" -> BarcodeFormat.CODE_39
-            "EAN_13" -> BarcodeFormat.EAN_13
-            "EAN_8" -> BarcodeFormat.EAN_8
+            "PDF417" -> BarcodeFormat.PDF_417
+            "CODE128" -> BarcodeFormat.CODE_128
+            "CODE39" -> BarcodeFormat.CODE_39
+            "EAN13" -> BarcodeFormat.EAN_13
+            "EAN8" -> BarcodeFormat.EAN_8
             "UPC_A" -> BarcodeFormat.UPC_A
             "UPC_E" -> BarcodeFormat.UPC_E
             "DATA_MATRIX" -> BarcodeFormat.DATA_MATRIX
