@@ -9,6 +9,11 @@ android {
     namespace = "com.docwallet"
     compileSdk = 36
 
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     defaultConfig {
         applicationId = "com.docwallet"
         minSdk = 26
@@ -31,7 +36,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -61,6 +66,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/LICENSE*"
             excludes += "/META-INF/NOTICE*"
+            excludes += "/assets/dexopt/*"
         }
     }
 }
