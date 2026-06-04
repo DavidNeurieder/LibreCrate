@@ -40,4 +40,8 @@ data class Document(
     val barcodeFormat: String? = null,
     @ColumnInfo(name = "barcode_value")
     val barcodeValue: String? = null,
+    @ColumnInfo(name = "current_page")
+    val currentPage: Int = 0,
+    @ColumnInfo(name = "reading_position")
+    val readingPosition: String? = null,
 )

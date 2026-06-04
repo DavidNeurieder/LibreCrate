@@ -22,6 +22,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,10 +44,20 @@ import java.io.InputStream
 import java.util.zip.ZipFile
 
 @Composable
-fun ComicViewer(file: File) {
+fun ComicViewer(
+    file: File,
+    initialPage: Int = 0,
+    onPageChanged: (Int) -> Unit = {},
+) {
     val pageImages = remember(file) { loadComicPages(file) }
     var showFullPage by remember { mutableStateOf(false) }
-    var currentPageIndex by remember { mutableIntStateOf(0) }
+    var currentPageIndex by remember { mutableIntStateOf(initialPage.coerceIn(0, (pageImages.size - 1).coerceAtLeast(0))) }
+
+    LaunchedEffect(currentPageIndex) {
+        if (currentPageIndex in pageImages.indices) {
+            onPageChanged(currentPageIndex)
+        }
+    }
 
     if (showFullPage && currentPageIndex in pageImages.indices) {
         FullPageViewer(

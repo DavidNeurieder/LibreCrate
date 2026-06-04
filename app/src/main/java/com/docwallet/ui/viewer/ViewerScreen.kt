@@ -203,16 +203,25 @@ fun ViewerScreen(
                     val doc = document!!
                     val file = decryptedFile!!
                     when (viewModel.getDocumentType()) {
-                        DocumentType.PDF -> PdfViewer(file = file, document = doc)
+                        DocumentType.PDF -> PdfViewer(
+                            file = file,
+                            document = doc,
+                            initialPage = doc.currentPage,
+                            onPageChanged = viewModel::saveReadingPosition,
+                        )
                         DocumentType.EPUB -> {
                             val context = LocalContext.current
                             LaunchedEffect(file) {
-                                EpubReaderActivity.start(context, file.absolutePath)
+                                EpubReaderActivity.start(context, file.absolutePath, doc.id)
                                 onBack()
                             }
                         }
                         DocumentType.PKPASS -> PkPassViewer(file = file)
-                        DocumentType.CBZ, DocumentType.CBR -> ComicViewer(file = file)
+                        DocumentType.CBZ, DocumentType.CBR -> ComicViewer(
+                            file = file,
+                            initialPage = doc.currentPage,
+                            onPageChanged = viewModel::saveReadingPosition,
+                        )
                         DocumentType.NOTE -> NoteEditor(
                             document = doc,
                             onSaved = { viewModel.loadDocument(documentId) },

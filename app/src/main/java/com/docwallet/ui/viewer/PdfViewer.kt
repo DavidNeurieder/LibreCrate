@@ -40,6 +40,8 @@ import java.nio.ByteBuffer
 fun PdfViewer(
     file: File,
     document: DocWalletDocument,
+    initialPage: Int = 0,
+    onPageChanged: (Int) -> Unit = {},
 ) {
     val pageCount = remember(document.pageCount) {
         if (document.pageCount > 0) document.pageCount
@@ -57,11 +59,14 @@ fun PdfViewer(
     }
 
     val renderedPages = remember { mutableStateMapOf<Int, Bitmap>() }
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = initialPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0)),
+    )
     var currentPage by remember { mutableIntStateOf(1) }
 
     LaunchedEffect(listState.firstVisibleItemIndex) {
         currentPage = listState.firstVisibleItemIndex + 1
+        onPageChanged(currentPage)
         val start = maxOf(0, listState.firstVisibleItemIndex - 1)
         val end = minOf(pageCount - 1, listState.firstVisibleItemIndex + 3)
         for (i in start..end) {

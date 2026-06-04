@@ -37,6 +37,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val filterType = MutableStateFlow<DocumentType?>(null)
     val favoritesOnly = MutableStateFlow(false)
 
+    val continueReading: StateFlow<List<Document>> = documentDao.getRecentDocuments(
+        System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000 // last 7 days
+    ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val documents: StateFlow<List<Document>> = combine(
         documentDao.getAllDocuments(),
         searchQuery,

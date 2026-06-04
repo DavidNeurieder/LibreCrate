@@ -131,6 +131,31 @@ class ViewerViewModel @JvmOverloads constructor(
         }
     }
 
+    fun saveReadingPosition(page: Int) {
+        val doc = _document.value ?: return
+        viewModelScope.launch {
+            val updated = doc.copy(currentPage = page)
+            withContext(ioDispatcher) {
+                app.documentDao.update(updated)
+            }
+            _document.value = updated
+        }
+    }
+
+    fun saveReadingPositionJson(positionJson: String) {
+        val doc = _document.value ?: return
+        viewModelScope.launch {
+            val updated = doc.copy(
+                readingPosition = positionJson,
+                lastOpenedAt = System.currentTimeMillis(),
+            )
+            withContext(ioDispatcher) {
+                app.documentDao.update(updated)
+            }
+            _document.value = updated
+        }
+    }
+
     fun getDocumentType(): DocumentType {
         val mime = _document.value?.mimeType ?: return DocumentType.UNKNOWN
         return DocumentType.fromMimeType(mime)
