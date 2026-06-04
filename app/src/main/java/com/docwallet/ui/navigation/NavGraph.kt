@@ -2,9 +2,12 @@ package com.docwallet.ui.navigation
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.docwallet.data.SessionStore
 import com.docwallet.ui.collection.CollectionScreen
 import com.docwallet.ui.library.LibraryScreen
 import com.docwallet.ui.search.SearchScreen
@@ -59,6 +62,13 @@ fun DocWalletNavGraph(
             )
         }
         composable(Routes.LIBRARY) {
+            val context = LocalContext.current
+            LaunchedEffect(Unit) {
+                val lastDocId = SessionStore.getLastDocumentId(context)
+                if (lastDocId != null) {
+                    navController.navigate(Routes.viewer(lastDocId))
+                }
+            }
             LibraryScreen(
                 onDocumentClick = { navController.navigate(Routes.viewer(it)) },
                 onSettingsClick = { navController.navigate(Routes.SETTINGS) },

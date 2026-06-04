@@ -59,10 +59,15 @@ fun PdfViewer(
     }
 
     val renderedPages = remember { mutableStateMapOf<Int, Bitmap>() }
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = initialPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0)),
-    )
+    val listState = rememberLazyListState()
     var currentPage by remember { mutableIntStateOf(1) }
+
+    LaunchedEffect(pageCount) {
+        val targetIndex = (initialPage - 1).coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+        if (targetIndex > 0) {
+            listState.scrollToItem(targetIndex)
+        }
+    }
 
     LaunchedEffect(listState.firstVisibleItemIndex) {
         currentPage = listState.firstVisibleItemIndex + 1

@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.docwallet.DocWalletApplication
+import com.docwallet.data.SessionStore
 import com.docwallet.data.encryption.FileEncryptor
 import com.docwallet.data.model.Document
 import com.docwallet.data.model.DocumentType
@@ -98,6 +99,7 @@ class ViewerViewModel @JvmOverloads constructor(
                     val updated = doc.copy(lastOpenedAt = System.currentTimeMillis())
                     app.documentDao.update(updated)
                     _document.value = updated
+                    SessionStore.saveLastDocumentId(app, documentId)
                 }
             } catch (e: Exception) {
                 Log.e("ViewerViewModel", "Failed to load document", e)

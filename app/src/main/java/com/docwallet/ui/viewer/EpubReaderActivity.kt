@@ -12,6 +12,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.commit
 import com.docwallet.DocWalletApplication
+import com.docwallet.data.SessionStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -47,6 +48,7 @@ class EpubReaderActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         documentId = intent?.getStringExtra(EXTRA_DOCUMENT_ID)
+        documentId?.let { SessionStore.saveLastDocumentId(this, it) }
         val filePath = intent?.getStringExtra(EXTRA_FILE_PATH) ?: run {
             finish()
             return
