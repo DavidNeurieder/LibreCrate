@@ -41,74 +41,69 @@ class ViewerViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
-            try {
-                var doc = withContext(ioDispatcher) {
-                    app.documentDao.getDocumentById(documentId)
-                }
-                if (doc == null) {
-                    val uuidRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-                    if (uuidRegex.matches(documentId)) {
-                        doc = withContext(ioDispatcher) {
-                            val filesDir = File(app.filesDir, "files").also { it.mkdirs() }
-                            val encryptedFile = File(filesDir, "${java.util.UUID.randomUUID()}.enc")
-                            val tempFile = File(app.cacheDir, "new_note_$documentId.md")
-                            tempFile.writeText("")
-                            val masterKey = app.encryptionManager.getMasterKeyForSession()
-                                ?: throw IllegalStateException("No master key available")
-                            val iv = app.fileEncryptor.encrypt(tempFile, encryptedFile, masterKey)
-                            tempFile.delete()
-                            val document = Document(
-                                id = documentId,
-                                title = "New Note",
-                                fileName = "${documentId}.md",
-                                mimeType = "text/markdown",
-                                filePath = encryptedFile.absolutePath,
-                                importedAt = System.currentTimeMillis(),
-                                encryptionIv = iv,
-                                textContent = "",
-                            )
-                            app.documentDao.insert(document)
-                            document
-                        }
-                        val emptyFile = File(app.cacheDir, "viewer_${doc.id}_${doc.fileName}")
-                        emptyFile.writeText("")
-                        _decryptedFile.value = emptyFile
-                        _document.value = doc
-                        _isLoading.value = false
-                        return@launch
+            var doc = withContext(ioDispatcher) {
+                app.documentDao.getDocumentById(documentId)
+            }
+            if (doc == null) {
+                val uuidRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+                if (uuidRegex.matches(documentId)) {
+                    doc = withContext(ioDispatcher) {
+                        val filesDir = File(app.filesDir, "files").also { it.mkdirs() }
+                        val encryptedFile = File(filesDir, "${java.util.UUID.randomUUID()}.enc")
+                        val tempFile = File(app.cacheDir, "new_note_$documentId.md")
+                        tempFile.writeText("")
+                        val masterKey = app.encryptionManager.getMasterKeyForSession()
+                            ?: throw IllegalStateException("No master key available")
+                        val iv = app.fileEncryptor.encrypt(tempFile, encryptedFile, masterKey)
+                        tempFile.delete()
+                        val document = Document(
+                            id = documentId,
+                            title = "New Note",
+                            fileName = "${documentId}.md",
+                            mimeType = "text/markdown",
+                            filePath = encryptedFile.absolutePath,
+                            importedAt = System.currentTimeMillis(),
+                            encryptionIv = iv,
+                            textContent = "",
+                        )
+                        app.documentDao.insert(document)
+                        document
                     }
-                    SessionStore.clearLastDocumentId(app)
-                    _error.value = "Document not found"
+                    val emptyFile = File(app.cacheDir, "viewer_${doc.id}_${doc.fileName}")
+                    emptyFile.writeText("")
+                    _decryptedFile.value = emptyFile
+                    _document.value = doc
+                    SessionStore.saveLastDocumentId(app, documentId)
                     _isLoading.value = false
                     return@launch
                 }
-                _document.value = doc
-
-                val decrypted = withContext(ioDispatcher) {
-                    val masterKey = app.encryptionManager.getMasterKeyForSession()
-                        ?: throw IllegalStateException("No master key available for decryption")
-                    val encryptedFile = File(doc.filePath)
-                    val tempFile = File(app.cacheDir, "viewer_${doc.id}_${doc.fileName}")
-                    val iv = doc.encryptionIv
-                        ?: throw IllegalArgumentException("Document has no encryption IV")
-                    fileEncryptor.decrypt(encryptedFile, tempFile, masterKey, iv)
-                    tempFile
-                }
-                _decryptedFile.value = decrypted
-
-                withContext(ioDispatcher) {
-                    val updated = doc.copy(lastOpenedAt = System.currentTimeMillis())
-                    app.documentDao.update(updated)
-                    _document.value = updated
-                    SessionStore.saveLastDocumentId(app, documentId)
-                }
-            } catch (e: Exception) {
-                Log.e("ViewerViewModel", "Failed to load document", e)
-                _error.value = e.message ?: "Failed to load document"
+                Log.w("ViewerViewModel", "Document not found for id=$documentId, matchesUuid=${uuidRegex.matches(documentId)}")
                 SessionStore.clearLastDocumentId(app)
-            } finally {
+                _error.value = "Document not found"
                 _isLoading.value = false
+                return@launch
             }
+            _document.value = doc
+
+            val decrypted = withContext(ioDispatcher) {
+                val masterKey = app.encryptionManager.getMasterKeyForSession()
+                    ?: throw IllegalStateException("No master key available for decryption")
+                val encryptedFile = File(doc.filePath)
+                val tempFile = File(app.cacheDir, "viewer_${doc.id}_${doc.fileName}")
+                val iv = doc.encryptionIv
+                    ?: throw IllegalArgumentException("Document has no encryption IV")
+                fileEncryptor.decrypt(encryptedFile, tempFile, masterKey, iv)
+                tempFile
+            }
+            _decryptedFile.value = decrypted
+
+            withContext(ioDispatcher) {
+                val updated = doc.copy(lastOpenedAt = System.currentTimeMillis())
+                app.documentDao.update(updated)
+                _document.value = updated
+                SessionStore.saveLastDocumentId(app, documentId)
+            }
+            _isLoading.value = false
         }
     }
 

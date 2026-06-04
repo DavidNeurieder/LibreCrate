@@ -1,9 +1,9 @@
 package com.docwallet.ui.viewer
 
 import android.content.Intent
+import com.docwallet.data.SessionStore
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -48,6 +48,41 @@ class EpubReaderTest {
         val activity = Robolectric.buildActivity(EpubReaderActivity::class.java, intent)
         val controller = activity.create()
         assertNotNull(controller.get())
+    }
+
+    @Test
+    fun `onCreate saves document ID to SessionStore`() {
+        val context = RuntimeEnvironment.getApplication().applicationContext
+        val file = createTestEpub(context)
+        val documentId = "epub-doc-001"
+
+        val intent = Intent(context, EpubReaderActivity::class.java).apply {
+            putExtra("epub_file_path", file.absolutePath)
+            putExtra("document_id", documentId)
+        }
+        val activity = Robolectric.buildActivity(EpubReaderActivity::class.java, intent)
+        activity.create()
+
+        assertEquals(documentId, SessionStore.getLastDocumentId(context))
+    }
+
+    @Test
+    fun `SessionStore survives Activity destroy`() {
+        val context = RuntimeEnvironment.getApplication().applicationContext
+        val file = createTestEpub(context)
+        val documentId = "epub-persist-test"
+
+        // Simulate first open
+        val intent = Intent(context, EpubReaderActivity::class.java).apply {
+            putExtra("epub_file_path", file.absolutePath)
+            putExtra("document_id", documentId)
+        }
+        val activity = Robolectric.buildActivity(EpubReaderActivity::class.java, intent)
+        activity.create().destroy()
+
+        // Simulate app restart — SessionStore persists
+        val retrieved = SessionStore.getLastDocumentId(context)
+        assertEquals("EPUB document ID survives app restart", documentId, retrieved)
     }
 
     private fun createTestEpub(context: android.content.Context): File {

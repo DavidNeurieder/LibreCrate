@@ -102,9 +102,24 @@ fun DocWalletNavGraph(
             )
         }
         composable(Routes.VIEWER) { backStackEntry ->
+            val context = LocalContext.current
             ViewerScreen(
                 documentId = backStackEntry.arguments?.getString("documentId") ?: "",
-                onBack = { navController.popBackStack() },
+                onBack = {
+                    if (navController.previousBackStackEntry == null) {
+                        navController.navigate(Routes.LIBRARY) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    } else {
+                        navController.popBackStack()
+                    }
+                },
+                onDocumentNotFound = {
+                    SessionStore.clearLastDocumentId(context)
+                    navController.navigate(Routes.LIBRARY) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
             )
         }
     }

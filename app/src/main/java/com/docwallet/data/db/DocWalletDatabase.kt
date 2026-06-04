@@ -14,7 +14,7 @@ import com.docwallet.data.model.Collection
 import com.docwallet.data.model.DocumentTag
 import com.docwallet.data.model.Tag
 
-@Database(entities = [Document::class, Tag::class, Collection::class, DocumentTag::class], version = 2, exportSchema = false)
+@Database(entities = [Document::class, Tag::class, Collection::class, DocumentTag::class], version = 3, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class DocWalletDatabase : RoomDatabase() {
     abstract fun documentDao(): DocumentDao
@@ -63,6 +63,13 @@ abstract class DocWalletDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE documents ADD COLUMN current_page INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE documents ADD COLUMN reading_position TEXT")
+            }
+        }
+
         fun create(context: Context, passphrase: ByteArray): DocWalletDatabase {
             val factory = SupportFactory(passphrase.copyOf(), null, false)
             return Room.databaseBuilder(
@@ -71,7 +78,7 @@ abstract class DocWalletDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
         }
     }

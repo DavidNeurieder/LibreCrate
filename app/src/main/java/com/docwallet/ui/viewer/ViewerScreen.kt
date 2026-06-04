@@ -52,6 +52,7 @@ fun ViewerScreen(
     documentId: String,
     onBack: () -> Unit,
     viewModel: ViewerViewModel = viewModel(),
+    onDocumentNotFound: () -> Unit = {},
 ) {
     val document by viewModel.document.collectAsState()
     val decryptedFile by viewModel.decryptedFile.collectAsState()
@@ -97,6 +98,12 @@ fun ViewerScreen(
 
     LaunchedEffect(documentId) {
         viewModel.loadDocument(documentId)
+    }
+
+    LaunchedEffect(error) {
+        if (error == "Document not found") {
+            onDocumentNotFound()
+        }
     }
 
     Scaffold(
