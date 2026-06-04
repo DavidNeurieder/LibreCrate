@@ -1,16 +1,18 @@
 package com.docwallet.ui.viewer
 
-import android.app.Application
 import com.docwallet.DocWalletApplication
 import com.docwallet.data.db.DocumentDao
 import com.docwallet.data.encryption.EncryptionManager
 import com.docwallet.data.encryption.FileEncryptor
 import com.docwallet.data.model.Document
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -33,7 +35,9 @@ import java.io.File
 @Config(sdk = [34])
 class ViewerViewModelTest {
 
-    private val testDispatcher = UnconfinedTestDispatcher()
+    private val testScheduler = StandardTestDispatcher().scheduler
+    private val testDispatcher = UnconfinedTestDispatcher(testScheduler)
+    private val ioDispatcher = StandardTestDispatcher(testScheduler)
     private lateinit var context: android.content.Context
     private lateinit var mockApp: DocWalletApplication
     private lateinit var mockDao: DocumentDao
@@ -57,7 +61,7 @@ class ViewerViewModelTest {
 
         fileEncryptor = FileEncryptor()
 
-        viewModel = ViewerViewModel(mockApp)
+        viewModel = ViewerViewModel(mockApp, ioDispatcher)
     }
 
     @After
@@ -66,7 +70,7 @@ class ViewerViewModelTest {
     }
 
     @Test
-    fun `loadDocument decrypts PDF successfully`() = runTest {
+    fun `loadDocument decrypts PDF successfully`() = runTest(testDispatcher) {
         val masterKey = createTestMasterKey()
         val originalContent = "Test PDF content for decryption".toByteArray()
         val encrypted = createEncryptedFile(originalContent, masterKey)
@@ -82,10 +86,11 @@ class ViewerViewModelTest {
             textContent = "Test PDF content for decryption",
         )
 
-        every { mockDao.getDocumentById("test-pdf-id") } returns doc
+        coEvery { mockDao.getDocumentById("test-pdf-id") } returns doc
         every { mockEncryptionManager.getMasterKeyForSession() } returns masterKey
 
         viewModel.loadDocument("test-pdf-id")
+        advanceUntilIdle()
 
         assertNull("There should be no error", viewModel.error.value)
         assertNotNull("Decrypted file should be set", viewModel.decryptedFile.value)
@@ -94,14 +99,15 @@ class ViewerViewModelTest {
 
         val decryptedFile = viewModel.decryptedFile.value!!
         assertTrue("Decrypted file should exist", decryptedFile.exists())
-        assertEquals("Content should match", originalContent.size, decryptedFile.length())
+        assertEquals("Content should match", originalContent.size.toLong(), decryptedFile.length())
     }
 
     @Test
-    fun `loadDocument handles document not found`() = runTest {
-        every { mockDao.getDocumentById("nonexistent") } returns null
+    fun `loadDocument handles document not found`() = runTest(testDispatcher) {
+        coEvery { mockDao.getDocumentById("nonexistent") } returns null
 
         viewModel.loadDocument("nonexistent")
+        advanceUntilIdle()
 
         assertEquals("Document not found", viewModel.error.value)
         assertNull(viewModel.decryptedFile.value)
@@ -109,7 +115,7 @@ class ViewerViewModelTest {
     }
 
     @Test
-    fun `loadDocument shows error when master key is missing`() = runTest {
+    fun `loadDocument shows error when master key is missing`() = runTest(testDispatcher) {
         val doc = Document(
             id = "no-key-id",
             title = "No Key",
@@ -119,17 +125,18 @@ class ViewerViewModelTest {
             encryptionIv = ByteArray(12),
         )
 
-        every { mockDao.getDocumentById("no-key-id") } returns doc
+        coEvery { mockDao.getDocumentById("no-key-id") } returns doc
         every { mockEncryptionManager.getMasterKeyForSession() } returns null
 
         viewModel.loadDocument("no-key-id")
+        advanceUntilIdle()
 
         assertNotNull("Error should be set", viewModel.error.value)
         assertNull(viewModel.decryptedFile.value)
     }
 
     @Test
-    fun `loadDocument handles missing encryption IV`() = runTest {
+    fun `loadDocument handles missing encryption IV`() = runTest(testDispatcher) {
         val masterKey = createTestMasterKey()
         val content = "Some content".toByteArray()
         val encrypted = createEncryptedFile(content, masterKey)
@@ -143,24 +150,26 @@ class ViewerViewModelTest {
             encryptionIv = null,
         )
 
-        every { mockDao.getDocumentById("no-iv-id") } returns doc
+        coEvery { mockDao.getDocumentById("no-iv-id") } returns doc
         every { mockEncryptionManager.getMasterKeyForSession() } returns masterKey
 
         viewModel.loadDocument("no-iv-id")
+        advanceUntilIdle()
 
         assertNotNull("Error should be set for missing IV", viewModel.error.value)
         assertNull(viewModel.decryptedFile.value)
     }
 
     @Test
-    fun `loadDocument creates new note for UUID-pattern document ID`() = runTest {
+    fun `loadDocument creates new note for UUID-pattern document ID`() = runTest(testDispatcher) {
         val noteId = "123e4567-e89b-12d3-a456-426614174000"
         val masterKey = createTestMasterKey()
 
-        every { mockDao.getDocumentById(noteId) } returns null
+        coEvery { mockDao.getDocumentById(noteId) } returns null
         every { mockEncryptionManager.getMasterKeyForSession() } returns masterKey
 
         viewModel.loadDocument(noteId)
+        advanceUntilIdle()
 
         assertEquals("New Note", viewModel.document.value?.title)
         assertEquals("text/markdown", viewModel.document.value?.mimeType)
@@ -169,7 +178,7 @@ class ViewerViewModelTest {
     }
 
     @Test
-    fun `isLoading state transitions correctly during load`() = runTest {
+    fun `isLoading state transitions correctly during load`() = runTest(testDispatcher) {
         val masterKey = createTestMasterKey()
         val content = "Loading state test".toByteArray()
         val encrypted = createEncryptedFile(content, masterKey)
@@ -183,12 +192,16 @@ class ViewerViewModelTest {
             encryptionIv = encrypted.iv,
         )
 
-        every { mockDao.getDocumentById("loading-test-id") } returns doc
+        coEvery { mockDao.getDocumentById("loading-test-id") } returns doc
         every { mockEncryptionManager.getMasterKeyForSession() } returns masterKey
 
-        assertTrue("Should start loading", viewModel.isLoading.value)
+        assertFalse("Should not be loading yet", viewModel.isLoading.value)
 
         viewModel.loadDocument("loading-test-id")
+
+        assertTrue("Should be loading after loadDocument", viewModel.isLoading.value)
+
+        advanceUntilIdle()
 
         assertFalse("Should finish loading", viewModel.isLoading.value)
         assertNull(viewModel.error.value)
@@ -203,9 +216,8 @@ class ViewerViewModelTest {
     private fun createEncryptedFile(content: ByteArray, masterKey: ByteArray): EncryptedFileResult {
         val filesDir = File(context.filesDir, "files").also { it.mkdirs() }
         val encryptedFile = File(filesDir, "test_${System.nanoTime()}.enc")
-        val iv = fileEncryptor.encryptBytes(content, masterKey).first
-        val encryptedData = fileEncryptor.encryptBytes(content, masterKey).second
-        encryptedFile.writeBytes(encryptedData)
+        val (iv, encryptedData) = fileEncryptor.encryptBytes(content, masterKey)
+        encryptedFile.writeBytes(iv + encryptedData)
         return EncryptedFileResult(encryptedFile, iv)
     }
 }

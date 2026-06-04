@@ -8,6 +8,7 @@ import com.docwallet.DocWalletApplication
 import com.docwallet.data.encryption.FileEncryptor
 import com.docwallet.data.model.Document
 import com.docwallet.data.model.DocumentType
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +17,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class ViewerViewModel(application: Application) : AndroidViewModel(application) {
+class ViewerViewModel @JvmOverloads constructor(
+    application: Application,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+) : AndroidViewModel(application) {
     private val app = application as DocWalletApplication
     private val fileEncryptor = FileEncryptor()
 
@@ -37,13 +41,13 @@ class ViewerViewModel(application: Application) : AndroidViewModel(application) 
             _isLoading.value = true
             _error.value = null
             try {
-                var doc = withContext(Dispatchers.IO) {
+                var doc = withContext(ioDispatcher) {
                     app.documentDao.getDocumentById(documentId)
                 }
                 if (doc == null) {
                     val uuidRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
                     if (uuidRegex.matches(documentId)) {
-                        doc = withContext(Dispatchers.IO) {
+                        doc = withContext(ioDispatcher) {
                             val filesDir = File(app.filesDir, "files").also { it.mkdirs() }
                             val encryptedFile = File(filesDir, "${java.util.UUID.randomUUID()}.enc")
                             val tempFile = File(app.cacheDir, "new_note_$documentId.md")
@@ -78,7 +82,7 @@ class ViewerViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 _document.value = doc
 
-                val decrypted = withContext(Dispatchers.IO) {
+                val decrypted = withContext(ioDispatcher) {
                     val masterKey = app.encryptionManager.getMasterKeyForSession()
                         ?: throw IllegalStateException("No master key available for decryption")
                     val encryptedFile = File(doc.filePath)
@@ -102,7 +106,7 @@ class ViewerViewModel(application: Application) : AndroidViewModel(application) 
         val doc = _document.value ?: return
         viewModelScope.launch {
             val updated = doc.copy(isFavorite = !doc.isFavorite)
-            withContext(Dispatchers.IO) {
+            withContext(ioDispatcher) {
                 app.documentDao.update(updated)
             }
             _document.value = updated
@@ -112,7 +116,7 @@ class ViewerViewModel(application: Application) : AndroidViewModel(application) 
     fun deleteDocument() {
         val doc = _document.value ?: return
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
+            withContext(ioDispatcher) {
                 File(doc.filePath).delete()
                 doc.thumbnailPath?.let { File(it).delete() }
                 app.documentDao.deleteById(doc.id)
