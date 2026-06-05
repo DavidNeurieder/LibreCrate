@@ -1,0 +1,12 @@
+• Initial release
+• PDF, EPUB, PKPass, CBZ/CBR, images, and Markdown notes
+• AES-256-GCM encryption with optional password protection
+• Encrypted backup & restore
+• Library with grid/list views, search, favorites
+• Collections and tags for organization
+• MuPDF-based PDF viewer
+• Readium2-based EPUB reader
+• Comic viewer for CBZ/CBR (zip and rar)
+• Share intent and SAF file picker import
+• Reading position persistence
+• Zero network access
