@@ -2,11 +2,9 @@ package com.docwallet.ui.navigation
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.docwallet.data.SessionStore
 import com.docwallet.ui.collection.CollectionScreen
 import com.docwallet.ui.library.LibraryScreen
 import com.docwallet.ui.search.SearchScreen
@@ -42,13 +40,10 @@ fun DocWalletNavGraph(
         startDestination = startDestination,
     ) {
         composable(Routes.UNLOCK) {
-            val context = LocalContext.current
             UnlockScreen(
                 onUnlocked = {
                     onUnlocked()
-                    val lastDocId = SessionStore.getLastDocumentId(context)
-                    val dest = if (lastDocId != null) Routes.viewer(lastDocId) else Routes.LIBRARY
-                    navController.navigate(dest) {
+                    navController.navigate(Routes.LIBRARY) {
                         popUpTo(Routes.UNLOCK) { inclusive = true }
                     }
                 },
@@ -102,24 +97,10 @@ fun DocWalletNavGraph(
             )
         }
         composable(Routes.VIEWER) { backStackEntry ->
-            val context = LocalContext.current
             ViewerScreen(
                 documentId = backStackEntry.arguments?.getString("documentId") ?: "",
-                onBack = {
-                    if (navController.previousBackStackEntry == null) {
-                        navController.navigate(Routes.LIBRARY) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    } else {
-                        navController.popBackStack()
-                    }
-                },
-                onDocumentNotFound = {
-                    SessionStore.clearLastDocumentId(context)
-                    navController.navigate(Routes.LIBRARY) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
+                onBack = { navController.popBackStack() },
+                onDocumentNotFound = { navController.popBackStack() },
             )
         }
     }
