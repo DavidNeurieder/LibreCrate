@@ -71,7 +71,7 @@ fun DocumentCard(
             if (thumbnail != null) {
                 Image(
                     bitmap = thumbnail,
-                    contentDescription = document.title,
+                    contentDescription = "Document thumbnail",
                     modifier = Modifier
                         .size(64.dp)
                         .clip(RoundedCornerShape(8.dp)),
@@ -86,14 +86,13 @@ fun DocumentCard(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f).clearAndSetSemantics { }) {
                 Text(
                     text = document.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clearAndSetSemantics { },
                 )
 
                 Spacer(modifier = Modifier.height(2.dp))
