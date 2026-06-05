@@ -42,13 +42,21 @@ class PdfProcessor : DocumentProcessor {
                     val pageWidth = bounds.x1 - bounds.x0
                     val scale = 200f / pageWidth
                     val matrix = Matrix(scale, 0f, 0f, scale, 0f, 0f)
-                    val pixmap = page.toPixmap(matrix, ColorSpace.DeviceRGB, false)
+                    val pixmap = page.toPixmap(matrix, ColorSpace.DeviceRGB, true)
                     try {
                         val bitmap = Bitmap.createBitmap(
                             pixmap.width, pixmap.height,
                             Bitmap.Config.ARGB_8888
                         )
                         bitmap.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(pixmap.samples))
+                        val pixels = IntArray(pixmap.width * pixmap.height)
+                        bitmap.getPixels(pixels, 0, pixmap.width, 0, 0, pixmap.width, pixmap.height)
+                        for (i in pixels.indices) {
+                            if (pixels[i] ushr 24 == 0) {
+                                pixels[i] = -0x1
+                            }
+                        }
+                        bitmap.setPixels(pixels, 0, pixmap.width, 0, 0, pixmap.width, pixmap.height)
                         bitmap
                     } finally {
                         pixmap.destroy()
