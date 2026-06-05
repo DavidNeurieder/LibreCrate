@@ -3,6 +3,7 @@ package com.docwallet.ui.viewer
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -99,7 +100,9 @@ fun ComicViewer(
                             Image(
                                 bitmap = bitmap.asImageBitmap(),
                                 contentDescription = "Page ${index + 1}",
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clearAndSetSemantics { },
                                 contentScale = ContentScale.Fit,
                             )
                             Text(
@@ -162,7 +165,8 @@ private fun FullPageViewer(
                     scaleY = scale,
                     translationX = offsetX,
                     translationY = offsetY,
-                ),
+                )
+                .clearAndSetSemantics { },
             contentScale = ContentScale.Fit,
         )
 

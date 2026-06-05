@@ -1,5 +1,6 @@
 package com.docwallet.ui.viewer
 
+import android.view.View
 import android.webkit.WebView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -169,6 +170,7 @@ fun NoteEditor(
                         settings.javaScriptEnabled = false
                         settings.loadWithOverviewMode = true
                         settings.useWideViewPort = true
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     }
                 },
                 update = { webView ->

@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import com.artifex.mupdf.fitz.ColorSpace
 import com.artifex.mupdf.fitz.Document
@@ -140,7 +141,8 @@ fun PdfViewer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
-                            .background(androidx.compose.ui.graphics.Color.White),
+                            .background(androidx.compose.ui.graphics.Color.White)
+                            .clearAndSetSemantics { },
                         contentScale = ContentScale.FillWidth,
                     )
                 } else {
