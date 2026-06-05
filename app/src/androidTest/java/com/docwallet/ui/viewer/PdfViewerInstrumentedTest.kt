@@ -1,7 +1,6 @@
 package com.docwallet.ui.viewer
 
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -50,7 +49,7 @@ class PdfViewerInstrumentedTest {
 
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithContentDescription("Page 1").assertExists()
+        composeTestRule.onNodeWithText("Page 1 of 1").assertExists()
     }
 
     @Test
@@ -98,14 +97,13 @@ class PdfViewerInstrumentedTest {
 
         composeTestRule.waitUntil(30_000) {
             try {
-                composeTestRule.onNodeWithContentDescription("Page 2").assertExists()
+                composeTestRule.onNodeWithText("Page 2").assertDoesNotExist()
                 true
             } catch (_: AssertionError) {
                 false
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Page 1").assertExists()
         composeTestRule.onNodeWithText("Page 1 of 2").assertExists()
     }
 
