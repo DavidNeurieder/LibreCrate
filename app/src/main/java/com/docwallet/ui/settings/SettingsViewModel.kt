@@ -5,9 +5,6 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.docwallet.DocWalletApplication
-import com.docwallet.data.FontFamilyName
-import com.docwallet.data.ReaderPreferences
-import com.docwallet.data.ReaderPreferencesStore
 import com.docwallet.data.encryption.EncryptionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,27 +24,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val newPassword = MutableStateFlow("")
     val confirmPassword = MutableStateFlow("")
 
-    val fontSize = MutableStateFlow(1.3f)
-    val fontFamilyName = MutableStateFlow(FontFamilyName.SANS_SERIF.name)
-
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
-
-    init {
-        val prefs = ReaderPreferencesStore.load(getApplication())
-        fontSize.value = prefs.fontSize
-        fontFamilyName.value = prefs.fontFamilyName
-    }
-
-    fun saveReaderPreferences() {
-        ReaderPreferencesStore.save(
-            getApplication(),
-            ReaderPreferences(
-                fontSize = fontSize.value,
-                fontFamilyName = fontFamilyName.value,
-            )
-        )
-    }
 
     fun setPassword() {
         val pwd = newPassword.value

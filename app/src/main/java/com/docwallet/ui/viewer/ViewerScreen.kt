@@ -1,18 +1,23 @@
 package com.docwallet.ui.viewer
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -21,12 +26,17 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.unit.dp
+import com.docwallet.data.PageFitMode
+import com.docwallet.data.PdfPreferences
+import com.docwallet.data.PdfPreferencesStore
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -65,7 +75,10 @@ fun ViewerScreen(
 
     var showInfoDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showPdfSettingsDialog by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val pdfPreferences = remember { mutableStateOf(PdfPreferencesStore.load(context)) }
 
     val activity = LocalContext.current as? Activity
 
@@ -155,6 +168,79 @@ fun ViewerScreen(
         }
     }
 
+    if (showPdfSettingsDialog) {
+        val currentPrefs = pdfPreferences.value
+        AlertDialog(
+            onDismissRequest = { showPdfSettingsDialog = false },
+            title = { Text("PDF Settings") },
+            text = {
+                Column {
+                    Text("Page fit mode",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(4.dp))
+                    PageFitMode.entries.forEach { mode ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    pdfPreferences.value = currentPrefs.copy(pageFitMode = mode)
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = currentPrefs.pageFitMode == mode,
+                                onClick = {
+                                    pdfPreferences.value = currentPrefs.copy(pageFitMode = mode)
+                                },
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = when (mode) {
+                                    PageFitMode.FIT_WIDTH -> "Fit width"
+                                    PageFitMode.FIT_PAGE -> "Fit page"
+                                    PageFitMode.ACTUAL_SIZE -> "Actual size"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Night mode",
+                            style = MaterialTheme.typography.bodyMedium)
+                        Switch(
+                            checked = currentPrefs.nightMode,
+                            onCheckedChange = {
+                                pdfPreferences.value = currentPrefs.copy(nightMode = it)
+                            },
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    PdfPreferencesStore.save(context, pdfPreferences.value)
+                    showPdfSettingsDialog = false
+                }) {
+                    Text("Apply")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPdfSettingsDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             if (!isFullscreen) {
@@ -185,6 +271,12 @@ fun ViewerScreen(
                                     tint = if (document!!.isFavorite)
                                         MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            IconButton(onClick = { showPdfSettingsDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Settings,
+                                    contentDescription = "PDF settings",
                                 )
                             }
                             IconButton(onClick = { showInfoDialog = true }) {
@@ -240,9 +332,9 @@ fun ViewerScreen(
                             onPageChanged = viewModel::saveReadingPosition,
                             onToggleFullscreen = ::toggleFullscreen,
                             isFullscreen = isFullscreen,
+                            pdfPreferences = pdfPreferences.value,
                         )
                         DocumentType.EPUB -> {
-                            val context = LocalContext.current
                             LaunchedEffect(file) {
                                 EpubReaderActivity.start(context, file.absolutePath, doc.id)
                                 onBack()

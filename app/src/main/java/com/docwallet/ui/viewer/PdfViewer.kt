@@ -25,8 +25,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -34,9 +36,20 @@ import androidx.compose.ui.unit.dp
 import com.artifex.mupdf.fitz.ColorSpace
 import com.artifex.mupdf.fitz.Document
 import com.artifex.mupdf.fitz.Matrix
+import com.docwallet.data.PageFitMode
+import com.docwallet.data.PdfPreferences
 import com.docwallet.data.model.Document as DocWalletDocument
 import java.io.File
 import java.nio.ByteBuffer
+
+private val invertColorMatrix = ColorMatrix(
+    floatArrayOf(
+        -1f, 0f, 0f, 0f, 255f,
+        0f, -1f, 0f, 0f, 255f,
+        0f, 0f, -1f, 0f, 255f,
+        0f, 0f, 0f, 1f, 0f,
+    ),
+)
 
 @Composable
 fun PdfViewer(
@@ -46,6 +59,7 @@ fun PdfViewer(
     onPageChanged: (Int) -> Unit = {},
     onToggleFullscreen: () -> Unit = {},
     isFullscreen: Boolean = false,
+    pdfPreferences: PdfPreferences = PdfPreferences(),
 ) {
     val pageCount = remember(document.pageCount) {
         if (document.pageCount > 0) document.pageCount
@@ -143,15 +157,29 @@ fun PdfViewer(
             itemsIndexed(Array(pageCount) { it }.toList()) { index, _ ->
                 val bitmap = renderedPages[index]
                 if (bitmap != null) {
+                    val pageContentScale = when (pdfPreferences.pageFitMode) {
+                        PageFitMode.FIT_WIDTH -> ContentScale.FillWidth
+                        PageFitMode.FIT_PAGE -> ContentScale.Fit
+                        PageFitMode.ACTUAL_SIZE -> ContentScale.None
+                    }
+                    val pageColorFilter = if (pdfPreferences.nightMode) {
+                        ColorFilter.colorMatrix(invertColorMatrix)
+                    } else null
+                    val pageBg = if (pdfPreferences.nightMode) {
+                        androidx.compose.ui.graphics.Color(0xFF1A1A1A)
+                    } else {
+                        androidx.compose.ui.graphics.Color.White
+                    }
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = "Page ${index + 1}",
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
-                            .background(androidx.compose.ui.graphics.Color.White)
+                            .background(pageBg)
                             .clearAndSetSemantics { },
-                        contentScale = ContentScale.FillWidth,
+                        contentScale = pageContentScale,
+                        colorFilter = pageColorFilter,
                     )
                 } else {
                     Box(
