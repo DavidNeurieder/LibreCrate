@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.app.Activity
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,6 +44,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.docwallet.data.model.DocumentType
 import com.docwallet.ui.common.EmptyState
@@ -61,6 +65,21 @@ fun ViewerScreen(
 
     var menuExpanded by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
+    var isFullscreen by remember { mutableStateOf(false) }
+
+    val activity = LocalContext.current as? Activity
+
+    fun toggleFullscreen() {
+        isFullscreen = !isFullscreen
+        val window = activity?.window ?: return
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        if (isFullscreen) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
 
     if (showInfoDialog && document != null) {
         val doc = document!!
@@ -108,81 +127,83 @@ fun ViewerScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = document?.title ?: "Document",
-                        fontWeight = FontWeight.Bold,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+            AnimatedVisibility(visible = !isFullscreen) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = document?.title ?: "Document",
+                            fontWeight = FontWeight.Bold,
                         )
-                    }
-                },
-                actions = {
-                    if (document != null) {
-                        IconButton(onClick = { viewModel.toggleFavorite() }) {
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = if (document!!.isFavorite)
-                                    Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = if (document!!.isFavorite)
-                                    "Remove from favorites" else "Add to favorites",
-                                tint = if (document!!.isFavorite)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
                             )
                         }
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(
-                                imageVector = Icons.Filled.Info,
-                                contentDescription = "More options",
-                            )
+                    },
+                    actions = {
+                        if (document != null) {
+                            IconButton(onClick = { viewModel.toggleFavorite() }) {
+                                Icon(
+                                    imageVector = if (document!!.isFavorite)
+                                        Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                    contentDescription = if (document!!.isFavorite)
+                                        "Remove from favorites" else "Add to favorites",
+                                    tint = if (document!!.isFavorite)
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Info,
+                                    contentDescription = "More options",
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Document info") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        showInfoDialog = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Filled.Info, contentDescription = null)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Delete document",
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        viewModel.deleteDocument()
+                                        onBack()
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Filled.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                        )
+                                    },
+                                )
+                            }
                         }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Document info") },
-                                onClick = {
-                                    menuExpanded = false
-                                    showInfoDialog = true
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Filled.Info, contentDescription = null)
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        "Delete document",
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    viewModel.deleteDocument()
-                                    onBack()
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Filled.Delete,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                    )
-                                },
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            }
         },
     ) { paddingValues ->
         Box(
@@ -215,6 +236,8 @@ fun ViewerScreen(
                             document = doc,
                             initialPage = doc.currentPage,
                             onPageChanged = viewModel::saveReadingPosition,
+                            onToggleFullscreen = ::toggleFullscreen,
+                            isFullscreen = isFullscreen,
                         )
                         DocumentType.EPUB -> {
                             val context = LocalContext.current
