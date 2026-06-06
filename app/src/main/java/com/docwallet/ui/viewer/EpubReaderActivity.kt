@@ -2,22 +2,86 @@ package com.docwallet.ui.viewer
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.GestureDetectorCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.commit
 import com.docwallet.DocWalletApplication
 import com.docwallet.data.FontFamilyName
+import com.docwallet.data.ReaderPreferences
 import com.docwallet.data.ReaderPreferencesStore
 import com.docwallet.data.SessionStore
+import com.docwallet.data.model.Document
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
@@ -31,6 +95,9 @@ import org.readium.r2.shared.util.http.DefaultHttpClient
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class EpubReaderActivity : FragmentActivity() {
 
@@ -73,14 +140,16 @@ class EpubReaderActivity : FragmentActivity() {
         enableEdgeToEdge()
 
         containerId = View.generateViewId()
-        val container = FragmentContainerView(this).apply {
-            id = containerId
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
+
+        val doc = try {
+            runBlocking(Dispatchers.IO) {
+                documentId?.let { id ->
+                    (application as DocWalletApplication).documentDao.getDocumentById(id)
+                }
+            }
+        } catch (_: Exception) {
+            null
         }
-        setContentView(container)
 
         try {
             val publication = runBlocking(Dispatchers.IO) {
@@ -106,12 +175,6 @@ class EpubReaderActivity : FragmentActivity() {
                     initialPreferences = initialPreferences,
                 )
 
-            if (savedInstanceState == null) {
-                supportFragmentManager.commit {
-                    setReorderingAllowed(true)
-                    add(containerId, EpubNavigatorFragment::class.java, null)
-                }
-            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open EPUB", e)
             Toast.makeText(
@@ -120,6 +183,21 @@ class EpubReaderActivity : FragmentActivity() {
                 Toast.LENGTH_LONG
             ).show()
             finish()
+            return
+        }
+
+        setContent {
+            val colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
+            MaterialTheme(colorScheme = colorScheme) {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    EpubReaderScreen(
+                        document = doc,
+                        containerId = containerId,
+                        onBack = { finish() },
+                        onToggleFavorite = { toggleFavorite() },
+                    )
+                }
+            }
         }
     }
 
@@ -159,6 +237,15 @@ class EpubReaderActivity : FragmentActivity() {
         }
     }
 
+    private fun toggleFavorite() {
+        val docId = documentId ?: return
+        runBlocking(Dispatchers.IO) {
+            val app = application as DocWalletApplication
+            val doc = app.documentDao.getDocumentById(docId) ?: return@runBlocking
+            app.documentDao.update(doc.copy(isFavorite = !doc.isFavorite))
+        }
+    }
+
     private suspend fun openPublication(file: File): Publication {
         val httpClient = DefaultHttpClient()
         val assetRetriever = AssetRetriever(contentResolver, httpClient)
@@ -182,6 +269,395 @@ class EpubReaderActivity : FragmentActivity() {
             is Try.Failure -> throw RuntimeException(
                 "Publication open failed: ${result.value.message}"
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EpubReaderScreen(
+    document: Document?,
+    containerId: Int,
+    onBack: () -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
+    var isFullscreen by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var isFavorite by remember { mutableStateOf(document?.isFavorite ?: false) }
+
+    val activity = LocalContext.current as? FragmentActivity
+    val scope = rememberCoroutineScope()
+
+    fun toggleFullscreen() {
+        isFullscreen = !isFullscreen
+        val window = (activity ?: return).window
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        if (isFullscreen) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER
+            }
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+            }
+        }
+    }
+
+    fun navigateForward() {
+        (activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment)?.goForward()
+    }
+
+    fun navigateBackward() {
+        (activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment)?.goBackward()
+    }
+
+    if (showInfoDialog && document != null) {
+        val doc = document
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            title = { Text("Document Info") },
+            text = {
+                Column {
+                    InfoRow("Title", doc.title)
+                    InfoRow("Type", doc.mimeType)
+                    InfoRow("Size", formatFileSize(doc.fileSize))
+                    InfoRow("Pages", doc.pageCount.toString())
+                    InfoRow("Author", doc.author.ifEmpty { "\u2014" })
+                    InfoRow("Imported", dateFormat.format(Date(doc.importedAt)))
+                    if (doc.lastOpenedAt > 0) {
+                        InfoRow("Last opened", dateFormat.format(Date(doc.lastOpenedAt)))
+                    }
+                    doc.description.ifEmpty { null }?.let {
+                        Spacer(Modifier.height(8.dp))
+                        HorizontalDivider()
+                        Spacer(Modifier.height(8.dp))
+                        Text("Description", style = MaterialTheme.typography.labelMedium)
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showInfoDialog = false }) {
+                    Text("Close")
+                }
+            },
+        )
+    }
+
+    if (showSettingsDialog) {
+        val act = activity
+        if (act != null) {
+            ReaderSettingsDialog(
+                activity = act,
+                containerId = containerId,
+                onDismiss = { showSettingsDialog = false },
+            )
+        }
+    }
+
+    if (showDeleteDialog && document != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete document") },
+            text = { Text("This action cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    val doc = document
+                    val app = (activity?.application as? DocWalletApplication) ?: return@TextButton
+                    scope.launch(Dispatchers.IO) {
+                        File(doc.filePath).delete()
+                        doc.thumbnailPath?.let { File(it).delete() }
+                        app.documentDao.deleteById(doc.id)
+                        withContext(Dispatchers.Main) {
+                            activity?.finish()
+                        }
+                    }
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            if (!isFullscreen) {
+                TopAppBar(
+                    title = {},
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                            )
+                        }
+                    },
+                    actions = {
+                        if (document != null) {
+                            IconButton(onClick = { showDeleteDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Delete,
+                                    contentDescription = "Delete document",
+                                )
+                            }
+                            IconButton(onClick = {
+                                isFavorite = !isFavorite
+                                onToggleFavorite()
+                            }) {
+                                Icon(
+                                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                                    tint = if (isFavorite) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            IconButton(onClick = { showInfoDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Info,
+                                    contentDescription = "More options",
+                                )
+                            }
+                            IconButton(onClick = { showSettingsDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Settings,
+                                    contentDescription = "Reader settings",
+                                )
+                            }
+                            IconButton(onClick = { toggleFullscreen() }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Fullscreen,
+                                    contentDescription = "Enter fullscreen",
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            }
+        },
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { context ->
+                        FrameLayout(context).apply {
+                            addView(
+                                FragmentContainerView(context).apply { id = containerId },
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                            )
+
+                            val screenWidth = context.resources.displayMetrics.widthPixels
+                            val gestureDetector = GestureDetectorCompat(
+                                context,
+                                object : GestureDetector.SimpleOnGestureListener() {
+                                    override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
+                                        if (event.x < screenWidth / 3f) {
+                                            navigateBackward()
+                                        } else {
+                                            navigateForward()
+                                        }
+                                        return true
+                                    }
+                                },
+                            )
+
+                            addView(
+                                View(context).apply {
+                                    setOnTouchListener { _, event ->
+                                        gestureDetector.onTouchEvent(event)
+                                        false
+                                    }
+                                },
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                            )
+
+                            post {
+                                val fm = (context as FragmentActivity).supportFragmentManager
+                                if (fm.findFragmentById(containerId) == null) {
+                                    fm.commit {
+                                        add(containerId, EpubNavigatorFragment::class.java, null)
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
+
+                if (isFullscreen) {
+                    IconButton(
+                        onClick = { toggleFullscreen() },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.FullscreenExit,
+                            contentDescription = "Exit fullscreen",
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        else -> "%.1f MB".format(bytes.toDouble() / (1024 * 1024))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReaderSettingsDialog(
+    activity: FragmentActivity,
+    containerId: Int,
+    onDismiss: () -> Unit,
+) {
+    val context = activity
+    val prefs = remember { ReaderPreferencesStore.load(context) }
+    var fontSize by remember { mutableStateOf(prefs.fontSize) }
+    var fontFamilyName by remember { mutableStateOf(prefs.fontFamilyName) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reader Settings") },
+        text = {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Font Size", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "${String.format(Locale.ROOT, "%.1f", fontSize)}x",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Slider(
+                    value = fontSize,
+                    onValueChange = { fontSize = it },
+                    valueRange = 0.75f..2.0f,
+                    steps = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                Text("Font Family", style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(4.dp))
+                FontFamilyDropdown(
+                    selected = FontFamilyName.entries.firstOrNull { it.name == fontFamilyName }
+                        ?: FontFamilyName.SERIF,
+                    onSelected = { selected ->
+                        fontFamilyName = selected.name
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val prefsToSave = ReaderPreferences(fontSize = fontSize, fontFamilyName = fontFamilyName)
+                ReaderPreferencesStore.save(context, prefsToSave)
+                val fragment = context.supportFragmentManager.findFragmentById(containerId) as? EpubNavigatorFragment
+                if (fragment != null) {
+                    fragment.submitPreferences(EpubPreferences(
+                        fontSize = fontSize.toDouble(),
+                        fontFamily = when (fontFamilyName) {
+                            FontFamilyName.SANS_SERIF.name -> FontFamily.SANS_SERIF
+                            FontFamilyName.OPEN_DYSLEXIC.name -> FontFamily.OPEN_DYSLEXIC
+                            else -> FontFamily.SERIF
+                        },
+                    ))
+                }
+                onDismiss()
+            }) {
+                Text("Apply")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FontFamilyDropdown(
+    selected: FontFamilyName,
+    onSelected: (FontFamilyName) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+    ) {
+        OutlinedTextField(
+            value = selected.label,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            FontFamilyName.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    onClick = {
+                        onSelected(option)
+                        expanded = false
+                    },
+                )
+            }
         }
     }
 }

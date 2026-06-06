@@ -11,12 +11,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -32,6 +31,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import android.app.Activity
+import android.os.Build
+import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,8 +63,8 @@ fun ViewerScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
 
-    var menuExpanded by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
 
     val activity = LocalContext.current as? Activity
@@ -75,8 +76,16 @@ fun ViewerScreen(
         if (isFullscreen) {
             controller.hide(WindowInsetsCompat.Type.systemBars())
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER
+            }
         } else {
             controller.show(WindowInsetsCompat.Type.systemBars())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+            }
         }
     }
 
@@ -114,6 +123,28 @@ fun ViewerScreen(
         )
     }
 
+    if (showDeleteDialog && document != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete document") },
+            text = { Text("This action cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    viewModel.deleteDocument()
+                    onBack()
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     LaunchedEffect(documentId) {
         viewModel.loadDocument(documentId)
     }
@@ -128,12 +159,7 @@ fun ViewerScreen(
         topBar = {
             if (!isFullscreen) {
                 TopAppBar(
-                    title = {
-                        Text(
-                            text = document?.title ?: "Document",
-                            fontWeight = FontWeight.Bold,
-                        )
-                    },
+                    title = {},
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
@@ -144,6 +170,12 @@ fun ViewerScreen(
                     },
                     actions = {
                         if (document != null) {
+                            IconButton(onClick = { showDeleteDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Delete,
+                                    contentDescription = "Delete document",
+                                )
+                            }
                             IconButton(onClick = { viewModel.toggleFavorite() }) {
                                 Icon(
                                     imageVector = if (document!!.isFavorite)
@@ -155,45 +187,16 @@ fun ViewerScreen(
                                     else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            IconButton(onClick = { menuExpanded = true }) {
+                            IconButton(onClick = { showInfoDialog = true }) {
                                 Icon(
                                     imageVector = Icons.Filled.Info,
                                     contentDescription = "More options",
                                 )
                             }
-                            DropdownMenu(
-                                expanded = menuExpanded,
-                                onDismissRequest = { menuExpanded = false },
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Document info") },
-                                    onClick = {
-                                        menuExpanded = false
-                                        showInfoDialog = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Filled.Info, contentDescription = null)
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            "Delete document",
-                                            color = MaterialTheme.colorScheme.error,
-                                        )
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        viewModel.deleteDocument()
-                                        onBack()
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Filled.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error,
-                                        )
-                                    },
+                            IconButton(onClick = { toggleFullscreen() }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Fullscreen,
+                                    contentDescription = "Enter fullscreen",
                                 )
                             }
                         }
