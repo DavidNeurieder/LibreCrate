@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -544,6 +545,7 @@ private fun InfoRow(label: String, value: String) {
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.clearAndSetSemantics { },
         )
     }
 }
