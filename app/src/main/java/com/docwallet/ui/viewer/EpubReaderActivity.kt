@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,8 +26,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Fullscreen
@@ -45,6 +51,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -55,8 +62,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -89,6 +99,7 @@ import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.preferences.FontFamily
+import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.util.Try
@@ -119,6 +130,7 @@ class EpubReaderActivity : FragmentActivity() {
 
     private var containerId: Int = View.generateViewId()
     private var documentId: String? = null
+    private var publication: Publication? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         documentId = intent?.getStringExtra(EXTRA_DOCUMENT_ID)
@@ -154,9 +166,10 @@ class EpubReaderActivity : FragmentActivity() {
         }
 
         try {
-            val publication = runBlocking(Dispatchers.IO) {
+            val pub = runBlocking(Dispatchers.IO) {
                 openPublication(file)
             }
+            publication = pub
 
             val initialLocator = loadLocator()
 
@@ -173,7 +186,7 @@ class EpubReaderActivity : FragmentActivity() {
                 publisherStyles = false,
             )
 
-            val navigatorFactory = EpubNavigatorFactory(publication)
+            val navigatorFactory = EpubNavigatorFactory(pub)
             supportFragmentManager.fragmentFactory =
                 navigatorFactory.createFragmentFactory(
                     initialLocator = initialLocator,
@@ -198,6 +211,7 @@ class EpubReaderActivity : FragmentActivity() {
                     EpubReaderScreen(
                         document = doc,
                         containerId = containerId,
+                        publication = publication,
                         onBack = { finish() },
                         onToggleFavorite = { toggleFavorite() },
                     )
@@ -283,6 +297,7 @@ class EpubReaderActivity : FragmentActivity() {
 private fun EpubReaderScreen(
     document: Document?,
     containerId: Int,
+    publication: Publication?,
     onBack: () -> Unit,
     onToggleFavorite: () -> Unit,
 ) {
@@ -290,6 +305,7 @@ private fun EpubReaderScreen(
     var showInfoDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showTocSheet by remember { mutableStateOf(false) }
     var isFavorite by remember { mutableStateOf(document?.isFavorite ?: false) }
 
     val activity = LocalContext.current as? FragmentActivity
@@ -398,6 +414,17 @@ private fun EpubReaderScreen(
         )
     }
 
+    if (showTocSheet && publication != null) {
+        val fragment = activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment
+        if (fragment != null) {
+            ChapterTocSheet(
+                publication = publication,
+                navigatorFragment = fragment,
+                onDismiss = { showTocSheet = false },
+            )
+        }
+    }
+
     Scaffold(
         topBar = {
             if (!isFullscreen) {
@@ -428,6 +455,12 @@ private fun EpubReaderScreen(
                                     contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
                                     tint = if (isFavorite) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            IconButton(onClick = { showTocSheet = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.List,
+                                    contentDescription = "Table of Contents",
                                 )
                             }
                             IconButton(onClick = { showInfoDialog = true }) {
@@ -548,6 +581,135 @@ private fun InfoRow(label: String, value: String) {
             modifier = Modifier.clearAndSetSemantics { },
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChapterTocSheet(
+    publication: Publication,
+    navigatorFragment: EpubNavigatorFragment,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val tocLinks = remember { flattenToc(publication.tableOfContents) }
+    val listState = rememberLazyListState()
+
+    val currentLocator by navigatorFragment.currentLocator.collectAsState()
+    val activeIndex = remember(currentLocator, tocLinks) {
+        findActiveTocIndex(currentLocator, tocLinks)
+    }
+
+    LaunchedEffect(activeIndex) {
+        if (activeIndex >= 0) {
+            listState.animateScrollToItem(activeIndex)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Text(
+            text = "Table of Contents",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+        )
+        HorizontalDivider()
+        if (tocLinks.isEmpty()) {
+            Text(
+                text = "No table of contents available.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(24.dp),
+            )
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+            ) {
+                itemsIndexed(tocLinks, key = { _, link -> link.first }) { index, (link, depth) ->
+                    TocItem(
+                        link = link,
+                        depth = depth,
+                        isActive = index == activeIndex,
+                        onClick = {
+                            navigatorFragment.go(link, true)
+                            onDismiss()
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TocItem(
+    link: Link,
+    depth: Int,
+    isActive: Boolean,
+    onClick: () -> Unit,
+) {
+    val title = (link.title ?: "").ifBlank { link.href.toString() }
+    val textColor = if (isActive) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    val fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(
+                start = (24 + depth * 16).dp,
+                end = 24.dp,
+                top = 10.dp,
+                bottom = 10.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (isActive) "► " else "  ",
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = fontWeight,
+            color = textColor,
+        )
+    }
+}
+
+private fun flattenToc(links: List<Link>, depth: Int = 0): List<Pair<Link, Int>> {
+    val result = mutableListOf<Pair<Link, Int>>()
+    for (link in links) {
+        result.add(link to depth)
+        if (link.children.isNotEmpty()) {
+            result.addAll(flattenToc(link.children, depth + 1))
+        }
+    }
+    return result
+}
+
+private fun findActiveTocIndex(currentLocator: Locator?, tocLinks: List<Pair<Link, Int>>): Int {
+    val locator = currentLocator ?: return -1
+    val locatorHref = locator.href.toString()
+    var bestIndex = -1
+    var bestLength = 0
+    for (i in tocLinks.indices) {
+        val linkHref = tocLinks[i].first.href.toString()
+        if (locatorHref.startsWith(linkHref) && linkHref.length > bestLength) {
+            bestIndex = i
+            bestLength = linkHref.length
+        }
+    }
+    return bestIndex
 }
 
 private fun formatFileSize(bytes: Long): String {
