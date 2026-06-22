@@ -5,8 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.view.GestureDetector
-import android.view.MotionEvent
+
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -78,7 +77,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.GestureDetectorCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
@@ -97,11 +95,15 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
+import org.readium.r2.navigator.input.DragEvent
+import org.readium.r2.navigator.input.InputListener
+import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.preferences.FontFamily
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.util.Try
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.http.DefaultHttpClient
@@ -128,7 +130,8 @@ class EpubReaderActivity : FragmentActivity() {
         }
     }
 
-    private var containerId: Int = View.generateViewId()
+    @JvmField
+    internal var containerId: Int = View.generateViewId()
     private var documentId: String? = null
     private var publication: Publication? = null
 
@@ -292,7 +295,7 @@ class EpubReaderActivity : FragmentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalReadiumApi::class)
 @Composable
 private fun EpubReaderScreen(
     document: Document?,
@@ -332,11 +335,11 @@ private fun EpubReaderScreen(
     }
 
     fun navigateForward() {
-        (activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment)?.goForward()
+        (activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment)?.goForward(true)
     }
 
     fun navigateBackward() {
-        (activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment)?.goBackward()
+        (activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment)?.goBackward(true)
     }
 
     if (showInfoDialog && document != null) {
@@ -513,32 +516,6 @@ private fun EpubReaderScreen(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
                             )
 
-                            val screenWidth = context.resources.displayMetrics.widthPixels
-                            val gestureDetector = GestureDetectorCompat(
-                                context,
-                                object : GestureDetector.SimpleOnGestureListener() {
-                                    override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
-                                        if (event.x < screenWidth / 3f) {
-                                            navigateBackward()
-                                        } else {
-                                            navigateForward()
-                                        }
-                                        return true
-                                    }
-                                },
-                            )
-
-                            addView(
-                                View(context).apply {
-                                    setOnTouchListener { _, event ->
-                                        gestureDetector.onTouchEvent(event)
-                                        false
-                                    }
-                                },
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                            )
-
                             post {
                                 val fm = (context as FragmentActivity).supportFragmentManager
                                 if (fm.findFragmentById(containerId) == null) {
@@ -546,6 +523,23 @@ private fun EpubReaderScreen(
                                         add(containerId, EpubNavigatorFragment::class.java, null)
                                     }
                                 }
+                                fm.executePendingTransactions()
+                                (fm.findFragmentById(containerId) as? EpubNavigatorFragment)
+                                    ?.addInputListener(object : InputListener {
+                                        override fun onTap(event: TapEvent): Boolean {
+                                            val sw = context.resources.displayMetrics.widthPixels
+                                            if (event.point.x < sw / 3f) {
+                                                navigateBackward()
+                                            } else {
+                                                navigateForward()
+                                            }
+                                            return true
+                                        }
+
+                                        override fun onDrag(event: DragEvent): Boolean = false
+
+                                        override fun onKey(event: org.readium.r2.navigator.input.KeyEvent): Boolean = false
+                                    })
                             }
                         }
                     },
@@ -686,7 +680,7 @@ private fun TocItem(
     }
 }
 
-private fun flattenToc(links: List<Link>, depth: Int = 0): List<Pair<Link, Int>> {
+internal fun flattenToc(links: List<Link>, depth: Int = 0): List<Pair<Link, Int>> {
     val result = mutableListOf<Pair<Link, Int>>()
     for (link in links) {
         result.add(link to depth)
@@ -697,7 +691,7 @@ private fun flattenToc(links: List<Link>, depth: Int = 0): List<Pair<Link, Int>>
     return result
 }
 
-private fun findActiveTocIndex(currentLocator: Locator?, tocLinks: List<Pair<Link, Int>>): Int {
+internal fun findActiveTocIndex(currentLocator: Locator?, tocLinks: List<Pair<Link, Int>>): Int {
     val locator = currentLocator ?: return -1
     val locatorHref = locator.href.toString()
     var bestIndex = -1
