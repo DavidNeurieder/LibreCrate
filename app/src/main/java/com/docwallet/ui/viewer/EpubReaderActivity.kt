@@ -149,11 +149,6 @@ class EpubReaderActivity : FragmentActivity() {
 
         super.onCreate(savedInstanceState)
 
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE,
-        )
-
         enableEdgeToEdge()
 
         containerId = View.generateViewId()
