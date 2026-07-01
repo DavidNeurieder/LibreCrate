@@ -39,7 +39,6 @@ class LibraryScreenTest {
                 LibraryScreen(
                     onDocumentClick = {},
                     onSettingsClick = {},
-                    onSearchClick = {},
                     onNewNoteClick = {},
                 )
             }

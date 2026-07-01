@@ -84,7 +84,6 @@ private val IMPORT_MIME_TYPES = arrayOf(
 fun LibraryScreen(
     onDocumentClick: (String) -> Unit,
     onSettingsClick: () -> Unit,
-    onSearchClick: () -> Unit = {},
     onNewNoteClick: () -> Unit = {},
     pendingImportUris: List<Uri> = emptyList(),
     onPendingImportConsumed: () -> Unit = {},
@@ -139,12 +138,6 @@ fun LibraryScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = onSearchClick) {
-                        Icon(
-                            imageVector = Icons.Filled.Search,
-                            contentDescription = "Search",
-                        )
-                    }
                     IconButton(onClick = onSettingsClick) {
                         Icon(
                             imageVector = Icons.Filled.Settings,

@@ -7,7 +7,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.docwallet.ui.collection.CollectionScreen
 import com.docwallet.ui.library.LibraryScreen
-import com.docwallet.ui.search.SearchScreen
 import com.docwallet.ui.settings.SettingsScreen
 import com.docwallet.ui.tag.TagScreen
 import com.docwallet.ui.unlock.PasswordSetupScreen
@@ -20,7 +19,6 @@ object Routes {
     const val LIBRARY = "library"
     const val VIEWER = "viewer/{documentId}"
     const val SETTINGS = "settings"
-    const val SEARCH = "search"
     const val COLLECTIONS = "collections"
     const val TAGS = "tags"
 
@@ -62,7 +60,6 @@ fun DocWalletNavGraph(
             LibraryScreen(
                 onDocumentClick = { navController.navigate(Routes.viewer(it)) },
                 onSettingsClick = { navController.navigate(Routes.SETTINGS) },
-                onSearchClick = { navController.navigate(Routes.SEARCH) },
                 onNewNoteClick = {
                     val newId = java.util.UUID.randomUUID().toString()
                     navController.navigate(Routes.viewer(newId))
@@ -88,12 +85,6 @@ fun DocWalletNavGraph(
                 onBack = { navController.popBackStack() },
                 onCollectionsClick = { navController.navigate(Routes.COLLECTIONS) },
                 onTagsClick = { navController.navigate(Routes.TAGS) },
-            )
-        }
-        composable(Routes.SEARCH) {
-            SearchScreen(
-                onDocumentClick = { navController.navigate(Routes.viewer(it)) },
-                onBack = { navController.popBackStack() },
             )
         }
         composable(Routes.VIEWER) { backStackEntry ->
