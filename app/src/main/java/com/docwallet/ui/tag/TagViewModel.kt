@@ -25,6 +25,8 @@ class TagViewModel(application: Application) : AndroidViewModel(application) {
     val nameInput = MutableStateFlow("")
     val selectedColor = MutableStateFlow(randomColor())
     val showDialog = MutableStateFlow(false)
+    val editingTag = MutableStateFlow<Tag?>(null)
+    val showEditDialog = MutableStateFlow(false)
 
     init {
         viewModelScope.launch {
@@ -44,6 +46,31 @@ class TagViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             tagDao.deleteById(id)
         }
+    }
+
+    fun renameTag(id: String, newName: String) {
+        viewModelScope.launch {
+            val tag = tagDao.getTagById(id) ?: return@launch
+            tagDao.update(tag.copy(name = newName))
+        }
+    }
+
+    fun setEditing(tag: Tag?) {
+        editingTag.value = tag
+        nameInput.value = tag?.name ?: ""
+        showEditDialog.value = true
+    }
+
+    fun saveEdit() {
+        val name = nameInput.value.trim()
+        if (name.isEmpty()) return
+        val editing = editingTag.value
+        if (editing != null) {
+            renameTag(editing.id, name)
+        }
+        showEditDialog.value = false
+        nameInput.value = ""
+        editingTag.value = null
     }
 
     fun randomColor(): Long {

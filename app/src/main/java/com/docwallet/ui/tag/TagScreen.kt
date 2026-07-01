@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -66,6 +67,7 @@ fun TagScreen(
     val nameInput by viewModel.nameInput.collectAsState()
     val selectedColor by viewModel.selectedColor.collectAsState()
     val showDialog by viewModel.showDialog.collectAsState()
+    val showEditDialog by viewModel.showEditDialog.collectAsState()
 
     var tagToDelete by remember { mutableStateOf<Tag?>(null) }
 
@@ -168,6 +170,12 @@ fun TagScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                IconButton(onClick = { viewModel.setEditing(tag) }) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Edit,
+                                        contentDescription = "Rename",
+                                    )
+                                }
                                 IconButton(onClick = { tagToDelete = tag }) {
                                     Icon(
                                         imageVector = Icons.Outlined.Delete,
@@ -242,6 +250,42 @@ fun TagScreen(
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.showDialog.value = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (showEditDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                viewModel.showEditDialog.value = false
+                viewModel.nameInput.value = ""
+                viewModel.editingTag.value = null
+            },
+            title = { Text("Rename tag") },
+            text = {
+                OutlinedTextField(
+                    value = nameInput,
+                    onValueChange = { viewModel.nameInput.value = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.saveEdit() }) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.showEditDialog.value = false
+                        viewModel.nameInput.value = ""
+                        viewModel.editingTag.value = null
+                    },
+                ) {
                     Text("Cancel")
                 }
             },

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Bookmarks
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ConfirmationNumber
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.Image
@@ -34,6 +35,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -48,6 +50,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -96,6 +99,9 @@ fun LibraryScreen(
     val favoritesOnly by viewModel.favoritesOnly.collectAsState()
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
     val thumbnails by viewModel.thumbnails.collectAsState()
+    val renamingDocument by viewModel.renamingDocument.collectAsState()
+    val renameInput by viewModel.renameInput.collectAsState()
+    val showRenameDialog by viewModel.showRenameDialog.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -449,12 +455,65 @@ fun LibraryScreen(
                             document = document,
                             onClick = { onDocumentClick(document.id) },
                             onFavoriteClick = { viewModel.toggleFavorite(document) },
+                            onRenameClick = {
+                                viewModel.renamingDocument.value = document
+                                viewModel.renameInput.value = document.title
+                                viewModel.showRenameDialog.value = true
+                            },
                             thumbnail = thumbnails[document.id],
                         )
                     }
                 }
             }
         }
+    }
+
+    if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                viewModel.showRenameDialog.value = false
+                viewModel.renameInput.value = ""
+                viewModel.renamingDocument.value = null
+            },
+            title = { Text("Rename document") },
+            text = {
+                OutlinedTextField(
+                    value = renameInput,
+                    onValueChange = { viewModel.renameInput.value = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val name = renameInput.trim()
+                        if (name.isNotEmpty()) {
+                            renamingDocument?.let { doc ->
+                                viewModel.renameDocument(doc.id, name)
+                            }
+                            viewModel.showRenameDialog.value = false
+                            viewModel.renameInput.value = ""
+                            viewModel.renamingDocument.value = null
+                        }
+                    },
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.showRenameDialog.value = false
+                        viewModel.renameInput.value = ""
+                        viewModel.renamingDocument.value = null
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 

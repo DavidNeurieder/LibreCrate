@@ -119,6 +119,17 @@ class ViewerViewModel @JvmOverloads constructor(
         }
     }
 
+    fun renameDocument(newTitle: String) {
+        val doc = _document.value ?: return
+        viewModelScope.launch {
+            val updated = doc.copy(title = newTitle)
+            withContext(ioDispatcher) {
+                app.documentDao.update(updated)
+            }
+            _document.value = updated
+        }
+    }
+
     fun deleteDocument() {
         val doc = _document.value ?: return
         viewModelScope.launch {

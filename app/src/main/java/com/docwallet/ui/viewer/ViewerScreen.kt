@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,6 +27,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -76,6 +78,8 @@ fun ViewerScreen(
 
     var showInfoDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameText by remember { mutableStateOf("") }
     var showPdfSettingsDialog by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -153,6 +157,49 @@ fun ViewerScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (showRenameDialog && document != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showRenameDialog = false
+                renameText = ""
+            },
+            title = { Text("Rename document") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val name = renameText.trim()
+                        if (name.isNotEmpty()) {
+                            viewModel.renameDocument(name)
+                        }
+                        showRenameDialog = false
+                        renameText = ""
+                    },
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showRenameDialog = false
+                        renameText = ""
+                    },
+                ) {
                     Text("Cancel")
                 }
             },
@@ -284,6 +331,15 @@ fun ViewerScreen(
                                 Icon(
                                     imageVector = Icons.Filled.Info,
                                     contentDescription = "More options",
+                                )
+                            }
+                            IconButton(onClick = {
+                                renameText = document!!.title
+                                showRenameDialog = true
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Edit,
+                                    contentDescription = "Rename",
                                 )
                             }
                             IconButton(onClick = { toggleFullscreen() }) {

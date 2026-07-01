@@ -42,6 +42,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val filterType = MutableStateFlow<DocumentType?>(null)
     val favoritesOnly = MutableStateFlow(false)
 
+    val renamingDocument = MutableStateFlow<Document?>(null)
+    val renameInput = MutableStateFlow("")
+    val showRenameDialog = MutableStateFlow(false)
+
     val continueReading: StateFlow<List<Document>> = documentDao.getRecentDocuments(
         System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000 // last 7 days
     ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -96,6 +100,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun toggleFavorite(document: Document) {
         viewModelScope.launch {
             documentDao.update(document.copy(isFavorite = !document.isFavorite))
+        }
+    }
+
+    fun renameDocument(id: String, newTitle: String) {
+        viewModelScope.launch {
+            val doc = documentDao.getDocumentById(id) ?: return@launch
+            documentDao.update(doc.copy(title = newTitle))
         }
     }
 
