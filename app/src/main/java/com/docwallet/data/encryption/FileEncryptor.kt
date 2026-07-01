@@ -2,6 +2,8 @@ package com.docwallet.data.encryption
 
 import java.io.File
 import javax.crypto.Cipher
+import javax.crypto.CipherInputStream
+import javax.crypto.CipherOutputStream
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
@@ -22,9 +24,14 @@ class FileEncryptor {
         cipher.init(Cipher.ENCRYPT_MODE, secretKey)
         val iv = cipher.iv
 
-        val data = input.readBytes()
-        val encrypted = cipher.doFinal(data)
-        output.writeBytes(iv + encrypted)
+        output.outputStream().use { outputStream ->
+            outputStream.write(iv)
+            input.inputStream().use { inputStream ->
+                CipherOutputStream(outputStream, cipher).use { cos ->
+                    inputStream.copyTo(cos)
+                }
+            }
+        }
 
         return iv
     }
@@ -44,9 +51,14 @@ class FileEncryptor {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
 
-        val data = input.readBytes()
-        val plaintext = cipher.doFinal(data, iv.size, data.size - iv.size)
-        output.writeBytes(plaintext)
+        output.outputStream().use { outputStream ->
+            input.inputStream().use { inputStream ->
+                inputStream.skip(iv.size.toLong())
+                CipherInputStream(inputStream, cipher).use { cis ->
+                    cis.copyTo(outputStream)
+                }
+            }
+        }
     }
 
     fun decryptBytes(encrypted: ByteArray, key: ByteArray, iv: ByteArray): ByteArray {

@@ -10,6 +10,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.spec.GCMParameterSpec
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [34])
@@ -39,7 +42,8 @@ class EncryptionManagerTest {
         }
 
         val context = RuntimeEnvironment.getApplication().applicationContext
-        manager = EncryptionManager(context, mockHasher)
+        val testCryptographer = TestKeyStoreCryptographer()
+        manager = EncryptionManager(context, mockHasher, testCryptographer)
     }
 
     @After
@@ -242,5 +246,24 @@ class EncryptionManagerTest {
         assertEquals(32, restoredKey!!.size)
 
         assertArrayEquals(originalKey, restoredKey)
+    }
+}
+
+class TestKeyStoreCryptographer : KeyStoreCryptographer {
+    private val aesKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+
+    override fun encrypt(plaintext: ByteArray): Pair<ByteArray, ByteArray> {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, aesKey)
+        return Pair(cipher.iv, cipher.doFinal(plaintext))
+    }
+
+    override fun decrypt(iv: ByteArray, ciphertext: ByteArray): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, aesKey, javax.crypto.spec.GCMParameterSpec(128, iv))
+        return cipher.doFinal(ciphertext)
+    }
+
+    override fun deleteKey() {
     }
 }

@@ -37,7 +37,7 @@ class ViewerViewModel @JvmOverloads constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    fun loadDocument(documentId: String) {
+    fun loadDocument(documentId: String, isNewNote: Boolean = false) {
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
@@ -45,8 +45,7 @@ class ViewerViewModel @JvmOverloads constructor(
                 app.documentDao.getDocumentById(documentId)
             }
             if (doc == null) {
-                val uuidRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-                if (uuidRegex.matches(documentId)) {
+                if (isNewNote) {
                     doc = withContext(ioDispatcher) {
                         val filesDir = File(app.filesDir, "files").also { it.mkdirs() }
                         val encryptedFile = File(filesDir, "${java.util.UUID.randomUUID()}.enc")
@@ -77,7 +76,7 @@ class ViewerViewModel @JvmOverloads constructor(
                     _isLoading.value = false
                     return@launch
                 }
-                Log.w("ViewerViewModel", "Document not found for id=$documentId, matchesUuid=${uuidRegex.matches(documentId)}")
+                Log.w("ViewerViewModel", "Document not found for id=$documentId")
                 SessionStore.clearLastDocumentId(app)
                 _error.value = "Document not found"
                 _isLoading.value = false

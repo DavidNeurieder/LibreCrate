@@ -3,8 +3,10 @@ package com.docwallet.ui.navigation
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.docwallet.ui.collection.CollectionScreen
 import com.docwallet.ui.library.LibraryScreen
 import com.docwallet.ui.settings.SettingsScreen
@@ -17,12 +19,13 @@ object Routes {
     const val UNLOCK = "unlock"
     const val PASSWORD_SETUP = "password_setup"
     const val LIBRARY = "library"
-    const val VIEWER = "viewer/{documentId}"
+    const val VIEWER = "viewer/{documentId}?isNewNote={isNewNote}"
     const val SETTINGS = "settings"
     const val COLLECTIONS = "collections"
     const val TAGS = "tags"
 
     fun viewer(documentId: String) = "viewer/$documentId"
+    fun newNote() = "viewer/${java.util.UUID.randomUUID()}?isNewNote=true"
 }
 
 @Composable
@@ -61,8 +64,7 @@ fun DocWalletNavGraph(
                 onDocumentClick = { navController.navigate(Routes.viewer(it)) },
                 onSettingsClick = { navController.navigate(Routes.SETTINGS) },
                 onNewNoteClick = {
-                    val newId = java.util.UUID.randomUUID().toString()
-                    navController.navigate(Routes.viewer(newId))
+                    navController.navigate(Routes.newNote())
                 },
                 pendingImportUris = pendingImportUris,
                 onPendingImportConsumed = onPendingImportConsumed,
@@ -87,9 +89,16 @@ fun DocWalletNavGraph(
                 onTagsClick = { navController.navigate(Routes.TAGS) },
             )
         }
-        composable(Routes.VIEWER) { backStackEntry ->
+        composable(
+            Routes.VIEWER,
+            arguments = listOf(
+                navArgument("documentId") { type = NavType.StringType },
+                navArgument("isNewNote") { type = NavType.BoolType; defaultValue = false },
+            ),
+        ) { backStackEntry ->
             ViewerScreen(
                 documentId = backStackEntry.arguments?.getString("documentId") ?: "",
+                isNewNote = backStackEntry.arguments?.getBoolean("isNewNote") ?: false,
                 onBack = { navController.popBackStack() },
                 onDocumentNotFound = { navController.popBackStack() },
             )

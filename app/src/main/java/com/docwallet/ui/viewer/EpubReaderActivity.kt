@@ -81,6 +81,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentContainerView
+import androidx.lifecycle.lifecycleScope
 import androidx.fragment.app.commit
 import com.docwallet.DocWalletApplication
 import com.docwallet.data.FontFamilyName
@@ -150,6 +151,7 @@ class EpubReaderActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
 
         containerId = View.generateViewId()
 
@@ -220,7 +222,19 @@ class EpubReaderActivity : FragmentActivity() {
 
     override fun onPause() {
         super.onPause()
-        saveCurrentLocator()
+        val docId = documentId ?: return
+        val fragment = supportFragmentManager.findFragmentById(containerId) as? EpubNavigatorFragment ?: return
+        val locator = fragment.currentLocator.value
+        lifecycleScope.launch(Dispatchers.IO) {
+            val app = application as DocWalletApplication
+            val doc = app.documentDao.getDocumentById(docId) ?: return@launch
+            app.documentDao.update(
+                doc.copy(
+                    readingPosition = locator.toJSON().toString(),
+                    lastOpenedAt = System.currentTimeMillis(),
+                )
+            )
+        }
     }
 
     private fun loadLocator(): Locator? {
@@ -256,9 +270,9 @@ class EpubReaderActivity : FragmentActivity() {
 
     private fun toggleFavorite() {
         val docId = documentId ?: return
-        runBlocking(Dispatchers.IO) {
+        lifecycleScope.launch(Dispatchers.IO) {
             val app = application as DocWalletApplication
-            val doc = app.documentDao.getDocumentById(docId) ?: return@runBlocking
+            val doc = app.documentDao.getDocumentById(docId) ?: return@launch
             app.documentDao.update(doc.copy(isFavorite = !doc.isFavorite))
         }
     }

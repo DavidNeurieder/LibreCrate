@@ -5,9 +5,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.docwallet.DocWalletApplication
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-class UnlockViewModel(application: Application) : AndroidViewModel(application) {
+class UnlockViewModel @JvmOverloads constructor(
+    application: Application,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
+) : AndroidViewModel(application) {
     private val encryptionManager = (application as DocWalletApplication).encryptionManager
 
     var password: String by mutableStateOf("")
@@ -28,23 +36,27 @@ class UnlockViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun unlock(onSuccess: () -> Unit) {
-        if (password.length < 4) {
-            error = "Password must be at least 4 characters"
+        if (password.length < 6) {
+            error = "Password must be at least 6 characters"
             return
         }
 
         isLoading = true
-        try {
-            val verified = encryptionManager.verifyPassword(password)
-            if (verified) {
-                onSuccess()
-            } else {
-                error = "Wrong password"
+        viewModelScope.launch(defaultDispatcher) {
+            val verified = try {
+                encryptionManager.verifyPassword(password)
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { error = "Error: ${e.message}" }
+                null
             }
-        } catch (e: Exception) {
-            error = "Error: ${e.message}"
-        } finally {
-            isLoading = false
+            withContext(Dispatchers.Main) {
+                when (verified) {
+                    true -> onSuccess()
+                    false -> error = "Wrong password"
+                    else -> { /* error already set */ }
+                }
+                isLoading = false
+            }
         }
     }
 

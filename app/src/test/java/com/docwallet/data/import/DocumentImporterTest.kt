@@ -11,6 +11,7 @@ import com.docwallet.data.encryption.EncryptionManager
 import com.docwallet.data.encryption.FileEncryptor
 import com.docwallet.data.model.Document
 import com.docwallet.data.model.DocumentType
+import com.docwallet.data.encryption.TestKeyStoreCryptographer
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -67,7 +68,7 @@ class DocumentImporterTest {
 
         context = RuntimeEnvironment.getApplication().applicationContext
 
-        encryptionManager = EncryptionManager(context, mockHasher)
+        encryptionManager = EncryptionManager(context, mockHasher, TestKeyStoreCryptographer())
         encryptionManager.initializeDeviceKeyMode()
 
         db = Room.inMemoryDatabaseBuilder(

@@ -32,8 +32,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val confirm = confirmPassword.value
 
         when {
-            pwd.length < 4 -> {
-                _message.value = "Password must be at least 4 characters"
+            pwd.length < 6 -> {
+                _message.value = "Password must be at least 6 characters"
                 return
             }
             pwd != confirm -> {
@@ -56,8 +56,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val confirm = confirmPassword.value
 
         when {
-            old.length < 4 || new.length < 4 -> {
-                _message.value = "Password must be at least 4 characters"
+            old.length < 6 || new.length < 6 -> {
+                _message.value = "Password must be at least 6 characters"
                 return
             }
             new != confirm -> {

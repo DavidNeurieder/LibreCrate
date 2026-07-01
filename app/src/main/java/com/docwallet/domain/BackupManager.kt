@@ -7,6 +7,7 @@ import com.docwallet.data.encryption.FileEncryptor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedOutputStream
+import java.io.DataInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -81,7 +82,7 @@ class BackupManager(
                     ?: return@withContext false
                 val fileEncryptor = FileEncryptor()
                 val iv = ByteArray(12)
-                FileInputStream(source).use { it.read(iv) }
+                DataInputStream(FileInputStream(source)).use { it.readFully(iv) }
                 val decryptedZip = File(tempDir, "backup.zip")
                 fileEncryptor.decrypt(source, decryptedZip, masterKey, iv)
 

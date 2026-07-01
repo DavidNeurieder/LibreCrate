@@ -67,6 +67,7 @@ import com.docwallet.ui.common.EmptyState
 @Composable
 fun ViewerScreen(
     documentId: String,
+    isNewNote: Boolean = false,
     onBack: () -> Unit,
     viewModel: ViewerViewModel = viewModel(),
     onDocumentNotFound: () -> Unit = {},
@@ -207,7 +208,7 @@ fun ViewerScreen(
     }
 
     LaunchedEffect(documentId) {
-        viewModel.loadDocument(documentId)
+        viewModel.loadDocument(documentId, isNewNote)
     }
 
     LaunchedEffect(error) {

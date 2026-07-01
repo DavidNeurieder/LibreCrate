@@ -205,7 +205,7 @@ private fun doSetPassword(
     onSuccess: () -> Unit,
 ) {
     when {
-        password.length < 4 -> onError("Password must be at least 4 characters")
+        password.length < 6 -> onError("Password must be at least 6 characters")
         password != confirmPassword -> onError("Passwords do not match")
         else -> {
             encryptionManager.initializeDeviceKeyMode()

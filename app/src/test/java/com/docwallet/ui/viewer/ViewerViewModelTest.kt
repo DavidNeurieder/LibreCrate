@@ -166,7 +166,7 @@ class ViewerViewModelTest {
         coEvery { mockDao.getDocumentById(noteId) } returns null
         every { mockEncryptionManager.getMasterKeyForSession() } returns masterKey
 
-        viewModel.loadDocument(noteId)
+        viewModel.loadDocument(noteId, isNewNote = true)
         advanceUntilIdle()
 
         assertEquals("New Note", viewModel.document.value?.title)
@@ -249,7 +249,7 @@ class ViewerViewModelTest {
         coEvery { mockDao.getDocumentById(noteId) } returns null
         every { mockEncryptionManager.getMasterKeyForSession() } returns masterKey
 
-        viewModel.loadDocument(noteId)
+        viewModel.loadDocument(noteId, isNewNote = true)
         advanceUntilIdle()
 
         assertEquals(noteId, SessionStore.getLastDocumentId(mockApp))

@@ -30,8 +30,13 @@ class DocumentImporter(
     }
 
     suspend fun importDocument(uri: Uri, mimeType: String): Document? = withContext(Dispatchers.IO) {
+        val tempFile = try {
+            copyUriToTempFile(uri)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to copy temp file", e)
+            return@withContext null
+        }
         try {
-            val tempFile = copyUriToTempFile(uri)
             val fileName = getFileName(uri) ?: "unknown"
             val fileSize = tempFile.length()
 
@@ -64,19 +69,20 @@ class DocumentImporter(
             )
 
             documentDao.insert(document)
-            tempFile.delete()
             document
         } catch (e: Exception) {
             Log.e(TAG, "Failed to import document", e)
             null
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
         }
     }
 
     suspend fun importNote(title: String, content: String): Document? = withContext(Dispatchers.IO) {
+        val safeName = title.replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
+        val fileName = "$safeName.md"
+        val tempFile = File(context.cacheDir, fileName)
         try {
-            val safeName = title.replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
-            val fileName = "$safeName.md"
-            val tempFile = File(context.cacheDir, fileName)
             tempFile.writeText(content)
 
             val masterKey = encryptionManager.getMasterKeyForSession()
@@ -102,11 +108,12 @@ class DocumentImporter(
             )
 
             documentDao.insert(document)
-            tempFile.delete()
             document
         } catch (e: Exception) {
             Log.e(TAG, "Failed to import note", e)
             null
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
         }
     }
 

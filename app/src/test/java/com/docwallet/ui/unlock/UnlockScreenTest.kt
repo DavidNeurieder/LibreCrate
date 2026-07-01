@@ -74,6 +74,6 @@ class UnlockScreenTest {
         }
         composeTestRule.onNodeWithText("Password").performTextInput("abc")
         composeTestRule.onNodeWithText("Unlock").performClick()
-        composeTestRule.onNodeWithText("Password must be at least 4 characters").assertExists()
+        composeTestRule.onNodeWithText("Password must be at least 6 characters").assertExists()
     }
 }
