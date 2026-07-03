@@ -85,8 +85,6 @@ fun DocWalletNavGraph(
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 onBack = { navController.popBackStack() },
-                onCollectionsClick = { navController.navigate(Routes.COLLECTIONS) },
-                onTagsClick = { navController.navigate(Routes.TAGS) },
             )
         }
         composable(

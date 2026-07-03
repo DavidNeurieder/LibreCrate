@@ -49,11 +49,6 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun showsManagementSection() {
-        composeTestRule.onNodeWithText("Management").assertExists()
-    }
-
-    @Test
     fun showsAboutSection() {
         composeTestRule.onNodeWithText("About").assertExists()
     }
@@ -66,16 +61,6 @@ class SettingsScreenTest {
     @Test
     fun showsImportBackupButton() {
         composeTestRule.onNodeWithText("Import Backup").assertExists()
-    }
-
-    @Test
-    fun showsCollectionsButton() {
-        composeTestRule.onNodeWithText("Collections").assertExists()
-    }
-
-    @Test
-    fun showsTagsButton() {
-        composeTestRule.onNodeWithText("Tags").assertExists()
     }
 
     @Test

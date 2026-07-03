@@ -60,8 +60,6 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onCollectionsClick: () -> Unit = {},
-    onTagsClick: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(),
 ) {
     val currentPassword by viewModel.currentPassword.collectAsState()
@@ -324,35 +322,6 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text("Import Backup")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            SectionHeader("Management")
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                ),
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    OutlinedButton(
-                        onClick = onCollectionsClick,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Collections")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedButton(
-                        onClick = onTagsClick,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Tags")
                     }
                 }
             }
