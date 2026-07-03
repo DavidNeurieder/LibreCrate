@@ -57,6 +57,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -448,9 +449,12 @@ fun LibraryScreen(
     }
 
     LaunchedEffect(Unit) {
-        documents.forEach { document ->
-            document.thumbnailPath?.let { viewModel.loadThumbnail(document.id, it) }
-        }
+        snapshotFlow { documents }
+            .collect { list ->
+                list.forEach { document ->
+                    document.thumbnailPath?.let { viewModel.loadThumbnail(document.id, it) }
+                }
+            }
     }
 }
 
