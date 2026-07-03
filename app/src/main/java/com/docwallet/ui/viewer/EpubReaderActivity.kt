@@ -176,12 +176,15 @@ class EpubReaderActivity : FragmentActivity() {
         val docId = documentId ?: return
         val fragment = supportFragmentManager.findFragmentById(containerId) as? EpubNavigatorFragment ?: return
         val locator = fragment.currentLocator.value
+        val progression = locator.locations.progression ?: 0.0
+        val percent = (progression * 100).toInt().coerceIn(1, 100)
         lifecycleScope.launch(Dispatchers.IO) {
             val app = application as DocWalletApplication
             val doc = app.documentDao.getDocumentById(docId) ?: return@launch
             app.documentDao.update(
                 doc.copy(
                     readingPosition = locator.toJSON().toString(),
+                    currentPage = percent,
                     lastOpenedAt = System.currentTimeMillis(),
                 )
             )

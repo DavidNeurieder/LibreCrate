@@ -99,8 +99,17 @@ fun DocumentCard(
 
                 Text(
                     text = buildString {
-                        append(DocumentType.fromMimeType(document.mimeType).name)
-                        if (document.pageCount > 0) {
+                        val docType = DocumentType.fromMimeType(document.mimeType)
+                        append(docType.name)
+                        if (document.currentPage > 0) {
+                            if (docType == DocumentType.EPUB) {
+                                append(" \u00B7 ${document.currentPage}% read")
+                            } else if (document.pageCount > 0) {
+                                append(" \u00B7 Page ${document.currentPage} of ${document.pageCount}")
+                            }
+                        } else if (docType == DocumentType.EPUB) {
+                            append(" \u00B7 0% read")
+                        } else if (document.pageCount > 0) {
                             append(" \u00B7 ${document.pageCount} pages")
                         }
                         append(" \u00B7 ${formatFileSize(document.fileSize)}")
