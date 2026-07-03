@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
@@ -24,6 +25,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -53,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.docwallet.data.model.DocumentType
 import com.docwallet.ui.common.EmptyState
@@ -264,7 +268,13 @@ fun ViewerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {},
+                title = {
+                    Text(
+                        text = document?.title ?: "",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -275,43 +285,57 @@ fun ViewerScreen(
                 },
                 actions = {
                     if (document != null) {
-                        IconButton(onClick = { showDeleteDialog = true }) {
+                        var showMore by remember { mutableStateOf(false) }
+                        IconButton(onClick = { showMore = true }) {
                             Icon(
-                                imageVector = Icons.Filled.Delete,
-                                contentDescription = "Delete document",
-                            )
-                        }
-                        IconButton(onClick = { viewModel.toggleFavorite() }) {
-                            Icon(
-                                imageVector = if (document!!.isFavorite)
-                                    Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = if (document!!.isFavorite)
-                                    "Remove from favorites" else "Add to favorites",
-                                tint = if (document!!.isFavorite)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(onClick = { showPdfSettingsDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Filled.Settings,
-                                contentDescription = "PDF settings",
-                            )
-                        }
-                        IconButton(onClick = { showInfoDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Filled.Info,
+                                imageVector = Icons.Default.MoreVert,
                                 contentDescription = "More options",
                             )
                         }
-                        IconButton(onClick = {
-                            renameText = document!!.title
-                            showRenameDialog = true
-                        }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Edit,
-                                contentDescription = "Rename",
+                        DropdownMenu(
+                            expanded = showMore,
+                            onDismissRequest = { showMore = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Info") },
+                                onClick = { showMore = false; showInfoDialog = true },
+                                leadingIcon = { Icon(Icons.Filled.Info, null) },
                             )
+                            DropdownMenuItem(
+                                text = { Text("Rename") },
+                                onClick = {
+                                    showMore = false
+                                    renameText = document!!.title
+                                    showRenameDialog = true
+                                },
+                                leadingIcon = { Icon(Icons.Outlined.Edit, null) },
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    if (document!!.isFavorite) Text("Remove favorite")
+                                    else Text("Add favorite")
+                                },
+                                onClick = { showMore = false; viewModel.toggleFavorite() },
+                                leadingIcon = {
+                                    Icon(
+                                        if (document!!.isFavorite) Icons.Filled.Favorite
+                                        else Icons.Outlined.FavoriteBorder,
+                                        null,
+                                    )
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete") },
+                                onClick = { showMore = false; showDeleteDialog = true },
+                                leadingIcon = { Icon(Icons.Filled.Delete, null) },
+                            )
+                            if (viewModel.getDocumentType() == DocumentType.PDF) {
+                                DropdownMenuItem(
+                                    text = { Text("PDF Settings") },
+                                    onClick = { showMore = false; showPdfSettingsDialog = true },
+                                    leadingIcon = { Icon(Icons.Filled.Settings, null) },
+                                )
+                            }
                         }
                     }
                 },

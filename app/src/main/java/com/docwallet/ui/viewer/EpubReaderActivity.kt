@@ -31,15 +31,18 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -73,6 +76,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
@@ -338,6 +342,8 @@ private fun EpubReaderScreen(
     onToggleFavorite: () -> Unit,
 ) {
     var showInfoDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameText by remember { mutableStateOf("") }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showTocSheet by remember { mutableStateOf(false) }
@@ -399,6 +405,54 @@ private fun EpubReaderScreen(
         }
     }
 
+    if (showRenameDialog && document != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showRenameDialog = false
+                renameText = ""
+            },
+            title = { Text("Rename document") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val name = renameText.trim()
+                        if (name.isNotEmpty()) {
+                            val docId = document?.id ?: return@TextButton
+                            scope.launch(Dispatchers.IO) {
+                                val app = (activity?.application as? DocWalletApplication) ?: return@launch
+                                val doc = app.documentDao.getDocumentById(docId) ?: return@launch
+                                app.documentDao.update(doc.copy(title = name))
+                            }
+                        }
+                        showRenameDialog = false
+                        renameText = ""
+                    },
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showRenameDialog = false
+                        renameText = ""
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     if (showDeleteDialog && document != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -443,7 +497,13 @@ private fun EpubReaderScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {},
+                title = {
+                    Text(
+                        text = document?.title ?: "",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -454,39 +514,60 @@ private fun EpubReaderScreen(
                 },
                 actions = {
                     if (document != null) {
-                        IconButton(onClick = { showDeleteDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Filled.Delete,
-                                contentDescription = "Delete document",
-                            )
-                        }
-                        IconButton(onClick = {
-                            isFavorite = !isFavorite
-                            onToggleFavorite()
-                        }) {
-                            Icon(
-                                imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                                tint = if (isFavorite) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                         IconButton(onClick = { showTocSheet = true }) {
                             Icon(
                                 imageVector = Icons.Filled.List,
                                 contentDescription = "Table of Contents",
                             )
                         }
-                        IconButton(onClick = { showInfoDialog = true }) {
+                        var showMore by remember { mutableStateOf(false) }
+                        IconButton(onClick = { showMore = true }) {
                             Icon(
-                                imageVector = Icons.Filled.Info,
+                                imageVector = Icons.Default.MoreVert,
                                 contentDescription = "More options",
                             )
                         }
-                        IconButton(onClick = { showSettingsDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Filled.Settings,
-                                contentDescription = "Reader settings",
+                        DropdownMenu(
+                            expanded = showMore,
+                            onDismissRequest = { showMore = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Info") },
+                                onClick = { showMore = false; showInfoDialog = true },
+                                leadingIcon = { Icon(Icons.Filled.Info, null) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Rename") },
+                                onClick = {
+                                    showMore = false
+                                    renameText = document.title
+                                    showRenameDialog = true
+                                },
+                                leadingIcon = { Icon(Icons.Outlined.Edit, null) },
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    if (isFavorite) Text("Remove favorite")
+                                    else Text("Add favorite")
+                                },
+                                onClick = { showMore = false; isFavorite = !isFavorite; onToggleFavorite() },
+                                leadingIcon = {
+                                    Icon(
+                                        if (isFavorite) Icons.Filled.Favorite
+                                        else Icons.Outlined.FavoriteBorder,
+                                        null,
+                                    )
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete") },
+                                onClick = { showMore = false; showDeleteDialog = true },
+                                leadingIcon = { Icon(Icons.Filled.Delete, null) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Reader Settings") },
+                                onClick = { showMore = false; showSettingsDialog = true },
+                                leadingIcon = { Icon(Icons.Filled.Settings, null) },
                             )
                         }
                     }
