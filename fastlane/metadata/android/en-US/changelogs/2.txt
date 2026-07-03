@@ -1,0 +1,8 @@
+• Redesigned library: search in top bar, sort & filter dropdowns
+• Reading progress shown on document cards (PDF page, EPUB %)
+• Merged continue reading into main list
+• Unified viewer headers with overflow menus
+• Removed fullscreen mode
+• EPUB reader now has rename dialog
+• Default sort by recently opened
+• Various fixes and optimizations

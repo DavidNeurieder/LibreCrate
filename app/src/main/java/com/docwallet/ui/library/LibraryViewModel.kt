@@ -32,8 +32,6 @@ enum class SortOption(val label: String) {
     RECENTLY_OPENED("Recently opened"),
     DATE_NEWEST("Newest first"),
     DATE_OLDEST("Oldest first"),
-    SIZE_LARGEST("Largest first"),
-    TYPE("By type"),
 }
 
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
@@ -100,8 +98,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             SortOption.NAME_DESC -> result.sortedByDescending { it.title.lowercase() }
             SortOption.DATE_NEWEST -> result.sortedByDescending { it.importedAt }
             SortOption.DATE_OLDEST -> result.sortedBy { it.importedAt }
-            SortOption.SIZE_LARGEST -> result.sortedByDescending { it.fileSize }
-            SortOption.TYPE -> result.sortedBy { it.mimeType }
             SortOption.RECENTLY_OPENED -> result.sortedByDescending { it.lastOpenedAt }
         }
 

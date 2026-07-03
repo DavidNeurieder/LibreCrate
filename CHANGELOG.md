@@ -1,8 +1,29 @@
 # Changelog
 
-## 0.1.0 (2026-06-05)
+## 0.2.0 (2026-07-03)
 
-Initial release.
+### UI/UX
+
+- **Redesigned library**: Search moves into TopAppBar; filter row condensed to Sort + Type dropdowns + Favorites chip
+- **Default sort**: Changed to "Recently opened"; removed "Largest first" and "By type" options
+- **Reading progress**: Document cards now show "Page X of Y" for PDFs and "% read" for EPUBs
+- **Continue reading**: Merged into main list; shows last-opened timestamp
+- **Edit removed**: Edit button removed from main screen DocumentCard (edit in viewer only)
+- **Fullscreen removed**: Fullscreen mode removed from all viewers
+- **Unified viewer headers**: Title in TopAppBar, type-specific buttons visible, all other actions in overflow menu
+- **EPUB rename**: Added rename dialog to EPUB reader
+- **Collections & Tags**: Entry points removed from Settings (functionality kept internally for future use)
+- **Scroll restoration**: Fixed LazyListState scroll position loss when returning from a document
+
+### Fixes
+
+- **Thumbnail loading**: Fixed race condition by switching from `LaunchedEffect(Unit)` to `snapshotFlow`
+- **PDF scroll position**: Replaced `scrollToItem` with `initialFirstVisibleItemIndex` in LazyColumn guarded by `pageCount > 0`
+- **EPUB progress**: Reading position now saved as progression percentage (1–100)
+
+### Technical
+
+- Bumped version to 0.2.0 (versionCode 2)
 
 ### Features
 

@@ -1,6 +1,6 @@
 # DocWallet
 
-**Version 0.1.0**
+**Version 0.2.0**
 
 Encrypted document vault for Android — stores, views, organizes, and searches PDFs, EPUBs, PKPass files, comic archives (CBZ/CBR), images, and personal notes. All documents are encrypted at rest with optional password protection and zero network access.
 
@@ -10,9 +10,8 @@ Encrypted document vault for Android — stores, views, organizes, and searches 
 - **Encryption at rest**: AES-256-GCM per-file encryption; master key wrapped via Argon2id + AES-256-KW
 - **Optional password**: Even with the phone unlocked, content can't be read without the password
 - **No network**: Zero internet permission — your documents never leave the device
-- **Library view**: Grid/list views, favorites, recents, search
-- **Collections & Tags**: Organize documents your way
-- **Reading position**: Remembers last page for PDFs and comics, last location for EPUBs
+- **Library view**: Search, sort, filter by type, favorites with reading progress indicators
+- **Reading position**: Remembers last page for PDFs and comics, last location for EPUBs; shows progress on document cards
 - **Import**: Share intents, SAF file picker, bulk import
 - **Backup**: Single encrypted `.docwallet-backup` file via SAF
 - **F-Droid only**: No Google Play Services, Firebase, Crashlytics, or AdMob
@@ -55,8 +54,8 @@ sdk.dir=/path/to/Android/Sdk
 ./gradlew connectedDebugAndroidTest
 ```
 
-- 119 unit tests
-- 46 instrumented tests (API 15+)
+- 119+ unit tests
+- 46+ instrumented tests (API 15+)
 
 ## AllowedAPKSigningKeys to verify Releases:
 

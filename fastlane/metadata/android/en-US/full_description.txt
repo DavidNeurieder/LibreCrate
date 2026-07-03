@@ -6,8 +6,7 @@ Features:
 • Six supported types: PDF, EPUB, PKPass, CBZ/CBR, images, and notes
 • Per-file AES-256-GCM encryption
 • Optional password protection (Argon2id key derivation)
-• Grid and list library views with search
-• Collections and tags for organization
+• Search, sort, and filter library with reading progress indicators
 • Share intent and SAF file picker import
 • Encrypted backup export/import via SAF
 • Zero network access — no Google Play Services, Firebase, or ads
