@@ -21,7 +21,6 @@ import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.ConfirmationNumber
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PictureAsPdf
@@ -54,7 +53,6 @@ fun DocumentCard(
     document: Document,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
-    onRenameClick: () -> Unit = {},
     thumbnail: ImageBitmap? = null,
 ) {
     Card(
@@ -123,13 +121,6 @@ fun DocumentCard(
                     imageVector = if (document.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = if (document.isFavorite) "Remove from favorites" else "Add to favorites",
                     tint = if (document.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = onRenameClick) {
-                Icon(
-                    imageVector = Icons.Outlined.Edit,
-                    contentDescription = "Rename",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
