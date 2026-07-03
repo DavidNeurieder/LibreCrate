@@ -7,6 +7,7 @@ import androidx.compose.ui.test.hasParent
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import com.docwallet.DocWalletApplication
 import com.docwallet.data.db.DocumentDao
 import com.docwallet.data.db.DocumentListItem
@@ -62,6 +63,7 @@ class LibraryScreenTest {
                 )
             }
         }
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
         composeTestRule.onNodeWithText("Search documents").assertExists()
     }
 
@@ -90,7 +92,7 @@ class LibraryScreenTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("All").assertExists()
+        composeTestRule.onNodeWithText("All").performClick()
         composeTestRule.onNodeWithText("PDFs").assertExists()
         composeTestRule.onNodeWithText("Books").assertExists()
     }
