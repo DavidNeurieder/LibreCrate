@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,7 +67,7 @@ fun PdfViewer(
     pdfPreferences: PdfPreferences = PdfPreferences(),
 ) {
     var pageCount by remember { mutableIntStateOf(document.pageCount) }
-    val initialIndex = (initialPage - 1).coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+    val initialIndex = (initialPage - 1).coerceAtLeast(0)
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
     var currentPage by remember { mutableIntStateOf(1) }
 
@@ -158,61 +159,67 @@ fun PdfViewer(
                 }
             },
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offsetX,
-                    translationY = offsetY,
-                ),
-        ) {
-            itemsIndexed(Array(pageCount) { it }.toList()) { index, _ ->
-                val bitmap = renderedPages[index]
-                if (bitmap != null) {
-                    val pageContentScale = when (pdfPreferences.pageFitMode) {
-                        PageFitMode.FIT_WIDTH -> ContentScale.FillWidth
-                        PageFitMode.FIT_PAGE -> ContentScale.Fit
-                        PageFitMode.ACTUAL_SIZE -> ContentScale.None
-                    }
-                    val pageColorFilter = if (pdfPreferences.nightMode) {
-                        ColorFilter.colorMatrix(invertColorMatrix)
-                    } else null
-                    val pageBg = if (pdfPreferences.nightMode) {
-                        androidx.compose.ui.graphics.Color(0xFF1A1A1A)
+        if (pageCount > 0) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offsetX,
+                        translationY = offsetY,
+                    ),
+            ) {
+                itemsIndexed(Array(pageCount) { it }.toList()) { index, _ ->
+                    val bitmap = renderedPages[index]
+                    if (bitmap != null) {
+                        val pageContentScale = when (pdfPreferences.pageFitMode) {
+                            PageFitMode.FIT_WIDTH -> ContentScale.FillWidth
+                            PageFitMode.FIT_PAGE -> ContentScale.Fit
+                            PageFitMode.ACTUAL_SIZE -> ContentScale.None
+                        }
+                        val pageColorFilter = if (pdfPreferences.nightMode) {
+                            ColorFilter.colorMatrix(invertColorMatrix)
+                        } else null
+                        val pageBg = if (pdfPreferences.nightMode) {
+                            androidx.compose.ui.graphics.Color(0xFF1A1A1A)
+                        } else {
+                            androidx.compose.ui.graphics.Color.White
+                        }
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Page ${index + 1}",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .background(pageBg)
+                                .clearAndSetSemantics { },
+                            contentScale = pageContentScale,
+                            colorFilter = pageColorFilter,
+                        )
                     } else {
-                        androidx.compose.ui.graphics.Color.White
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(16.dp),
+                        )
                     }
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Page ${index + 1}",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .background(pageBg)
-                            .clearAndSetSemantics { },
-                        contentScale = pageContentScale,
-                        colorFilter = pageColorFilter,
-                    )
-                } else {
-                    Spacer(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(16.dp),
-                    )
                 }
             }
-        }
 
-        Text(
-            text = "Page $currentPage of $pageCount",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(16.dp),
-        )
+            Text(
+                text = "Page $currentPage of $pageCount",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp),
+            )
+        } else {
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
     }
 }
