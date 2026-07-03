@@ -84,6 +84,7 @@ import androidx.fragment.app.FragmentContainerView
 import androidx.lifecycle.lifecycleScope
 import androidx.fragment.app.commit
 import com.docwallet.DocWalletApplication
+import com.docwallet.data.AppPreferencesStore
 import com.docwallet.data.FontFamilyName
 import com.docwallet.data.ReaderPreferences
 import com.docwallet.data.ReaderPreferencesStore
@@ -150,7 +151,7 @@ class EpubReaderActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        updateScreenCaptureFlag()
 
         containerId = View.generateViewId()
 
@@ -168,6 +169,19 @@ class EpubReaderActivity : FragmentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateScreenCaptureFlag()
+    }
+
+    private fun updateScreenCaptureFlag() {
+        if (AppPreferencesStore.isScreenshotsEnabled(this)) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 

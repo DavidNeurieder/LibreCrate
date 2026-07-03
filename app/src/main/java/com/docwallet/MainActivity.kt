@@ -1,8 +1,10 @@
 package com.docwallet
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Bundle
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,16 +22,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
+import com.docwallet.data.AppPreferencesStore
 import com.docwallet.ui.navigation.DocWalletNavGraph
 import com.docwallet.ui.navigation.Routes
 
 class MainActivity : ComponentActivity() {
     private val pendingShareUris = mutableStateOf<List<Uri>>(emptyList())
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+        if (key == "screenshots_enabled") {
+            updateScreenCaptureFlag()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        updateScreenCaptureFlag()
+        getSharedPreferences("app_preferences", MODE_PRIVATE)
+            .registerOnSharedPreferenceChangeListener(prefsListener)
 
         handleShareIntent(intent)
 
@@ -69,6 +79,20 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        getSharedPreferences("app_preferences", MODE_PRIVATE)
+            .unregisterOnSharedPreferenceChangeListener(prefsListener)
+    }
+
+    private fun updateScreenCaptureFlag() {
+        if (AppPreferencesStore.isScreenshotsEnabled(this)) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 
