@@ -161,13 +161,10 @@ class BackupManager(
     private fun restoreKeyFiles(tempDir: File) {
         val encryptionDir = File(context.filesDir, "encryption").also { it.mkdirs() }
         copyFromDir(tempDir, "wrapped_master_key", encryptionDir)
+        // Only restore the plaintext device_key. On a cross-device restore the
+        // old KeyStore-wrapped key is undecryptable — the legacy path will
+        // succeed and trigger migrateDeviceKeyToKeyStore on first access.
         copyFromDir(tempDir, "device_key", encryptionDir)
-        // Also restore KeyStore-wrapped form if it was bundled in the ZIP
-        // (it may be inside the files/encryption/ directory from copyDirectory).
-        val tempEncryptedKey = File(tempDir, "files/encryption/encrypted_device_key")
-        if (tempEncryptedKey.exists()) {
-            tempEncryptedKey.copyTo(File(encryptionDir, "encrypted_device_key"), overwrite = true)
-        }
         val tempSalt = File(tempDir, "salt")
         if (tempSalt.exists()) {
             tempSalt.copyTo(File(encryptionDir, "salt"), overwrite = true)

@@ -78,6 +78,8 @@ class BackupManagerTest {
         File(context.cacheDir, "src_doc2.txt").delete()
         File(context.cacheDir, "verify_doc1.txt").delete()
         File(context.cacheDir, "verify_doc2.txt").delete()
+        File(context.cacheDir, "src_ri1.txt").delete()
+        File(context.cacheDir, "verify_ri1.txt").delete()
     }
 
     @Suppress("BlockingMethodInNonBlockingContext")
@@ -239,6 +241,77 @@ class BackupManagerTest {
         // Files should also be restored.
         val restoredFile = File(docs[0].filePath)
         assertTrue("Encrypted file should exist", restoredFile.exists())
+
+        restoredDb.close()
+    }
+
+    @Suppress("BlockingMethodInNonBlockingContext")
+    @Test
+    fun backupAfterUninstallReinstall() = runTest {
+        val filesDir = File(context.filesDir, "files").also { it.mkdirs() }
+
+        // --- First install: create data and export backup ---
+        val docContent = "Data from first install after reinstall".toByteArray()
+        val docFile = File(filesDir, "ri1.enc")
+        val docSrc = File(context.cacheDir, "src_ri1.txt").apply { writeBytes(docContent) }
+        val docIv = fileEncryptor.encrypt(docSrc, docFile, masterKey)
+        docSrc.delete()
+
+        val doc = Document(
+            id = "ri-doc-1",
+            title = "Reinstall Doc",
+            fileName = "ri.txt",
+            mimeType = "text/plain",
+            filePath = docFile.absolutePath,
+            fileSize = docContent.size.toLong(),
+            encryptionIv = docIv,
+        )
+        dao.insert(doc)
+        assertEquals(1, dao.getAllDocuments().first().size)
+
+        val backupFile = File(context.cacheDir, "test_backup.backup")
+        assertTrue(backupManager.exportBackup(backupFile))
+        db.close()
+
+        // --- Uninstall: wipe everything ---
+        context.getDatabasePath("docwallet.db").let { dbFile ->
+            dbFile.delete()
+            File(dbFile.parentFile, "docwallet.db-wal").delete()
+            File(dbFile.parentFile, "docwallet.db-shm").delete()
+        }
+        File(context.filesDir, "files").deleteRecursively()
+        File(context.filesDir, "encryption").deleteRecursively()
+
+        // --- Reinstall: fresh EncryptionManager with a *different*
+        //     TestKeyStoreCryptographer (simulates lost Android KeyStore key).
+        //     No initializeDeviceKeyMode() — app has never launched before. ---
+        val freshEm = EncryptionManager(context, DeterministicHasher(), TestKeyStoreCryptographer())
+        assertTrue("Should be first launch after reinstall", freshEm.isFirstLaunch())
+
+        val freshBm = BackupManager(context, freshEm) { null }
+        assertTrue("Import should succeed after reinstall", freshBm.importBackup(backupFile, currentPassword = null))
+
+        // Keys restored from the backup — master key is recoverable via the
+        // plaintext device_key path (encrypted_device_key from the old KeyStore
+        // is undecryptable by the new TestKeyStoreCryptographer).
+        val restoredKey = freshEm.getMasterKeyForSession()
+        assertNotNull("Master key should be recoverable", restoredKey)
+        assertArrayEquals("Master key must match the original", masterKey, restoredKey)
+
+        // Data intact
+        val restoredDb = DocWalletDatabase.create(context, restoredKey!!)
+        val restoredDao = restoredDb.documentDao()
+        val docs = restoredDao.getAllDocuments().first()
+        assertEquals(1, docs.size)
+        assertEquals("ri-doc-1", docs[0].id)
+
+        val restoredFile = File(docs[0].filePath)
+        assertTrue("Encrypted file should exist", restoredFile.exists())
+
+        val decrypted = File(context.cacheDir, "verify_ri1.txt")
+        fileEncryptor.decrypt(restoredFile, decrypted, restoredKey, docs[0].encryptionIv!!)
+        assertArrayEquals(docContent, decrypted.readBytes())
+        decrypted.delete()
 
         restoredDb.close()
     }
