@@ -38,6 +38,7 @@ class BackupManagerTest {
 
     companion object {
         private const val TEST_PASSWORD = "test_vault_password"
+        private const val TEST_PASSWORD_2 = "different_password"
     }
 
     @Before
@@ -85,6 +86,12 @@ class BackupManagerTest {
         File(context.cacheDir, "src_ri1.txt").delete()
         File(context.cacheDir, "verify_ri1.txt").delete()
         File(context.cacheDir, "src_wp.txt").delete()
+        File(context.cacheDir, "saved_encryption_a").deleteRecursively()
+        File(context.cacheDir, "backup_b.vault").delete()
+        File(context.cacheDir, "src_doc_a_cross.txt").delete()
+        File(context.cacheDir, "src_doc_b_cross.txt").delete()
+        File(context.cacheDir, "verify_doc_a_cross.txt").delete()
+        File(context.cacheDir, "verify_doc_b_cross.txt").delete()
     }
 
     @Suppress("BlockingMethodInNonBlockingContext")
@@ -352,6 +359,154 @@ class BackupManagerTest {
         decrypted.delete()
 
         restoredDb.close()
+    }
+
+    @Suppress("BlockingMethodInNonBlockingContext")
+    @Test
+    fun importBackupWithDifferentMasterKeyAndPasswordIntoExistingContent() = runTest {
+        val filesDir = File(context.filesDir, "files").also { it.mkdirs() }
+
+        // --- Device A: existing content ---
+        val docAContent = "Existing document on device A".toByteArray()
+        val docAFile = File(filesDir, "doc_a_cross.enc")
+        val docASrc = File(context.cacheDir, "src_doc_a_cross.txt").apply { writeBytes(docAContent) }
+        val docAIv = fileEncryptor.encrypt(docASrc, docAFile, masterKey)
+        docASrc.delete()
+
+        val docA = Document(
+            id = "cross-a-doc-1",
+            title = "Device A Doc",
+            fileName = "a.txt",
+            mimeType = "text/plain",
+            filePath = docAFile.absolutePath,
+            fileSize = docAContent.size.toLong(),
+            encryptionIv = docAIv,
+        )
+        dao.insert(docA)
+
+        // --- Save A's encryption files and close A's DB ---
+        val encryptionDir = File(context.filesDir, "encryption")
+        val savedEncryption = File(context.cacheDir, "saved_encryption_a").also {
+            it.deleteRecursively()
+            it.mkdirs()
+        }
+        encryptionDir.walkTopDown().forEach { file ->
+            if (file.isFile) {
+                val dest = File(savedEncryption, file.relativeTo(encryptionDir).path)
+                dest.parentFile?.mkdirs()
+                file.copyTo(dest, overwrite = true)
+            }
+        }
+        db.close()
+        context.getDatabasePath("docwallet.db").let { dbFile ->
+            dbFile.delete()
+            File(dbFile.parentFile, "docwallet.db-wal").delete()
+            File(dbFile.parentFile, "docwallet.db-shm").delete()
+        }
+
+        // --- Device B: different master key AND different password ---
+        // B's DB uses the same file path ("docwallet.db") since exportBackup() hardcodes it.
+        encryptionDir.deleteRecursively()
+        encryptionManager.lock()
+        encryptionManager.initializeWithPassword(TEST_PASSWORD_2)
+        val masterKeyB = encryptionManager.getMasterKeyForSession()
+        assertNotNull("MK_B should be available", masterKeyB)
+        assertFalse("MK_B differs from MK_A", masterKey.contentEquals(masterKeyB))
+
+        val dbB = DocWalletDatabase.create(context, masterKeyB!!)
+        val daoB = dbB.documentDao()
+
+        val docBContent = "Document from device B".toByteArray()
+        val docBFile = File(filesDir, "doc_b_cross.enc")
+        val docBSrc = File(context.cacheDir, "src_doc_b_cross.txt").apply { writeBytes(docBContent) }
+        val docBIv = fileEncryptor.encrypt(docBSrc, docBFile, masterKeyB)
+        docBSrc.delete()
+
+        val docB = Document(
+            id = "cross-b-doc-1",
+            title = "Device B Doc",
+            fileName = "b.txt",
+            mimeType = "text/plain",
+            filePath = docBFile.absolutePath,
+            fileSize = docBContent.size.toLong(),
+            encryptionIv = docBIv,
+        )
+        daoB.insert(docB)
+
+        // Export backup from B
+        val backupManagerB = BackupManager(context, encryptionManager, { dbB }, DeterministicHasher())
+        val backupFile = File(context.cacheDir, "backup_b.vault")
+        assertTrue("Export from B should succeed", backupManagerB.exportBackup(backupFile, TEST_PASSWORD_2))
+        assertTrue("Backup file should exist", backupFile.exists())
+
+        dbB.close()
+        context.getDatabasePath("docwallet.db").let { dbFile ->
+            dbFile.delete()
+            File(dbFile.parentFile, "docwallet.db-wal").delete()
+            File(dbFile.parentFile, "docwallet.db-shm").delete()
+        }
+
+        // --- Restore A's encryption files and re-create A's DB ---
+        encryptionDir.deleteRecursively()
+        savedEncryption.walkTopDown().forEach { file ->
+            if (file.isFile) {
+                val dest = File(encryptionDir, file.relativeTo(savedEncryption).path)
+                dest.parentFile?.mkdirs()
+                file.copyTo(dest, overwrite = true)
+            }
+        }
+        encryptionManager.lock()
+        val restoredMasterKeyA = encryptionManager.getMasterKeyForSession()
+        assertNotNull("MK_A should be recoverable after restore", restoredMasterKeyA)
+        assertArrayEquals("Restored MK_A matches original", masterKey, restoredMasterKeyA)
+
+        val dbA2 = DocWalletDatabase.create(context, restoredMasterKeyA!!)
+        val daoA2 = dbA2.documentDao()
+        daoA2.insert(docA)
+        backupManager = BackupManager(context, encryptionManager, { dbA2 }, DeterministicHasher())
+
+        // --- Import B's backup into A ---
+        assertTrue("Import from B into A should succeed", backupManager.importBackup(backupFile, TEST_PASSWORD_2))
+
+        // --- Verify merged content ---
+        val docs = daoA2.getAllDocuments().first()
+        assertEquals("Both devices' documents should be present", 2, docs.size)
+
+        val restoredA = docs.find { it.id == "cross-a-doc-1" }
+        assertNotNull("Device A doc exists", restoredA)
+        assertEquals("Device A Doc", restoredA!!.title)
+        assertTrue("Doc A encrypted file exists", File(restoredA.filePath).exists())
+
+        val restoredB = docs.find { it.id == "cross-b-doc-1" }
+        assertNotNull("Device B doc exists", restoredB)
+        assertEquals("Device B Doc", restoredB!!.title)
+        assertTrue("Doc B encrypted file exists", File(restoredB.filePath).exists())
+
+        // Decrypt doc A with MK_A
+        val decryptedA = File(context.cacheDir, "verify_doc_a_cross.txt")
+        fileEncryptor.decrypt(
+            File(restoredA.filePath), decryptedA,
+            masterKey, restoredA.encryptionIv!!,
+        )
+        assertArrayEquals("Doc A content matches", docAContent, decryptedA.readBytes())
+        decryptedA.delete()
+
+        // Decrypt doc B with MK_B
+        val decryptedB = File(context.cacheDir, "verify_doc_b_cross.txt")
+        fileEncryptor.decrypt(
+            File(restoredB.filePath), decryptedB,
+            masterKeyB, restoredB.encryptionIv!!,
+        )
+        assertArrayEquals("Doc B content matches", docBContent, decryptedB.readBytes())
+        decryptedB.delete()
+
+        // --- reopenDatabase() must work with MK_A (local key preserved) ---
+        dbA2.close()
+        val reopenedDb = DocWalletDatabase.create(context, masterKey)
+        val reopenedDao = reopenedDb.documentDao()
+        val reopenedDocs = reopenedDao.getAllDocuments().first()
+        assertEquals("Reopened DB should have 2 docs", 2, reopenedDocs.size)
+        reopenedDb.close()
     }
 
     private class TestKeyStoreCryptographer : KeyStoreCryptographer {
