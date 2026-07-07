@@ -9,6 +9,7 @@ import com.docwallet.vault.backup.VaultExporter
 import com.docwallet.vault.database.SqlCipherOpener
 import com.docwallet.vault.database.SqlHandle
 import com.docwallet.vault.database.SqlHandleSupportAndroid
+import com.docwallet.vault.database.VaultDatabaseMerger
 import com.docwallet.vault.backup.VaultImporter
 import com.docwallet.vault.crypto.Argon2Hasher
 import com.docwallet.vault.crypto.Argon2HasherImpl
@@ -118,13 +119,28 @@ class BackupManager(
                 tempDb.writeBytes(dbData)
 
                 if (currentDb != null && backupMasterKey != null) {
-                    val backupOpener: (String) -> SqlHandle = { path ->
-                        SqlCipherOpener(context, backupMasterKey).open(path)
+                    val backupHandle = SqlCipherOpener(context, backupMasterKey).open(tempDb.absolutePath)
+                    val currentSqlHandle = getDatabase()?.openHelper?.writableDatabase
+                        ?.let { SqlHandleSupportAndroid(it) } ?: return
+                    val localKey = encryptionManager.getMasterKeyForSession()
+                    val filesDir = File(context.filesDir, "files")
+                    try {
+                        val merger = VaultDatabaseMerger()
+                        if (localKey != null) {
+                            merger.mergeWithFileReencryption(
+                                backupDb = backupHandle,
+                                currentDb = currentSqlHandle,
+                                files = contents.files,
+                                backupKey = backupMasterKey,
+                                localKey = localKey,
+                                filesDirPath = filesDir.absolutePath,
+                            )
+                        } else {
+                            merger.merge(backupHandle, currentSqlHandle)
+                        }
+                    } finally {
+                        backupHandle.close()
                     }
-                    val currentHandle: () -> SqlHandle? = {
-                        getDatabase()?.openHelper?.writableDatabase?.let { SqlHandleSupportAndroid(it) }
-                    }
-                    DatabaseMerger(backupOpener, currentHandle).merge(tempDb.absolutePath)
                 } else if (currentDb == null && backupMasterKey != null) {
                     contents.keys["wrapped_master_key"]?.let {
                         File(encryptionDir, "wrapped_master_key").writeBytes(it)

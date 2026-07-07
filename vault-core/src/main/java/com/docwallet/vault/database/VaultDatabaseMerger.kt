@@ -1,9 +1,11 @@
 package com.docwallet.vault.database
 
+import com.docwallet.vault.crypto.FileEncryptor
 import com.docwallet.vault.model.VaultCollection
 import com.docwallet.vault.model.VaultDocument
 import com.docwallet.vault.model.VaultDocumentTag
 import com.docwallet.vault.model.VaultTag
+import java.io.File
 import java.util.UUID
 
 class VaultDatabaseMerger {
@@ -114,6 +116,68 @@ class VaultDatabaseMerger {
             documentsSkipped = skipped,
             collectionsAdded = collectionsAdded,
             tagsAdded = tagsAdded,
+        )
+    }
+
+    fun mergeWithFileReencryption(
+        backupDb: SqlHandle,
+        currentDb: SqlHandle,
+        files: Map<String, ByteArray>,
+        backupKey: ByteArray,
+        localKey: ByteArray,
+        filesDirPath: String,
+        fileEncryptor: FileEncryptor = FileEncryptor(),
+    ): MergeResult {
+        val backupDocs = readDocuments(backupDb)
+        val result = merge(backupDb, currentDb)
+
+        for (doc in backupDocs) {
+            val iv = doc.encryptionIv ?: continue
+            val relativeName = doc.filePath.substringAfterLast("/")
+            val fileBytes = files[relativeName] ?: continue
+            if (fileBytes.size <= FileEncryptor.IV_LENGTH) continue
+
+            try {
+                val target = File(filesDirPath, relativeName)
+                if (target.exists()) {
+                    val localIv = readFileIv(target)
+                    updateFilePaths(currentDb, doc.filePath, target.absolutePath, localIv)
+                    continue
+                }
+                val rawCiphertext = fileBytes.copyOfRange(FileEncryptor.IV_LENGTH, fileBytes.size)
+                val plaintext = fileEncryptor.decryptBytes(rawCiphertext, backupKey, iv)
+                val (newIv, reencrypted) = fileEncryptor.encryptBytes(plaintext, localKey)
+                target.parentFile?.mkdirs()
+                target.outputStream().use { out ->
+                    out.write(newIv)
+                    out.write(reencrypted)
+                }
+                updateFilePaths(currentDb, doc.filePath, target.absolutePath, newIv)
+            } catch (_: Exception) {
+            }
+        }
+
+        return result
+    }
+
+    private fun readFileIv(file: File): ByteArray {
+        val iv = ByteArray(FileEncryptor.IV_LENGTH)
+        file.inputStream().use { stream ->
+            var offset = 0
+            while (offset < iv.size) {
+                val n = stream.read(iv, offset, iv.size - offset)
+                if (n == -1) break
+                offset += n
+            }
+            if (offset < iv.size) error("File too short to contain IV: ${file.name}")
+        }
+        return iv
+    }
+
+    private fun updateFilePaths(db: SqlHandle, oldPath: String, newPath: String, iv: ByteArray) {
+        db.execSQL(
+            "UPDATE documents SET encryption_iv = ?, file_path = ? WHERE file_path = ?",
+            arrayOf(iv, newPath, oldPath),
         )
     }
 

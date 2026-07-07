@@ -446,6 +446,10 @@ class BackupManagerTest {
             File(dbFile.parentFile, "docwallet.db-shm").delete()
         }
 
+        // Remove B's encrypted files so they don't collide with A's import (same device)
+        docBFile.delete()
+        File(filesDir, "doc_b_cross.enc").delete()
+
         // --- Restore A's encryption files and re-create A's DB ---
         encryptionDir.deleteRecursively()
         savedEncryption.walkTopDown().forEach { file ->
@@ -491,11 +495,11 @@ class BackupManagerTest {
         assertArrayEquals("Doc A content matches", docAContent, decryptedA.readBytes())
         decryptedA.delete()
 
-        // Decrypt doc B with MK_B
+        // Decrypt doc B with MK_A (re-encrypted during import)
         val decryptedB = File(context.cacheDir, "verify_doc_b_cross.txt")
         fileEncryptor.decrypt(
             File(restoredB.filePath), decryptedB,
-            masterKeyB, restoredB.encryptionIv!!,
+            masterKey, restoredB.encryptionIv!!,
         )
         assertArrayEquals("Doc B content matches", docBContent, decryptedB.readBytes())
         decryptedB.delete()
