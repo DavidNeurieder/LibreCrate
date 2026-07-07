@@ -385,21 +385,6 @@ fun SettingsScreen(
                             Text("Change Password")
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Divider()
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        TextButton(
-                            onClick = { viewModel.disablePassword() },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error,
-                            ),
-                        ) {
-                            Text("Disable Password")
-                        }
                     }
                 }
             }
