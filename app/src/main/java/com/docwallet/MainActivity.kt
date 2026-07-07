@@ -59,10 +59,11 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) {
                         if (app.encryptionManager.isFirstLaunch()) {
                             startDestination = Routes.PASSWORD_SETUP
+                        } else if (app.encryptionManager.getMasterKeyForSession() != null) {
+                            startDestination = Routes.LIBRARY
                         } else if (app.encryptionManager.isPasswordSet()) {
                             startDestination = Routes.UNLOCK
                         } else {
-                            app.encryptionManager.getMasterKeyForSession()
                             startDestination = Routes.LIBRARY
                         }
                         isReady = true

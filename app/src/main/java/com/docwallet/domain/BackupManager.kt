@@ -7,12 +7,15 @@ import com.docwallet.data.db.DocWalletDatabase
 import com.docwallet.data.encryption.EncryptionManager
 import com.docwallet.vault.backup.VaultExporter
 import com.docwallet.vault.database.SqlCipherOpener
+import com.docwallet.vault.database.SqlHandle
 import com.docwallet.vault.database.SqlHandleSupportAndroid
 import com.docwallet.vault.backup.VaultImporter
+import com.docwallet.vault.crypto.Argon2Hasher
 import com.docwallet.vault.crypto.Argon2HasherImpl
 import com.docwallet.vault.crypto.FileEncryptor
 import com.docwallet.vault.crypto.KdfParams
 import com.docwallet.vault.crypto.KeyDerivation
+import com.docwallet.vault.crypto.KeyWrap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -21,19 +24,10 @@ class BackupManager(
     private val context: Context,
     private val encryptionManager: EncryptionManager,
     private val getDatabase: () -> DocWalletDatabase? = { null },
+    private val hasher: Argon2Hasher = Argon2HasherImpl(),
 ) {
-    private val hasher = Argon2HasherImpl()
     private val keyDerivation = KeyDerivation(hasher)
     private val kdfParams = KdfParams()
-    private val databaseMerger = DatabaseMerger(
-        backupOpener = { path ->
-            val mk = encryptionManager.getMasterKeyForSession() ?: error("No master key")
-            SqlCipherOpener(context, mk).open(path)
-        },
-        currentHandle = {
-            getDatabase()?.openHelper?.writableDatabase?.let { SqlHandleSupportAndroid(it) }
-        },
-    )
     private val vaultExporter = VaultExporter(keyDerivation, kdfParams, FileEncryptor())
     private val vaultImporter = VaultImporter(keyDerivation, kdfParams, FileEncryptor())
 
@@ -109,56 +103,93 @@ class BackupManager(
         vaultPassword: String,
     ) {
         val encryptionDir = File(context.filesDir, "encryption").also { it.mkdirs() }
+        val currentDb = getDatabase()
 
-        contents.keys["wrapped_master_key"]?.let {
-            File(encryptionDir, "wrapped_master_key").writeBytes(it)
-        }
-        contents.keys["device_key"]?.let {
-            File(encryptionDir, "device_key").writeBytes(it)
-        }
-        contents.keys["salt"]?.let {
-            File(encryptionDir, "salt").writeBytes(it)
+        val backupMasterKey: ByteArray? = deriveBackupMasterKey(contents, vaultPassword)
+
+        if (backupMasterKey == null && currentDb == null) {
+            Log.e(TAG, "No valid master key for backup restoration")
+            return
         }
 
-        val masterKey = if (contents.keys.containsKey("wrapped_master_key") &&
-            contents.keys.containsKey("salt")) {
-            encryptionManager.verifyPassword(vaultPassword)
-            encryptionManager.setupDeviceKeyForDailyUnlock()
-            encryptionManager.getMasterKeyForSession()
-        } else {
-            val mk = encryptionManager.getMasterKeyForSession()
-            if (mk != null) {
-                encryptionManager.setupDeviceKeyForDailyUnlock()
-            }
-            mk
-        }
+        contents.dbFile?.let { dbData ->
+            val tempDb = File(context.cacheDir, "restore_db_${System.currentTimeMillis()}.db")
+            try {
+                tempDb.writeBytes(dbData)
 
-        if (masterKey != null) {
-            contents.dbFile?.let { dbData ->
-                val tempDb = File(context.cacheDir, "restore_db_${System.currentTimeMillis()}.db")
-                try {
-                    tempDb.writeBytes(dbData)
-                    val currentDb = getDatabase()
-                    if (currentDb != null) {
-                        databaseMerger.merge(tempDb.absolutePath)
-                    } else {
-                        val dbFile = context.getDatabasePath("docwallet.db")
-                        dbFile.parentFile?.mkdirs()
-                        tempDb.copyTo(dbFile, overwrite = true)
+                if (currentDb != null && backupMasterKey != null) {
+                    val backupOpener: (String) -> SqlHandle = { path ->
+                        SqlCipherOpener(context, backupMasterKey).open(path)
                     }
-                } finally {
-                    tempDb.delete()
-                }
-            }
+                    val currentHandle: () -> SqlHandle? = {
+                        getDatabase()?.openHelper?.writableDatabase?.let { SqlHandleSupportAndroid(it) }
+                    }
+                    DatabaseMerger(backupOpener, currentHandle).merge(tempDb.absolutePath)
+                } else if (currentDb == null && backupMasterKey != null) {
+                    contents.keys["wrapped_master_key"]?.let {
+                        File(encryptionDir, "wrapped_master_key").writeBytes(it)
+                    }
+                    contents.keys["salt"]?.let {
+                        File(encryptionDir, "salt").writeBytes(it)
+                    }
 
-            val filesDir = File(context.filesDir, "files").also { it.mkdirs() }
-            for ((entryName, data) in contents.files) {
-                val targetFile = File(filesDir, entryName)
-                targetFile.parentFile?.mkdirs()
-                if (!targetFile.exists()) {
-                    targetFile.writeBytes(data)
+                    encryptionManager.verifyPassword(vaultPassword)
+                    encryptionManager.setupDeviceKeyForDailyUnlock()
+
+                    val dbFile = context.getDatabasePath("docwallet.db")
+                    dbFile.parentFile?.mkdirs()
+                    tempDb.copyTo(dbFile, overwrite = true)
+                } else if (currentDb != null && backupMasterKey == null) {
+                    Log.w(TAG, "Legacy backup without key material — merging with current key")
+                    val mk = encryptionManager.getMasterKeyForSession()
+                    if (mk != null) {
+                        val legacyOpener: (String) -> SqlHandle = { path ->
+                            SqlCipherOpener(context, mk).open(path)
+                        }
+                        val currentHandle: () -> SqlHandle? = {
+                            getDatabase()?.openHelper?.writableDatabase?.let { SqlHandleSupportAndroid(it) }
+                        }
+                        DatabaseMerger(legacyOpener, currentHandle).merge(tempDb.absolutePath)
+                    } else {
+                        Log.w(TAG, "No master key available for legacy merge")
+                    }
+                } else {
+                    Log.w(TAG, "Unhandled restore branch — skipping DB restore")
                 }
+            } finally {
+                tempDb.delete()
             }
+        }
+
+        val filesDir = File(context.filesDir, "files").also { it.mkdirs() }
+        for ((entryName, data) in contents.files) {
+            val targetFile = File(filesDir, entryName)
+            targetFile.parentFile?.mkdirs()
+            if (!targetFile.exists()) {
+                targetFile.writeBytes(data)
+            }
+        }
+    }
+
+    private fun deriveBackupMasterKey(
+        contents: com.docwallet.vault.backup.BackupContents,
+        vaultPassword: String,
+    ): ByteArray? {
+        if (!contents.keys.containsKey("wrapped_master_key") ||
+            !contents.keys.containsKey("salt")) return null
+
+        return try {
+            val salt = contents.keys["salt"]!!
+            val wrappedKey = contents.keys["wrapped_master_key"]!!
+            val userKey = keyDerivation.deriveAndZero(vaultPassword, salt, kdfParams)
+            try {
+                KeyWrap.unwrap(wrappedKey, userKey).copyOf()
+            } finally {
+                userKey.fill(0)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to derive backup master key", e)
+            null
         }
     }
 

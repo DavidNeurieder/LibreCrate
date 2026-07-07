@@ -1,5 +1,8 @@
 package com.docwallet.data.encryption
 
+import android.app.KeyguardManager
+import android.content.Context
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Log
@@ -10,7 +13,17 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-class AndroidKeyStoreCryptographer : KeyStoreCryptographer {
+class AndroidKeyStoreCryptographer(context: Context) : KeyStoreCryptographer {
+
+    private val canRequireAuth: Boolean
+    private val appContext = context.applicationContext
+
+    init {
+        canRequireAuth = if (Build.VERSION.SDK_INT >= 30) {
+            val km = appContext.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            km.isDeviceSecure()
+        } else false
+    }
     override fun encrypt(plaintext: ByteArray): Pair<ByteArray, ByteArray> {
         val key = getOrCreateKey()
             ?: throw SecurityException("AndroidKeyStore not available — cannot encrypt device key")
@@ -55,16 +68,20 @@ class AndroidKeyStoreCryptographer : KeyStoreCryptographer {
                 return (keyStore.getEntry(KEYSTORE_DEVICE_KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
             }
             val keyGen = KeyGenerator.getInstance("AES", "AndroidKeyStore")
-            keyGen.init(
-                KeyGenParameterSpec.Builder(
+            val specBuilder = KeyGenParameterSpec.Builder(
                     KEYSTORE_DEVICE_KEY_ALIAS,
                     KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
                 )
                     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                     .setKeySize(256)
-                    .build()
-            )
+
+                if (canRequireAuth) {
+                    specBuilder.setUserAuthenticationRequired(true)
+                    specBuilder.setUserAuthenticationParameters(30, KeyProperties.AUTH_DEVICE_CREDENTIAL)
+                }
+
+                keyGen.init(specBuilder.build())
             keyGen.generateKey()
         } catch (e: Exception) {
             Log.w(TAG, "Failed to access AndroidKeyStore", e)

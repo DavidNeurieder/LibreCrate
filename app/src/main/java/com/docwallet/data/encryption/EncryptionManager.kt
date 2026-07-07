@@ -8,7 +8,7 @@ import java.io.File
 class EncryptionManager(
     context: Context,
     argon2Hasher: com.docwallet.vault.crypto.Argon2Hasher = com.docwallet.vault.crypto.Argon2HasherImpl(),
-    keyStoreCryptographer: com.docwallet.vault.crypto.KeyStoreCryptographer = AndroidKeyStoreCryptographer(),
+    keyStoreCryptographer: com.docwallet.vault.crypto.KeyStoreCryptographer = AndroidKeyStoreCryptographer(context),
 ) : KeyManager {
 
     private val inner: DefaultKeyManager = DefaultKeyManager(

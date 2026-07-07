@@ -77,7 +77,11 @@ class DefaultKeyManager(
             val data = keyStore.read(ENCRYPTED_DEVICE_KEY) ?: return null
             val iv = data.copyOfRange(0, GCM_IV_LENGTH)
             val ciphertext = data.copyOfRange(GCM_IV_LENGTH, data.size)
-            val deviceKey = storeCryptographer.decrypt(iv, ciphertext)
+            val deviceKey = try {
+                storeCryptographer.decrypt(iv, ciphertext)
+            } catch (e: Exception) {
+                return null
+            }
             val wrappedKey = keyStore.read(DEVICE_WRAPPED_KEY)
                 ?: keyStore.read(WRAPPED_KEY) ?: return null
             try {

@@ -63,7 +63,7 @@ class BackupManagerTest {
         db = DocWalletDatabase.create(context, masterKey)
         dao = db.documentDao()
 
-        backupManager = BackupManager(context, encryptionManager) { db }
+        backupManager = BackupManager(context, encryptionManager, { db }, DeterministicHasher())
     }
 
     @After
@@ -223,7 +223,7 @@ class BackupManagerTest {
         encryptionManager.lock()
 
         // Import with a fresh BackupManager that has no database reference.
-        val freshBackupManager = BackupManager(context, encryptionManager) { null }
+        val freshBackupManager = BackupManager(context, encryptionManager, { null }, DeterministicHasher())
         assertTrue("Backup import should succeed on fresh install", freshBackupManager.importBackup(backupFile, TEST_PASSWORD))
 
         // Key files should be restored from the backup.
@@ -326,7 +326,7 @@ class BackupManagerTest {
         val freshEm = EncryptionManager(context, DeterministicHasher(), TestKeyStoreCryptographer())
         assertTrue("Should be first launch after reinstall", freshEm.isFirstLaunch())
 
-        val freshBm = BackupManager(context, freshEm) { null }
+        val freshBm = BackupManager(context, freshEm, { null }, DeterministicHasher())
         assertTrue("Import should succeed after reinstall", freshBm.importBackup(backupFile, TEST_PASSWORD))
 
         // Keys restored from the backup — master key is recoverable via the

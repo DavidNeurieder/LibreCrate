@@ -164,7 +164,7 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        text = "Enter your vault password to decrypt and restore this backup.",
+                        text = "The passkey of the vault that created this backup is needed to decrypt it.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
