@@ -2,6 +2,7 @@ package com.docwallet.cli
 
 import com.docwallet.vault.backup.VaultExporter
 import com.docwallet.vault.backup.VaultImporter
+import com.docwallet.vault.crypto.Argon2HasherImpl
 import com.docwallet.vault.crypto.KeyDerivation
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -12,7 +13,7 @@ import org.junit.Test
 import java.io.File
 
 class VaultRoundtripTest {
-    private val hasher = Argon2HasherJvm()
+    private val hasher = Argon2HasherImpl()
     private val keyDerivation = KeyDerivation(hasher)
     private val exporter = VaultExporter(keyDerivation)
     private val importer = VaultImporter(keyDerivation)

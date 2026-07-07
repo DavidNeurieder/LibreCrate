@@ -6,6 +6,8 @@ import android.util.Log
 import com.docwallet.data.db.DocWalletDatabase
 import com.docwallet.data.encryption.EncryptionManager
 import com.docwallet.vault.backup.VaultExporter
+import com.docwallet.vault.database.SqlCipherOpener
+import com.docwallet.vault.database.SqlHandleSupportAndroid
 import com.docwallet.vault.backup.VaultImporter
 import com.docwallet.vault.crypto.Argon2HasherImpl
 import com.docwallet.vault.crypto.FileEncryptor
@@ -23,7 +25,15 @@ class BackupManager(
     private val hasher = Argon2HasherImpl()
     private val keyDerivation = KeyDerivation(hasher)
     private val kdfParams = KdfParams()
-    private val databaseMerger = DatabaseMerger(context, getDatabase)
+    private val databaseMerger = DatabaseMerger(
+        backupOpener = { path ->
+            val mk = encryptionManager.getMasterKeyForSession() ?: error("No master key")
+            SqlCipherOpener(context, mk).open(path)
+        },
+        currentHandle = {
+            getDatabase()?.openHelper?.writableDatabase?.let { SqlHandleSupportAndroid(it) }
+        },
+    )
     private val vaultExporter = VaultExporter(keyDerivation, kdfParams, FileEncryptor())
     private val vaultImporter = VaultImporter(keyDerivation, kdfParams, FileEncryptor())
 
@@ -116,14 +126,14 @@ class BackupManager(
             masterKey = encryptionManager.getMasterKeyForSession()
         }
 
-        masterKey?.let { mk ->
+        if (masterKey != null) {
             contents.dbFile?.let { dbData ->
                 val tempDb = File(context.cacheDir, "restore_db_${System.currentTimeMillis()}.db")
                 try {
                     tempDb.writeBytes(dbData)
                     val currentDb = getDatabase()
                     if (currentDb != null) {
-                        databaseMerger.merge(tempDb, mk)
+                        databaseMerger.merge(tempDb.absolutePath)
                     } else {
                         val dbFile = context.getDatabasePath("docwallet.db")
                         dbFile.parentFile?.mkdirs()

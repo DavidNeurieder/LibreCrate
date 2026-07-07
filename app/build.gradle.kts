@@ -105,7 +105,6 @@ dependencies {
     implementation(project(":vault-reader"))
     implementation(project(":reader-pdf"))
     implementation(project(":reader-epub"))
-    implementation(libs.argon2kt)
     implementation(libs.commonmark)
     implementation(libs.zxing.core)
     implementation(libs.commons.compress)

@@ -1,10 +1,9 @@
-package com.docwallet.cli
+package com.docwallet.vault.crypto
 
-import com.docwallet.vault.crypto.Argon2Hasher
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator
 import org.bouncycastle.crypto.params.Argon2Parameters
 
-class Argon2HasherJvm : Argon2Hasher {
+class Argon2HasherImpl : Argon2Hasher {
     override fun hash(
         password: ByteArray,
         salt: ByteArray,

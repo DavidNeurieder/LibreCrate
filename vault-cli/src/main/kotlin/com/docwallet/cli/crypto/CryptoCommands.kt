@@ -1,6 +1,6 @@
 package com.docwallet.cli.crypto
 
-import com.docwallet.cli.Argon2HasherJvm
+import com.docwallet.vault.crypto.Argon2HasherImpl
 import com.docwallet.vault.crypto.AesKeyGenerator
 import com.docwallet.vault.crypto.FileEncryptor
 import com.docwallet.vault.crypto.KdfParams
@@ -30,7 +30,7 @@ class KdfCommand : CliktCommand(name = "kdf", help = "Derive key from password u
     private val parallelism by option("--parallelism").int().default(4)
 
     override fun run() {
-        val hasher = Argon2HasherJvm()
+        val hasher = Argon2HasherImpl()
         val derivation = KeyDerivation(hasher)
         val salt = if (saltHex.isNotEmpty()) hexToBytes(saltHex)
         else derivation.generateSalt()

@@ -3,19 +3,14 @@ package com.docwallet.data.encryption
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Log
+import com.docwallet.vault.crypto.KeyStoreCryptographer
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-interface KeyStoreCryptographer {
-    fun encrypt(plaintext: ByteArray): Pair<ByteArray, ByteArray>
-    fun decrypt(iv: ByteArray, ciphertext: ByteArray): ByteArray
-    fun deleteKey()
-}
-
-internal class AndroidKeyStoreCryptographer : KeyStoreCryptographer {
+class AndroidKeyStoreCryptographer : KeyStoreCryptographer {
     override fun encrypt(plaintext: ByteArray): Pair<ByteArray, ByteArray> {
         val key = getOrCreateKey()
             ?: throw SecurityException("AndroidKeyStore not available — cannot encrypt device key")

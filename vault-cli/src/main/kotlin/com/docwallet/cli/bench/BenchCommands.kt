@@ -1,6 +1,6 @@
 package com.docwallet.cli.bench
 
-import com.docwallet.cli.Argon2HasherJvm
+import com.docwallet.vault.crypto.Argon2HasherImpl
 import com.docwallet.vault.crypto.FileEncryptor
 import com.docwallet.vault.crypto.KdfParams
 import com.docwallet.vault.crypto.KeyDerivation
@@ -26,7 +26,7 @@ class BenchKdf : CliktCommand(name = "kdf", help = "Benchmark Argon2id key deriv
 
     override fun run() {
         val params = KdfParams(memoryCost = memory, iterations = iterations, parallelism = parallelism)
-        val derivation = KeyDerivation(Argon2HasherJvm())
+        val derivation = KeyDerivation(Argon2HasherImpl())
         val salt = derivation.generateSalt()
         echo("Benchmarking KDF (memory=$memory, iterations=$iterations, parallelism=$parallelism, count=$count)...")
 

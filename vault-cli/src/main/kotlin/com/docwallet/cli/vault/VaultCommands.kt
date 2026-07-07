@@ -1,6 +1,6 @@
 package com.docwallet.cli.vault
 
-import com.docwallet.cli.Argon2HasherJvm
+import com.docwallet.vault.crypto.Argon2HasherImpl
 import com.docwallet.cli.DirectoryStorage
 import com.docwallet.cli.JdbcSqlHandleOpener
 import com.docwallet.vault.backup.VaultExporter
@@ -49,7 +49,7 @@ class VaultCreate : CliktCommand(name = "create", help = "Create a .vault file f
 
         val dbData = if (db.isNotEmpty()) File(db).takeIf { it.exists() }?.readBytes() else null
 
-        val keyDerivation = KeyDerivation(Argon2HasherJvm())
+        val keyDerivation = KeyDerivation(Argon2HasherImpl())
         val vaultBytes = VaultExporter(keyDerivation).export(files, dbData, password)
         File(output).writeBytes(vaultBytes)
 
@@ -76,7 +76,7 @@ class VaultExport : CliktCommand(name = "export", help = "Export a directory as 
 
         val dbData = if (db.isNotEmpty()) File(db).takeIf { it.exists() }?.readBytes() else null
 
-        val keyDerivation = KeyDerivation(Argon2HasherJvm())
+        val keyDerivation = KeyDerivation(Argon2HasherImpl())
         val vaultBytes = VaultExporter(keyDerivation).export(files, dbData, password)
         File(output).writeBytes(vaultBytes)
 
@@ -109,7 +109,7 @@ class VaultExtract : CliktCommand(name = "extract", help = "Extract a .vault fil
     private val dir by option("--dir", "-d").required()
 
     override fun run() {
-        val keyDerivation = KeyDerivation(Argon2HasherJvm())
+        val keyDerivation = KeyDerivation(Argon2HasherImpl())
         val vaultBytes = File(input).readBytes()
         val contents = VaultImporter(keyDerivation).`import`(vaultBytes, password)
             ?: throw IllegalStateException("Failed to import vault (wrong password or corrupt file)")
@@ -146,7 +146,7 @@ class VaultImport : CliktCommand(name = "import", help = "Import a .vault backup
     private val dir by option("--dir", "-d").required()
 
     override fun run() {
-        val keyDerivation = KeyDerivation(Argon2HasherJvm())
+        val keyDerivation = KeyDerivation(Argon2HasherImpl())
         val vaultBytes = File(input).readBytes()
         val contents = VaultImporter(keyDerivation).`import`(vaultBytes, password)
             ?: throw IllegalStateException("Failed to import vault (wrong password or corrupt file)")
@@ -192,7 +192,7 @@ class VaultMerge : CliktCommand(name = "merge", help = "Merge a .vault backup in
 
     override fun run() {
         val vaultBytes = File(input).readBytes()
-        val keyDerivation = KeyDerivation(Argon2HasherJvm())
+        val keyDerivation = KeyDerivation(Argon2HasherImpl())
         val contents = VaultImporter(keyDerivation).`import`(vaultBytes, password)
             ?: throw IllegalStateException("Failed to import vault (wrong password or corrupt file)")
 
@@ -283,7 +283,7 @@ class VaultRoundtrip : CliktCommand(name = "roundtrip", help = "Create vault and
             }
         }
 
-        val keyDerivation = KeyDerivation(Argon2HasherJvm())
+        val keyDerivation = KeyDerivation(Argon2HasherImpl())
         val vaultBytes = VaultExporter(keyDerivation).export(files, null, password)
 
         val contents = VaultImporter(keyDerivation).`import`(vaultBytes, password)
