@@ -4,7 +4,7 @@ import java.security.SecureRandom
 import java.util.Arrays
 
 class KeyDerivation(
-    private val hasher: Argon2Hasher = Argon2HasherImpl(),
+    private val hasher: Argon2Hasher,
 ) {
 
     fun deriveKey(password: String, salt: ByteArray, params: KdfParams = KdfParams()): ByteArray {

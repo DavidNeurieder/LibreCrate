@@ -14,7 +14,7 @@ sqliteKtx = "2.4.0"
 mupdf = "1.27.1"
 documentfile = "1.0.1"
 coil = "2.5.0"
-argon2kt = "1.4.0"
+argon2kt = "1.6.0"
 commonmark = "0.21.0"
 zxing = "3.5.2"
 commonsCompress = "1.25.0"
@@ -24,6 +24,9 @@ work = "2.9.0"
 preference = "1.2.1"
 readium = "3.0.0"
 desugarJdkLibs = "2.0.4"
+clikt = "4.2.2"
+bouncycastle = "1.78.1"
+sqliteJdbc = "3.45.1.0"
 
 
 # Test
@@ -72,6 +75,9 @@ readium-shared = { group = "org.readium.kotlin-toolkit", name = "readium-shared"
 readium-streamer = { group = "org.readium.kotlin-toolkit", name = "readium-streamer", version.ref = "readium" }
 readium-navigator = { group = "org.readium.kotlin-toolkit", name = "readium-navigator", version.ref = "readium" }
 desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
+clikt = { group = "com.github.ajalt.clikt", name = "clikt", version.ref = "clikt" }
+sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqliteJdbc" }
+bouncycastle = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
 
 coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutinesCore" }
 

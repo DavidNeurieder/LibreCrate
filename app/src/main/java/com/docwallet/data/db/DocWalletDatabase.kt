@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.docwallet.data.model.Document
+import com.docwallet.vault.database.DatabaseSchema
 import net.sqlcipher.database.SupportFactory
 
 import androidx.room.migration.Migration
@@ -24,6 +25,13 @@ abstract class DocWalletDatabase : RoomDatabase() {
 
     companion object {
         private const val DB_NAME = "docwallet.db"
+
+        private val FTS_CALLBACK = object : RoomDatabase.Callback() {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                super.onCreate(db)
+                db.execSQL(DatabaseSchema.CREATE_DOCUMENTS_FTS_TABLE)
+            }
+        }
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -79,6 +87,7 @@ abstract class DocWalletDatabase : RoomDatabase() {
             )
                 .openHelperFactory(factory)
                 .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addCallback(FTS_CALLBACK)
                 .build()
         }
     }
