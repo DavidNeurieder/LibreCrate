@@ -14,20 +14,20 @@ class VaultImporter(
     private val kdfParams: KdfParams = KdfParams(),
     private val fileEncryptor: FileEncryptor = FileEncryptor(),
 ) {
-    fun `import`(vaultBytes: ByteArray, backupPassword: String): BackupContents? {
+    fun `import`(vaultBytes: ByteArray, vaultPassword: String): BackupContents? {
         return try {
             val vaultData = VaultPackage.read(vaultBytes)
-            importFromVault(vaultData, backupPassword)
+            importFromVault(vaultData, vaultPassword)
         } catch (_: Exception) {
             try {
-                importLegacy(vaultBytes, backupPassword)
+                importLegacy(vaultBytes, vaultPassword)
             } catch (_: Exception) {
                 null
             }
         }
     }
 
-    private fun importFromVault(vaultData: VaultPackageData, backupPassword: String): BackupContents {
+    private fun importFromVault(vaultData: VaultPackageData, vaultPassword: String): BackupContents {
         val manifest = vaultData.manifest
         val saltBytes = java.util.Base64.getDecoder().decode(manifest.salt)
 
@@ -36,7 +36,7 @@ class VaultImporter(
             iterations = manifest.argon2Iterations,
             parallelism = manifest.argon2Parallelism,
         )
-        val derivedKey = keyDerivation.deriveAndZero(backupPassword, saltBytes, importKdfParams)
+        val derivedKey = keyDerivation.deriveAndZero(vaultPassword, saltBytes, importKdfParams)
 
         try {
             val encryptedBlob = vaultData.encryptedBlob
@@ -50,12 +50,12 @@ class VaultImporter(
         }
     }
 
-    private fun importLegacy(bytes: ByteArray, backupPassword: String): BackupContents {
+    private fun importLegacy(bytes: ByteArray, vaultPassword: String): BackupContents {
         val salt = bytes.copyOfRange(0, 16)
         val iv = bytes.copyOfRange(16, 28)
         val ciphertext = bytes.copyOfRange(28, bytes.size)
 
-        val derivedKey = keyDerivation.deriveAndZero(backupPassword, salt, kdfParams)
+        val derivedKey = keyDerivation.deriveAndZero(vaultPassword, salt, kdfParams)
 
         try {
             val plainZipBytes = fileEncryptor.decryptBytes(ciphertext, derivedKey, iv)

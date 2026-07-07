@@ -17,11 +17,11 @@ class VaultExporter(
     fun export(
         files: Map<String, ByteArray>,
         dbFile: ByteArray?,
-        backupPassword: String,
+        vaultPassword: String,
         keys: Map<String, ByteArray> = emptyMap(),
     ): ByteArray {
         val salt = keyDerivation.generateSalt()
-        val derivedKey = keyDerivation.deriveAndZero(backupPassword, salt, kdfParams)
+        val derivedKey = keyDerivation.deriveAndZero(vaultPassword, salt, kdfParams)
 
         try {
             val zipEntries = mutableMapOf<String, ByteArray>()

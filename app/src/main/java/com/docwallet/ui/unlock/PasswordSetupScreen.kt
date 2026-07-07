@@ -57,7 +57,6 @@ fun PasswordSetupScreen(
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    var showSkipDialog by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -88,7 +87,7 @@ fun PasswordSetupScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Set a password to encrypt your vault. You can always enable this later in Settings.",
+                text = "Set a password to encrypt your vault. You will need this password for backups.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -164,46 +163,7 @@ fun PasswordSetupScreen(
                 Text("Set Password & Continue")
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedButton(
-                onClick = { showSkipDialog = true },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Skip \u2014 Start Without Password")
-            }
         }
-    }
-
-    if (showSkipDialog) {
-        AlertDialog(
-            onDismissRequest = { showSkipDialog = false },
-            title = { Text("Skip Password?") },
-            text = {
-                Text(
-                    "You can enable password protection anytime in Settings. " +
-                            "Your documents will still be encrypted using device-level keys."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showSkipDialog = false
-                    scope.launch(kotlinx.coroutines.Dispatchers.Default) {
-                        encryptionManager.initializeDeviceKeyMode()
-                        withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            onComplete()
-                        }
-                    }
-                }) {
-                    Text("Skip")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSkipDialog = false }) {
-                    Text("Set Password")
-                }
-            },
-        )
     }
 }
 
@@ -220,8 +180,7 @@ private fun doSetPassword(
         password != confirmPassword -> onError("Passwords do not match")
         else -> {
             scope.launch(Dispatchers.Default) {
-                encryptionManager.initializeDeviceKeyMode()
-                val success = encryptionManager.setPassword(password)
+                val success = encryptionManager.initializeWithPassword(password)
                 withContext(Dispatchers.Main) {
                     if (success) {
                         onSuccess()

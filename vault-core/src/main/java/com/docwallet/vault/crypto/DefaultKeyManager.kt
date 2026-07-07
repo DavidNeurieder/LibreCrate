@@ -13,30 +13,57 @@ class DefaultKeyManager(
 
     @Volatile private var cachedMasterKey: ByteArray? = null
 
-    override fun isPasswordSet(): Boolean {
-        val deviceKeyPresent = keyStore.exists(DEVICE_KEY) || keyStore.exists(ENCRYPTED_DEVICE_KEY)
-        return keyStore.exists(WRAPPED_KEY) && !deviceKeyPresent
-    }
-
-    override fun isFirstLaunch(): Boolean {
-        return !keyStore.exists(WRAPPED_KEY)
-    }
+    override fun isPasswordSet(): Boolean = keyStore.exists(SALT)
+    override fun isFirstLaunch(): Boolean =
+        !keyStore.exists(WRAPPED_KEY) && !keyStore.exists(DEVICE_WRAPPED_KEY)
 
     override fun initializeDeviceKeyMode() {
-        if (keyStore.exists(WRAPPED_KEY)) return
+        if (keyStore.exists(WRAPPED_KEY) || keyStore.exists(DEVICE_WRAPPED_KEY)) return
 
         val masterKey = AesKeyGenerator.generateKey()
         val deviceKey = AesKeyGenerator.generateKey()
 
         try {
             val wrappedKey = KeyWrap.wrap(masterKey, deviceKey)
-            keyStore.write(WRAPPED_KEY, wrappedKey)
+            keyStore.write(DEVICE_WRAPPED_KEY, wrappedKey)
             val (iv, encrypted) = storeCryptographer.encrypt(deviceKey)
             val payload = ByteArray(GCM_IV_LENGTH + encrypted.size)
             System.arraycopy(iv, 0, payload, 0, GCM_IV_LENGTH)
             System.arraycopy(encrypted, 0, payload, GCM_IV_LENGTH, encrypted.size)
             keyStore.write(ENCRYPTED_DEVICE_KEY, payload)
             cachedMasterKey = masterKey
+        } finally {
+            Arrays.fill(deviceKey, 0)
+        }
+    }
+
+    override fun initializeWithPassword(password: String): Boolean {
+        if (keyStore.exists(WRAPPED_KEY)) return false
+
+        val masterKey = AesKeyGenerator.generateKey()
+        val deviceKey = AesKeyGenerator.generateKey()
+
+        try {
+            val deviceWrappedKey = KeyWrap.wrap(masterKey, deviceKey)
+            keyStore.write(DEVICE_WRAPPED_KEY, deviceWrappedKey)
+            val (iv, encrypted) = storeCryptographer.encrypt(deviceKey)
+            val payload = ByteArray(GCM_IV_LENGTH + encrypted.size)
+            System.arraycopy(iv, 0, payload, 0, GCM_IV_LENGTH)
+            System.arraycopy(encrypted, 0, payload, GCM_IV_LENGTH, encrypted.size)
+            keyStore.write(ENCRYPTED_DEVICE_KEY, payload)
+
+            val salt = keyDerivation.generateSalt()
+            val userKey = keyDerivation.deriveAndZero(password, salt, kdfParams)
+
+            try {
+                val wrappedKey = KeyWrap.wrap(masterKey, userKey)
+                keyStore.write(WRAPPED_KEY, wrappedKey)
+                keyStore.write(SALT, salt)
+                cachedMasterKey = masterKey
+                return true
+            } finally {
+                Arrays.fill(userKey, 0)
+            }
         } finally {
             Arrays.fill(deviceKey, 0)
         }
@@ -51,7 +78,8 @@ class DefaultKeyManager(
             val iv = data.copyOfRange(0, GCM_IV_LENGTH)
             val ciphertext = data.copyOfRange(GCM_IV_LENGTH, data.size)
             val deviceKey = storeCryptographer.decrypt(iv, ciphertext)
-            val wrappedKey = keyStore.read(WRAPPED_KEY) ?: return null
+            val wrappedKey = keyStore.read(DEVICE_WRAPPED_KEY)
+                ?: keyStore.read(WRAPPED_KEY) ?: return null
             try {
                 val masterKey = KeyWrap.unwrap(wrappedKey, deviceKey)
                 cachedMasterKey = masterKey
@@ -63,7 +91,8 @@ class DefaultKeyManager(
 
         if (keyStore.exists(DEVICE_KEY)) {
             val deviceKey = keyStore.read(DEVICE_KEY) ?: return null
-            val wrappedKey = keyStore.read(WRAPPED_KEY) ?: return null
+            val wrappedKey = keyStore.read(DEVICE_WRAPPED_KEY)
+                ?: keyStore.read(WRAPPED_KEY) ?: return null
             try {
                 val masterKey = KeyWrap.unwrap(wrappedKey, deviceKey)
                 cachedMasterKey = masterKey
@@ -86,6 +115,23 @@ class DefaultKeyManager(
             keyStore.write(ENCRYPTED_DEVICE_KEY, payload)
             keyStore.delete(DEVICE_KEY)
         } catch (_: Exception) {
+        }
+    }
+
+    fun setupDeviceKeyForDailyUnlock(): Boolean {
+        val masterKey = cachedMasterKey ?: return false
+        val deviceKey = AesKeyGenerator.generateKey()
+        try {
+            val wrappedKey = KeyWrap.wrap(masterKey, deviceKey)
+            keyStore.write(DEVICE_WRAPPED_KEY, wrappedKey)
+            val (iv, encrypted) = storeCryptographer.encrypt(deviceKey)
+            val payload = ByteArray(GCM_IV_LENGTH + encrypted.size)
+            System.arraycopy(iv, 0, payload, 0, GCM_IV_LENGTH)
+            System.arraycopy(encrypted, 0, payload, GCM_IV_LENGTH, encrypted.size)
+            keyStore.write(ENCRYPTED_DEVICE_KEY, payload)
+            return true
+        } finally {
+            Arrays.fill(deviceKey, 0)
         }
     }
 
@@ -112,9 +158,6 @@ class DefaultKeyManager(
                 val wrappedKey = KeyWrap.wrap(masterKey, userKey)
                 keyStore.write(WRAPPED_KEY, wrappedKey)
                 keyStore.write(SALT, salt)
-                keyStore.delete(ENCRYPTED_DEVICE_KEY)
-                keyStore.delete(DEVICE_KEY)
-                storeCryptographer.deleteKey()
                 cachedMasterKey = masterKey
                 return true
             } finally {
@@ -175,7 +218,7 @@ class DefaultKeyManager(
 
             try {
                 val wrappedKey = KeyWrap.wrap(masterKey, deviceKey)
-                keyStore.write(WRAPPED_KEY, wrappedKey)
+                keyStore.write(DEVICE_WRAPPED_KEY, wrappedKey)
                 val (iv, encrypted) = storeCryptographer.encrypt(deviceKey)
                 val payload = ByteArray(GCM_IV_LENGTH + encrypted.size)
                 System.arraycopy(iv, 0, payload, 0, GCM_IV_LENGTH)
@@ -202,6 +245,7 @@ class DefaultKeyManager(
     companion object {
         private const val GCM_IV_LENGTH = 12
         internal const val WRAPPED_KEY = "wrapped_master_key"
+        internal const val DEVICE_WRAPPED_KEY = "device_wrapped_key"
         internal const val DEVICE_KEY = "device_key"
         internal const val ENCRYPTED_DEVICE_KEY = "encrypted_device_key"
         internal const val SALT = "salt"

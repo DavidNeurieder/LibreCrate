@@ -37,7 +37,7 @@ class BackupManagerTest {
     private lateinit var masterKey: ByteArray
 
     companion object {
-        private const val BACKUP_PW = "test-backup-password"
+        private const val TEST_PASSWORD = "test_vault_password"
     }
 
     @Before
@@ -55,7 +55,7 @@ class BackupManagerTest {
         }
 
         encryptionManager = EncryptionManager(context, DeterministicHasher(), TestKeyStoreCryptographer())
-        encryptionManager.initializeDeviceKeyMode()
+        encryptionManager.initializeWithPassword(TEST_PASSWORD)
 
         masterKey = encryptionManager.getMasterKeyForSession()!!
         fileEncryptor = FileEncryptor()
@@ -130,7 +130,7 @@ class BackupManagerTest {
         assertTrue(doc2File.exists())
 
         val backupFile = File(context.cacheDir, "test_backup.backup")
-        val exported = backupManager.exportBackup(backupFile, BACKUP_PW)
+        val exported = backupManager.exportBackup(backupFile, TEST_PASSWORD)
         assertTrue("Backup export should succeed", exported)
         assertTrue("Backup file should exist", backupFile.exists())
         assertTrue("Backup file should have content", backupFile.length() > 0)
@@ -145,7 +145,7 @@ class BackupManagerTest {
         assertFalse(doc1File.exists())
         assertFalse(doc2File.exists())
 
-        val imported = backupManager.importBackup(backupFile, BACKUP_PW)
+        val imported = backupManager.importBackup(backupFile, TEST_PASSWORD)
         assertTrue("Backup import should succeed", imported)
 
         val restoredDocs = dao.getAllDocuments().first()
@@ -202,7 +202,7 @@ class BackupManagerTest {
         assertEquals(1, dao.getAllDocuments().first().size)
 
         val backupFile = File(context.cacheDir, "test_backup.backup")
-        assertTrue(backupManager.exportBackup(backupFile, BACKUP_PW))
+        assertTrue(backupManager.exportBackup(backupFile, TEST_PASSWORD))
         assertTrue(backupFile.exists())
 
         db.close()
@@ -224,13 +224,15 @@ class BackupManagerTest {
 
         // Import with a fresh BackupManager that has no database reference.
         val freshBackupManager = BackupManager(context, encryptionManager) { null }
-        assertTrue("Backup import should succeed on fresh install", freshBackupManager.importBackup(backupFile, BACKUP_PW))
+        assertTrue("Backup import should succeed on fresh install", freshBackupManager.importBackup(backupFile, TEST_PASSWORD))
 
         // Key files should be restored from the backup.
         val encryptionDir = File(context.filesDir, "encryption")
         assertTrue("wrapped_master_key should be restored", File(encryptionDir, "wrapped_master_key").exists())
+        assertTrue("salt should be restored", File(encryptionDir, "salt").exists())
 
-        // Now getMasterKeyForSession should return the original master key.
+        // Now getMasterKeyForSession should return the original master key
+        // (import verified the password and set up device key for daily unlock).
         val restoredMasterKey = encryptionManager.getMasterKeyForSession()
         assertNotNull("Master key should be recoverable after restore", restoredMasterKey)
         assertArrayEquals("Restored master key should match original", masterKey, restoredMasterKey)
@@ -274,7 +276,7 @@ class BackupManagerTest {
         assertEquals(1, dao.getAllDocuments().first().size)
 
         val backupFile = File(context.cacheDir, "test_backup.backup")
-        assertTrue(backupManager.exportBackup(backupFile, BACKUP_PW))
+        assertTrue(backupManager.exportBackup(backupFile, TEST_PASSWORD))
 
         // Try importing with the wrong password.
         val result = backupManager.importBackup(backupFile, "wrong-password-123")
@@ -306,7 +308,7 @@ class BackupManagerTest {
         assertEquals(1, dao.getAllDocuments().first().size)
 
         val backupFile = File(context.cacheDir, "test_backup.backup")
-        assertTrue(backupManager.exportBackup(backupFile, BACKUP_PW))
+        assertTrue(backupManager.exportBackup(backupFile, TEST_PASSWORD))
         db.close()
 
         // --- Uninstall: wipe everything ---
@@ -325,11 +327,11 @@ class BackupManagerTest {
         assertTrue("Should be first launch after reinstall", freshEm.isFirstLaunch())
 
         val freshBm = BackupManager(context, freshEm) { null }
-        assertTrue("Import should succeed after reinstall", freshBm.importBackup(backupFile, BACKUP_PW))
+        assertTrue("Import should succeed after reinstall", freshBm.importBackup(backupFile, TEST_PASSWORD))
 
         // Keys restored from the backup — master key is recoverable via the
-        // plaintext device_key path (encrypted_device_key from the old KeyStore
-        // is undecryptable by the new TestKeyStoreCryptographer).
+        // password path (wrapped_master_key + salt). A new device key is set up
+        // for daily unlock on the fresh device.
         val restoredKey = freshEm.getMasterKeyForSession()
         assertNotNull("Master key should be recoverable", restoredKey)
         assertArrayEquals("Master key must match the original", masterKey, restoredKey)

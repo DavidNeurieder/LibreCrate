@@ -24,9 +24,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val newPassword = MutableStateFlow("")
     val confirmPassword = MutableStateFlow("")
 
-    val exportBackupPassword = MutableStateFlow("")
-    val exportBackupPasswordConfirm = MutableStateFlow("")
-    val importBackupPassword = MutableStateFlow("")
+    val exportVaultPassword = MutableStateFlow("")
+    val importVaultPassword = MutableStateFlow("")
 
     val showExportPasswordDialog = MutableStateFlow(false)
     val showImportPasswordDialog = MutableStateFlow(false)
@@ -111,27 +110,24 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun onExportConfirmed(uri: Uri) {
-        val password = exportBackupPassword.value
-        val confirm = exportBackupPasswordConfirm.value
+        val password = exportVaultPassword.value
 
-        when {
-            password.length < 6 -> {
-                _message.value = "Backup password must be at least 6 characters"
-                return
-            }
-            password != confirm -> {
-                _message.value = "Backup passwords do not match"
-                return
-            }
+        if (password.isBlank()) {
+            _message.value = "Enter your vault password"
+            return
         }
 
         viewModelScope.launch {
-            val success = withContext(Dispatchers.IO) {
-                app.backupManager.exportBackupToUri(uri, password)
+            val success = withContext(Dispatchers.Default) {
+                if (!encryptionManager.verifyPassword(password)) {
+                    return@withContext false
+                }
+                withContext(Dispatchers.IO) {
+                    app.backupManager.exportBackupToUri(uri, password)
+                }
             }
             if (success) {
-                exportBackupPassword.value = ""
-                exportBackupPasswordConfirm.value = ""
+                exportVaultPassword.value = ""
             }
             _message.value = if (success) "Backup exported successfully" else "Backup export failed"
         }
@@ -139,11 +135,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun onImportConfirmed() {
-        val password = importBackupPassword.value
+        val password = importVaultPassword.value
         val uri = pendingImportUri.value ?: return
 
         if (password.isBlank()) {
-            _message.value = "Enter the backup password"
+            _message.value = "Enter your vault password"
             return
         }
 
@@ -154,7 +150,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 ok
             }
             if (success) {
-                importBackupPassword.value = ""
+                importVaultPassword.value = ""
                 pendingImportUri.value = null
             }
             _message.value = if (success) "Backup imported successfully" else "Backup import failed"
@@ -164,13 +160,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun cancelExport() {
         showExportPasswordDialog.value = false
-        exportBackupPassword.value = ""
-        exportBackupPasswordConfirm.value = ""
+        exportVaultPassword.value = ""
     }
 
     fun cancelImport() {
         showImportPasswordDialog.value = false
-        importBackupPassword.value = ""
+        importVaultPassword.value = ""
         pendingImportUri.value = null
     }
 

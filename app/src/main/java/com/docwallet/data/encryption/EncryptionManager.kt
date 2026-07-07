@@ -20,6 +20,7 @@ class EncryptionManager(
     override fun isPasswordSet(): Boolean = inner.isPasswordSet()
     override fun isFirstLaunch(): Boolean = inner.isFirstLaunch()
     override fun initializeDeviceKeyMode() = inner.initializeDeviceKeyMode()
+    override fun initializeWithPassword(password: String): Boolean = inner.initializeWithPassword(password)
     override fun getMasterKeyForSession(): ByteArray? = inner.getMasterKeyForSession()
     override fun setPassword(password: String): Boolean = inner.setPassword(password)
     override fun verifyPassword(password: String): Boolean = inner.verifyPassword(password)
@@ -28,6 +29,7 @@ class EncryptionManager(
     override fun disablePassword(): Boolean = inner.disablePassword()
     override fun lock() = inner.lock()
 
+    fun setupDeviceKeyForDailyUnlock(): Boolean = inner.setupDeviceKeyForDailyUnlock()
     fun resolveDeviceKeyForBackup(): ByteArray? = inner.resolveDeviceKeyForBackup()
 
     companion object {

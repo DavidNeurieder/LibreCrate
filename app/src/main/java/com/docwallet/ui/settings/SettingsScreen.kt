@@ -73,9 +73,8 @@ fun SettingsScreen(
     val newPassword by viewModel.newPassword.collectAsState()
     val confirmPassword by viewModel.confirmPassword.collectAsState()
     val message by viewModel.message.collectAsState()
-    val exportBackupPassword by viewModel.exportBackupPassword.collectAsState()
-    val exportBackupPasswordConfirm by viewModel.exportBackupPasswordConfirm.collectAsState()
-    val importBackupPassword by viewModel.importBackupPassword.collectAsState()
+    val exportVaultPassword by viewModel.exportVaultPassword.collectAsState()
+    val importVaultPassword by viewModel.importVaultPassword.collectAsState()
     val showExportPasswordDialog by viewModel.showExportPasswordDialog.collectAsState()
     val showImportPasswordDialog by viewModel.showImportPasswordDialog.collectAsState()
 
@@ -108,7 +107,6 @@ fun SettingsScreen(
     // Export password dialog
     if (showExportPasswordDialog) {
         var exportPasswordVisible by remember { mutableStateOf(false) }
-        var exportConfirmVisible by remember { mutableStateOf(false) }
 
         AlertDialog(
             onDismissRequest = { viewModel.cancelExport() },
@@ -116,15 +114,15 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        text = "Set a password to encrypt this backup. You will need it to restore.",
+                        text = "Enter your vault password to encrypt this backup.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
-                        value = exportBackupPassword,
-                        onValueChange = { viewModel.exportBackupPassword.value = it },
-                        label = { Text("Backup password") },
+                        value = exportVaultPassword,
+                        onValueChange = { viewModel.exportVaultPassword.value = it },
+                        label = { Text("Vault password") },
                         singleLine = true,
                         visualTransformation = if (exportPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
@@ -132,24 +130,6 @@ fun SettingsScreen(
                                 Icon(
                                     imageVector = if (exportPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                     contentDescription = if (exportPasswordVisible) "Hide" else "Show",
-                                )
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = exportBackupPasswordConfirm,
-                        onValueChange = { viewModel.exportBackupPasswordConfirm.value = it },
-                        label = { Text("Confirm password") },
-                        singleLine = true,
-                        visualTransformation = if (exportConfirmVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { exportConfirmVisible = !exportConfirmVisible }) {
-                                Icon(
-                                    imageVector = if (exportConfirmVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (exportConfirmVisible) "Hide" else "Show",
                                 )
                             }
                         },
@@ -184,15 +164,15 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        text = "Enter the password that was used to encrypt this backup.",
+                        text = "Enter your vault password to decrypt and restore this backup.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
-                        value = importBackupPassword,
-                        onValueChange = { viewModel.importBackupPassword.value = it },
-                        label = { Text("Backup password") },
+                        value = importVaultPassword,
+                        onValueChange = { viewModel.importVaultPassword.value = it },
+                        label = { Text("Vault password") },
                         singleLine = true,
                         visualTransformation = if (importPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {

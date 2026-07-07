@@ -37,7 +37,7 @@ class BackupManager(
     private val vaultExporter = VaultExporter(keyDerivation, kdfParams, FileEncryptor())
     private val vaultImporter = VaultImporter(keyDerivation, kdfParams, FileEncryptor())
 
-    suspend fun exportBackup(destination: File, backupPassword: String): Boolean {
+    suspend fun exportBackup(destination: File, vaultPassword: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 val encryptionDir = File(context.filesDir, "encryption")
@@ -46,10 +46,6 @@ class BackupManager(
                 val wrappedKey = File(encryptionDir, "wrapped_master_key")
                 if (wrappedKey.exists()) {
                     fileEntries["wrapped_master_key"] = wrappedKey.readBytes()
-                }
-
-                encryptionManager.resolveDeviceKeyForBackup()?.let { deviceKey ->
-                    fileEntries["device_key"] = deviceKey
                 }
 
                 val saltFile = File(encryptionDir, "salt")
@@ -78,7 +74,7 @@ class BackupManager(
                     }
                 }
 
-                val vaultBytes = vaultExporter.export(files, dbData, backupPassword, fileEntries)
+                val vaultBytes = vaultExporter.export(files, dbData, vaultPassword, fileEntries)
                 destination.writeBytes(vaultBytes)
 
                 Log.d(TAG, "Export complete: ${vaultBytes.size} bytes, ${files.size} documents")
@@ -90,14 +86,14 @@ class BackupManager(
         }
     }
 
-    suspend fun importBackup(source: File, backupPassword: String): Boolean {
+    suspend fun importBackup(source: File, vaultPassword: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 val vaultBytes = source.readBytes()
-                val contents = vaultImporter.`import`(vaultBytes, backupPassword)
+                val contents = vaultImporter.`import`(vaultBytes, vaultPassword)
                     ?: return@withContext false
 
-                restoreContents(contents)
+                restoreContents(contents, vaultPassword)
 
                 Log.d(TAG, "Import complete from vault format")
                 true
@@ -108,7 +104,10 @@ class BackupManager(
         }
     }
 
-    private suspend fun restoreContents(contents: com.docwallet.vault.backup.BackupContents) {
+    private suspend fun restoreContents(
+        contents: com.docwallet.vault.backup.BackupContents,
+        vaultPassword: String,
+    ) {
         val encryptionDir = File(context.filesDir, "encryption").also { it.mkdirs() }
 
         contents.keys["wrapped_master_key"]?.let {
@@ -121,9 +120,17 @@ class BackupManager(
             File(encryptionDir, "salt").writeBytes(it)
         }
 
-        var masterKey = encryptionManager.getMasterKeyForSession()
-        if (masterKey == null) {
-            masterKey = encryptionManager.getMasterKeyForSession()
+        val masterKey = if (contents.keys.containsKey("wrapped_master_key") &&
+            contents.keys.containsKey("salt")) {
+            encryptionManager.verifyPassword(vaultPassword)
+            encryptionManager.setupDeviceKeyForDailyUnlock()
+            encryptionManager.getMasterKeyForSession()
+        } else {
+            val mk = encryptionManager.getMasterKeyForSession()
+            if (mk != null) {
+                encryptionManager.setupDeviceKeyForDailyUnlock()
+            }
+            mk
         }
 
         if (masterKey != null) {
@@ -155,10 +162,10 @@ class BackupManager(
         }
     }
 
-    suspend fun exportBackupToUri(uri: Uri, backupPassword: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun exportBackupToUri(uri: Uri, vaultPassword: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val tempFile = File(context.cacheDir, "backup_export_${System.currentTimeMillis()}.vault")
-            val success = exportBackup(tempFile, backupPassword)
+            val success = exportBackup(tempFile, vaultPassword)
             if (!success) return@withContext false
             context.contentResolver.openOutputStream(uri)?.use { outputStream ->
                 tempFile.inputStream().use { it.copyTo(outputStream) }
@@ -171,7 +178,7 @@ class BackupManager(
         }
     }
 
-    suspend fun importBackupFromUri(uri: Uri, backupPassword: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun importBackupFromUri(uri: Uri, vaultPassword: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val tempFile = File(context.cacheDir, "backup_import_${System.currentTimeMillis()}.vault")
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
@@ -179,7 +186,7 @@ class BackupManager(
                     inputStream.copyTo(outputStream)
                 }
             } ?: return@withContext false
-            val success = importBackup(tempFile, backupPassword)
+            val success = importBackup(tempFile, vaultPassword)
             tempFile.delete()
             success
         } catch (e: Exception) {
