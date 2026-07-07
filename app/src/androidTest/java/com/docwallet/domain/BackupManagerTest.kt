@@ -7,7 +7,7 @@ import com.docwallet.data.db.DocWalletDatabase
 import com.docwallet.data.encryption.EncryptionManager
 import com.docwallet.vault.crypto.Argon2Hasher
 import com.docwallet.vault.crypto.FileEncryptor
-import com.docwallet.data.encryption.KeyStoreCryptographer
+import com.docwallet.vault.crypto.KeyStoreCryptographer
 import com.docwallet.data.model.Document
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest

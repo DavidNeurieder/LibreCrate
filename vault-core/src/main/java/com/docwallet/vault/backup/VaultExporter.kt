@@ -18,6 +18,7 @@ class VaultExporter(
         files: Map<String, ByteArray>,
         dbFile: ByteArray?,
         backupPassword: String,
+        keys: Map<String, ByteArray> = emptyMap(),
     ): ByteArray {
         val salt = keyDerivation.generateSalt()
         val derivedKey = keyDerivation.deriveAndZero(backupPassword, salt, kdfParams)
@@ -25,6 +26,9 @@ class VaultExporter(
         try {
             val zipEntries = mutableMapOf<String, ByteArray>()
 
+            for ((name, data) in keys) {
+                zipEntries["keys/$name"] = data
+            }
             if (dbFile != null) {
                 zipEntries["db/docwallet.db"] = dbFile
             }

@@ -45,16 +45,16 @@ class BackupManager(
 
                 val wrappedKey = File(encryptionDir, "wrapped_master_key")
                 if (wrappedKey.exists()) {
-                    fileEntries["keys/wrapped_master_key"] = wrappedKey.readBytes()
+                    fileEntries["wrapped_master_key"] = wrappedKey.readBytes()
                 }
 
                 encryptionManager.resolveDeviceKeyForBackup()?.let { deviceKey ->
-                    fileEntries["keys/device_key"] = deviceKey
+                    fileEntries["device_key"] = deviceKey
                 }
 
                 val saltFile = File(encryptionDir, "salt")
                 if (saltFile.exists()) {
-                    fileEntries["keys/salt"] = saltFile.readBytes()
+                    fileEntries["salt"] = saltFile.readBytes()
                 }
 
                 val dbFile = context.getDatabasePath("docwallet.db")
@@ -78,7 +78,7 @@ class BackupManager(
                     }
                 }
 
-                val vaultBytes = vaultExporter.export(files, dbData, backupPassword)
+                val vaultBytes = vaultExporter.export(files, dbData, backupPassword, fileEntries)
                 destination.writeBytes(vaultBytes)
 
                 Log.d(TAG, "Export complete: ${vaultBytes.size} bytes, ${files.size} documents")
