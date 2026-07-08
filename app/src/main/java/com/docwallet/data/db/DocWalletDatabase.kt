@@ -15,7 +15,7 @@ import com.docwallet.data.model.Collection
 import com.docwallet.data.model.DocumentTag
 import com.docwallet.data.model.Tag
 
-@Database(entities = [Document::class, Tag::class, Collection::class, DocumentTag::class], version = 4, exportSchema = false)
+@Database(entities = [Document::class, Tag::class, Collection::class, DocumentTag::class], version = 5, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class DocWalletDatabase : RoomDatabase() {
     abstract fun documentDao(): DocumentDao
@@ -26,10 +26,13 @@ abstract class DocWalletDatabase : RoomDatabase() {
     companion object {
         private const val DB_NAME = "docwallet.db"
 
-        private val FTS_CALLBACK = object : RoomDatabase.Callback() {
+        internal val FTS_CALLBACK = object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
                 db.execSQL(DatabaseSchema.CREATE_DOCUMENTS_FTS_TABLE)
+                db.execSQL(DatabaseSchema.CREATE_FTS_TRIGGER_INSERT)
+                db.execSQL(DatabaseSchema.CREATE_FTS_TRIGGER_DELETE)
+                db.execSQL(DatabaseSchema.CREATE_FTS_TRIGGER_UPDATE)
             }
         }
 
@@ -86,6 +89,16 @@ abstract class DocWalletDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(DatabaseSchema.CREATE_DOCUMENTS_FTS_TABLE)
+                db.execSQL(DatabaseSchema.CREATE_FTS_TRIGGER_INSERT)
+                db.execSQL(DatabaseSchema.CREATE_FTS_TRIGGER_DELETE)
+                db.execSQL(DatabaseSchema.CREATE_FTS_TRIGGER_UPDATE)
+                db.execSQL(DatabaseSchema.REBUILD_FTS_INDEX)
+            }
+        }
+
         fun create(context: Context, passphrase: ByteArray): DocWalletDatabase {
             val factory = SupportFactory(passphrase, null, false)
             return Room.databaseBuilder(
@@ -94,7 +107,7 @@ abstract class DocWalletDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .addCallback(FTS_CALLBACK)
                 .build()
         }

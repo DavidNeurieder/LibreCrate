@@ -86,4 +86,29 @@ object DatabaseSchema {
     fun createFtsTable(handle: SqlHandle) {
         handle.execSQL(CREATE_DOCUMENTS_FTS_TABLE)
     }
+
+    val CREATE_FTS_TRIGGER_INSERT = """
+        CREATE TRIGGER IF NOT EXISTS documents_fts_ai AFTER INSERT ON documents BEGIN
+            INSERT INTO documents_fts(rowid, title, author, description, text_content)
+            VALUES (new.rowid, new.title, new.author, new.description, new.text_content);
+        END;
+    """.trimIndent()
+
+    val CREATE_FTS_TRIGGER_DELETE = """
+        CREATE TRIGGER IF NOT EXISTS documents_fts_ad AFTER DELETE ON documents BEGIN
+            INSERT INTO documents_fts(documents_fts, rowid, title, author, description, text_content)
+            VALUES ('delete', old.rowid, old.title, old.author, old.description, old.text_content);
+        END;
+    """.trimIndent()
+
+    val CREATE_FTS_TRIGGER_UPDATE = """
+        CREATE TRIGGER IF NOT EXISTS documents_fts_au AFTER UPDATE ON documents BEGIN
+            INSERT INTO documents_fts(documents_fts, rowid, title, author, description, text_content)
+            VALUES ('delete', old.rowid, old.title, old.author, old.description, old.text_content);
+            INSERT INTO documents_fts(rowid, title, author, description, text_content)
+            VALUES (new.rowid, new.title, new.author, new.description, new.text_content);
+        END;
+    """.trimIndent()
+
+    val REBUILD_FTS_INDEX = "INSERT INTO documents_fts(documents_fts) VALUES('rebuild')"
 }

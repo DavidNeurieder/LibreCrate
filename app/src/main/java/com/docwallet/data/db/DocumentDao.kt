@@ -6,7 +6,9 @@ import androidx.room.PrimaryKey
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.Update
+import androidx.sqlite.db.SupportSQLiteQuery
 import com.docwallet.data.model.Document
 import kotlinx.coroutines.flow.Flow
 
@@ -34,6 +36,9 @@ data class DocumentListItem(
 interface DocumentDao {
     @Query("SELECT id, title, file_name, mime_type, file_size, page_count, author, description, thumbnail_path, imported_at, last_opened_at, is_favorite, collection_id, barcode_format, barcode_value, current_page, reading_position FROM documents ORDER BY imported_at DESC")
     fun getDocumentList(): Flow<List<DocumentListItem>>
+
+    @RawQuery(observedEntities = [Document::class])
+    fun searchDocuments(query: SupportSQLiteQuery): Flow<List<DocumentListItem>>
 
     @Query("SELECT * FROM documents ORDER BY imported_at DESC")
     fun getAllDocuments(): Flow<List<Document>>

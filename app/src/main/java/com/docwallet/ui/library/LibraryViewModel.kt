@@ -7,6 +7,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.sqlite.db.SimpleSQLiteQuery
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import com.docwallet.DocWalletApplication
 import com.docwallet.data.db.DocumentListItem
 import com.docwallet.data.model.Document
@@ -18,6 +20,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -34,6 +38,7 @@ enum class SortOption(val label: String) {
     DATE_OLDEST("Oldest first"),
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as DocWalletApplication
     private val documentDao = app.documentDao
@@ -47,12 +52,30 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val favoritesOnly = MutableStateFlow(false)
 
     val documents: StateFlow<List<Document>> = combine(
-        documentDao.getDocumentList(),
-        searchQuery,
+        searchQuery.flatMapLatest { query ->
+            if (query.isBlank()) {
+                documentDao.getDocumentList()
+            } else {
+                val sanitized = query.trim()
+                    .split("\\s+".toRegex())
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ") { "${it}*" }
+                try {
+                    documentDao.searchDocuments(
+                        SimpleSQLiteQuery(
+                            "SELECT d.id, d.title, d.file_name, d.mime_type, d.file_size, d.page_count, d.author, d.description, d.thumbnail_path, d.imported_at, d.last_opened_at, d.is_favorite, d.collection_id, d.barcode_format, d.barcode_value, d.current_page, d.reading_position FROM documents d INNER JOIN documents_fts fts ON d.rowid = fts.rowid WHERE documents_fts MATCH ? ORDER BY rank",
+                            arrayOf(sanitized)
+                        )
+                    )
+                } catch (_: Exception) {
+                    flowOf(emptyList())
+                }
+            }
+        },
         selectedSort,
         filterType,
         favoritesOnly
-    ) { items, query, sort, type, favs ->
+    ) { items: List<DocumentListItem>, sort: SortOption, type: DocumentType?, favs: Boolean ->
         var result = items.map { item ->
             Document(
                 id = item.id,
@@ -89,19 +112,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             result = result.filter { it.isFavorite }
         }
 
-        if (query.isNotBlank()) {
-            result = result.filter { it.title.contains(query, ignoreCase = true) }
-        }
-
-        result = when (sort) {
+        when (sort) {
             SortOption.NAME_ASC -> result.sortedBy { it.title.lowercase() }
             SortOption.NAME_DESC -> result.sortedByDescending { it.title.lowercase() }
             SortOption.DATE_NEWEST -> result.sortedByDescending { it.importedAt }
             SortOption.DATE_OLDEST -> result.sortedBy { it.importedAt }
             SortOption.RECENTLY_OPENED -> result.sortedByDescending { it.lastOpenedAt }
         }
-
-        result
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
