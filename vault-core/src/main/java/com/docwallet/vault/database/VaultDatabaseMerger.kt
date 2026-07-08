@@ -157,6 +157,29 @@ class VaultDatabaseMerger {
             }
         }
 
+        for (doc in backupDocs) {
+            val thumbPath = doc.thumbnailPath ?: continue
+            val relativeName = thumbPath.substringAfterLast("/")
+            val fileBytes = files[relativeName] ?: continue
+            if (fileBytes.size <= FileEncryptor.IV_LENGTH) continue
+
+            try {
+                val target = File(filesDirPath, relativeName)
+                if (target.exists()) continue
+
+                val thumbIv = fileBytes.copyOfRange(0, FileEncryptor.IV_LENGTH)
+                val rawCiphertext = fileBytes.copyOfRange(FileEncryptor.IV_LENGTH, fileBytes.size)
+                val plaintext = fileEncryptor.decryptBytes(rawCiphertext, backupKey, thumbIv)
+                val (newIv, reencrypted) = fileEncryptor.encryptBytes(plaintext, localKey)
+                target.parentFile?.mkdirs()
+                target.outputStream().use { out ->
+                    out.write(newIv)
+                    out.write(reencrypted)
+                }
+            } catch (_: Exception) {
+            }
+        }
+
         return result
     }
 
