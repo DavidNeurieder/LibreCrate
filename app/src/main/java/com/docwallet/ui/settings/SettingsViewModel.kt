@@ -136,8 +136,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val ok = app.backupManager.importBackupFromUri(uri, password) { progress ->
                     _backupProgress.value = progress
                 }
-                if (ok) app.reopenDatabase()
-                ok
+                if (ok) app.reopenDatabase() else false
             }
             _backupProgress.value = null
             if (success) {

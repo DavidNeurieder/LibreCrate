@@ -3,6 +3,7 @@ package com.docwallet
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import android.util.Log
 import com.docwallet.data.db.CollectionDao
 import com.docwallet.data.db.DocWalletDatabase
 import com.docwallet.data.db.DocumentDao
@@ -51,28 +52,44 @@ class DocWalletApplication : Application() {
         if (database != null) return true
         val passphrase = encryptionManager.getMasterKeyForSession()
             ?: return false
-        val newDb = DocWalletDatabase.create(this, passphrase)
-        database = newDb
-        _documentDao = newDb.documentDao()
-        _collectionDao = newDb.collectionDao()
-        _tagDao = newDb.tagDao()
-        return true
+        return try {
+            val newDb = DocWalletDatabase.create(this, passphrase)
+            database = newDb
+            _documentDao = newDb.documentDao()
+            _collectionDao = newDb.collectionDao()
+            _tagDao = newDb.tagDao()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize database", e)
+            false
+        }
     }
 
     @Synchronized
-    fun reopenDatabase() {
-        database?.close()
-        database = null
-        _documentDao = null
-        _collectionDao = null
-        _tagDao = null
-        initializeDatabase()
+    fun reopenDatabase(): Boolean {
+        val passphrase = encryptionManager.getMasterKeyForSession()
+            ?: return false
+        return try {
+            val newDb = DocWalletDatabase.create(this, passphrase)
+            database = newDb
+            _documentDao = newDb.documentDao()
+            _collectionDao = newDb.collectionDao()
+            _tagDao = newDb.tagDao()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to reopen database", e)
+            false
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
         encryptionManager = EncryptionManager(this)
         registerActivityLifecycleCallbacks(ActivityLifecycleLockCallbacks(encryptionManager))
+    }
+
+    companion object {
+        private const val TAG = "DocWalletApp"
     }
 }
 

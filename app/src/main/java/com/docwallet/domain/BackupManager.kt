@@ -178,6 +178,13 @@ class BackupManager(
                         backupHandle.close()
                     }
                 } else if (currentDb == null && backupMasterKey != null) {
+                    val origWrappedKey = File(encryptionDir, "wrapped_master_key").let { f ->
+                        if (f.exists()) f.readBytes() else null
+                    }
+                    val origSalt = File(encryptionDir, "salt").let { f ->
+                        if (f.exists()) f.readBytes() else null
+                    }
+
                     contents.keys["wrapped_master_key"]?.let {
                         File(encryptionDir, "wrapped_master_key").writeBytes(it)
                     }
@@ -185,8 +192,33 @@ class BackupManager(
                         File(encryptionDir, "salt").writeBytes(it)
                     }
 
-                    encryptionManager.verifyPassword(vaultPassword)
-                    encryptionManager.setupDeviceKeyForDailyUnlock()
+                    val passwordVerified = encryptionManager.verifyPassword(vaultPassword)
+                    if (!passwordVerified) {
+                        Log.e(TAG, "Password verification failed — restoring original key material")
+                        if (origWrappedKey != null) {
+                            File(encryptionDir, "wrapped_master_key").writeBytes(origWrappedKey)
+                        }
+                        if (origSalt != null) {
+                            File(encryptionDir, "salt").writeBytes(origSalt)
+                        }
+                        return
+                    }
+
+                    val deviceKeySetup = encryptionManager.setupDeviceKeyForDailyUnlock()
+                    if (!deviceKeySetup) {
+                        Log.e(TAG, "Device key setup failed — restoring original key material and aborting")
+                        if (origWrappedKey != null) {
+                            File(encryptionDir, "wrapped_master_key").writeBytes(origWrappedKey)
+                        } else {
+                            File(encryptionDir, "wrapped_master_key").delete()
+                        }
+                        if (origSalt != null) {
+                            File(encryptionDir, "salt").writeBytes(origSalt)
+                        } else {
+                            File(encryptionDir, "salt").delete()
+                        }
+                        return
+                    }
 
                     val dbFile = context.getDatabasePath("docwallet.db")
                     dbFile.parentFile?.mkdirs()
