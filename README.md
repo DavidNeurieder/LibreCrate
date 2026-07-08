@@ -6,15 +6,25 @@ Encrypted document vault for Android — stores, views, organizes, and searches 
 
 ## Features
 
-- **Six document types**: PDF, EPUB, PKPass, CBZ/CBR, Images, Markdown notes
-- **Encryption at rest**: AES-256-GCM per-file encryption; master key wrapped via Argon2id + AES-256-KW
+- **Six document types**: PDF, EPUB, PKPass (Apple Wallet passes), CBZ/CBR comics, Images, and Markdown notes
+- **Encryption at rest**: AES-256-GCM per-file encryption; master key wrapped via Argon2id + AES-256 Key Wrap (RFC 3394)
 - **Optional password**: Even with the phone unlocked, content can't be read without the password
 - **No network**: Zero internet permission — your documents never leave the device
-- **Library view**: Search, sort, filter by type, favorites with reading progress indicators
-- **Reading position**: Remembers last page for PDFs and comics, last location for EPUBs; shows progress on document cards
-- **Import**: Share intents, SAF file picker, bulk import
-- **Backup**: Single encrypted `.docwallet-backup` file via SAF
+- **Library view**: Grid/list, type filter, favorites, sort options, and reading-progress indicators
+- **Reading position**: Remembers last page for PDFs and comics, last location for EPUBs; shows "Page X of Y" / "% read" on cards
+- **Full-text search**: FTS5 search across title, author, description, and extracted document text, with highlighted snippets
+- **Import**: Share intents (single or multiple) and SAF file picker (bulk import)
+- **Backup**: Single encrypted `.docwallet-backup` file via SAF, verified by your password
 - **F-Droid only**: No Google Play Services, Firebase, Crashlytics, or AdMob
+
+### Viewers
+
+- **PDF** (MuPDF): paginated scroll, pinch-to-zoom/pan, fit modes (width/page/actual), night mode, last-page memory
+- **EPUB** (Readium 2): reflowable reader, table of contents, reader settings (font family/size, line height, margins), reading progress, rename/favorite/delete
+- **Comics** (CBZ/CBR): thumbnail grid + full-page reader, zoom/pan, last-page memory
+- **Apple Wallet pass** (PKPass): pass fields, themed colors, logo/strip images, barcode display (ZXing)
+- **Images**: full-screen Coil viewer with zoom/pan and an info overlay
+- **Notes**: Markdown editor with live preview, formatting toolbar, word/character count, and debounced autosave
 
 ## Security
 
@@ -25,8 +35,16 @@ Encrypted document vault for Android — stores, views, organizes, and searches 
 | File encryption | AES-256-GCM (12-byte IV, 128-bit tag) |
 | Password mode | Master key wrapped with password-derived key; device key deleted |
 | Device-key mode | Master key wrapped with per-device AES key (no password) |
-| Lock | Clears in-memory master key; requires password re-entry |
+| Lock | Clears in-memory master key when app is backgrounded; requires password re-entry |
 | Backup | Encrypted Zip bundle with wrapped master key + DB + files |
+
+## Known Limitations (current build)
+
+- **No biometric unlock** — unlock is by password only.
+- **No idle auto-lock** — the vault locks only when the app is backgrounded.
+- **Collections & Tags** exist internally but are not reachable from the current UI and cannot be assigned to documents.
+- **No in-document search** — search covers the whole library, not find-within a PDF/EPUB.
+- **Barcodes are display-only** — passes show barcodes; there is no camera scanning.
 
 ## Screenshots
 
@@ -59,7 +77,7 @@ sdk.dir=/path/to/Android/Sdk
 ```
 
 - 119+ unit tests
-- 46+ instrumented tests (API 15+)
+- 46+ instrumented tests
 
 ## AllowedAPKSigningKeys to verify Releases:
 
