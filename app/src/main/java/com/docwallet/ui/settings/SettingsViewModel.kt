@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.docwallet.DocWalletApplication
 import com.docwallet.data.encryption.EncryptionManager
+import com.docwallet.domain.BackupProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    private val _backupProgress = MutableStateFlow<BackupProgress?>(null)
+    val backupProgress: StateFlow<BackupProgress?> = _backupProgress.asStateFlow()
 
     fun setPassword() {
         val pwd = newPassword.value
@@ -97,21 +101,24 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
+        showExportPasswordDialog.value = false
         viewModelScope.launch {
             val success = withContext(Dispatchers.Default) {
                 if (!encryptionManager.verifyPassword(password)) {
                     return@withContext false
                 }
                 withContext(Dispatchers.IO) {
-                    app.backupManager.exportBackupToUri(uri, password)
+                    app.backupManager.exportBackupToUri(uri, password) { progress ->
+                        _backupProgress.value = progress
+                    }
                 }
             }
+            _backupProgress.value = null
             if (success) {
                 exportVaultPassword.value = ""
             }
             _message.value = if (success) "Backup exported successfully" else "Backup export failed"
         }
-        showExportPasswordDialog.value = false
     }
 
     fun onImportConfirmed() {
@@ -123,19 +130,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
+        showImportPasswordDialog.value = false
         viewModelScope.launch {
             val success = withContext(Dispatchers.IO) {
-                val ok = app.backupManager.importBackupFromUri(uri, password)
+                val ok = app.backupManager.importBackupFromUri(uri, password) { progress ->
+                    _backupProgress.value = progress
+                }
                 if (ok) app.reopenDatabase()
                 ok
             }
+            _backupProgress.value = null
             if (success) {
                 importVaultPassword.value = ""
                 pendingImportUri.value = null
             }
             _message.value = if (success) "Backup imported successfully" else "Backup import failed"
         }
-        showImportPasswordDialog.value = false
     }
 
     fun cancelExport() {

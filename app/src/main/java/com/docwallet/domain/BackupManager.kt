@@ -22,6 +22,12 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.io.File
 
+data class BackupProgress(
+    val phase: String,
+    val fraction: Float,
+    val detail: String = "",
+)
+
 class BackupManager(
     private val context: Context,
     private val encryptionManager: EncryptionManager,
@@ -33,21 +39,28 @@ class BackupManager(
     private val vaultExporter = VaultExporter(keyDerivation, kdfParams, FileEncryptor())
     private val vaultImporter = VaultImporter(keyDerivation, kdfParams, FileEncryptor())
 
-    suspend fun exportBackup(destination: File, vaultPassword: String): Boolean {
+    suspend fun exportBackup(
+        destination: File,
+        vaultPassword: String,
+        onProgress: (BackupProgress) -> Unit = {},
+    ): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 val encryptionDir = File(context.filesDir, "encryption")
                 val fileEntries = mutableMapOf<String, ByteArray>()
 
+                onProgress(BackupProgress("Reading key files", 0.0f))
                 val wrappedKey = File(encryptionDir, "wrapped_master_key")
                 if (wrappedKey.exists()) {
                     fileEntries["wrapped_master_key"] = wrappedKey.readBytes()
                 }
+                onProgress(BackupProgress("Reading key files", 0.05f))
 
                 val saltFile = File(encryptionDir, "salt")
                 if (saltFile.exists()) {
                     fileEntries["salt"] = saltFile.readBytes()
                 }
+                onProgress(BackupProgress("Reading key files", 0.1f))
 
                 val dbFile = context.getDatabasePath("docwallet.db")
                 val dbData = if (dbFile.exists()) {
@@ -58,20 +71,32 @@ class BackupManager(
                     }
                     dbFile.readBytes()
                 } else null
+                onProgress(BackupProgress("Reading database", 0.15f))
 
                 val filesDir = File(context.filesDir, "files")
+                val allFiles = if (filesDir.exists()) {
+                    filesDir.walkTopDown().filter { it.isFile }.toList()
+                } else emptyList()
+                val total = allFiles.size.coerceAtLeast(1)
                 val files = mutableMapOf<String, ByteArray>()
-                if (filesDir.exists()) {
-                    filesDir.walkTopDown().forEach { file ->
-                        if (file.isFile) {
-                            val name = file.relativeTo(filesDir).path
-                            files[name] = file.readBytes()
-                        }
-                    }
+                allFiles.forEachIndexed { i, file ->
+                    val name = file.relativeTo(filesDir).path
+                    files[name] = file.readBytes()
+                    onProgress(
+                        BackupProgress(
+                            "Reading files",
+                            0.15f + 0.45f * ((i + 1).toFloat() / total),
+                            detail = "$i of $total",
+                        )
+                    )
                 }
 
+                onProgress(BackupProgress("Encrypting backup", 0.6f))
                 val vaultBytes = vaultExporter.export(files, dbData, vaultPassword, fileEntries)
+                onProgress(BackupProgress("Encrypting backup", 0.8f))
+
                 destination.writeBytes(vaultBytes)
+                onProgress(BackupProgress("Writing output", 1.0f))
 
                 Log.d(TAG, "Export complete: ${vaultBytes.size} bytes, ${files.size} documents")
                 true
@@ -82,15 +107,22 @@ class BackupManager(
         }
     }
 
-    suspend fun importBackup(source: File, vaultPassword: String): Boolean {
+    suspend fun importBackup(
+        source: File,
+        vaultPassword: String,
+        onProgress: (BackupProgress) -> Unit = {},
+    ): Boolean {
         return withContext(Dispatchers.IO) {
             try {
+                onProgress(BackupProgress("Decrypting backup", 0.10f))
                 val vaultBytes = source.readBytes()
                 val contents = vaultImporter.`import`(vaultBytes, vaultPassword)
                     ?: return@withContext false
+                onProgress(BackupProgress("Decrypting backup", 0.30f))
 
-                restoreContents(contents, vaultPassword)
+                restoreContents(contents, vaultPassword, onProgress)
 
+                onProgress(BackupProgress("Restore complete", 1.0f))
                 Log.d(TAG, "Import complete from vault format")
                 true
             } catch (e: Exception) {
@@ -103,6 +135,7 @@ class BackupManager(
     private suspend fun restoreContents(
         contents: com.docwallet.vault.backup.BackupContents,
         vaultPassword: String,
+        onProgress: (BackupProgress) -> Unit = {},
     ) {
         val encryptionDir = File(context.filesDir, "encryption").also { it.mkdirs() }
         val currentDb = getDatabase()
@@ -114,11 +147,13 @@ class BackupManager(
             return
         }
 
+        onProgress(BackupProgress("Restoring keys", 0.30f))
         contents.dbFile?.let { dbData ->
             val tempDb = File(context.cacheDir, "restore_db_${System.currentTimeMillis()}.db")
             try {
                 tempDb.writeBytes(dbData)
 
+                onProgress(BackupProgress("Merging database", 0.35f))
                 if (currentDb != null && backupMasterKey != null) {
                     val backupHandle = SqlCipherOpener(context, backupMasterKey).open(tempDb.absolutePath)
                     val currentSqlHandle = getDatabase()?.openHelper?.writableDatabase
@@ -179,12 +214,21 @@ class BackupManager(
         }
 
         val filesDir = File(context.filesDir, "files").also { it.mkdirs() }
-        for ((entryName, data) in contents.files) {
+        val fileList = contents.files.entries.toList()
+        val fileTotal = fileList.size.coerceAtLeast(1)
+        fileList.forEachIndexed { i, (entryName, data) ->
             val targetFile = File(filesDir, entryName)
             targetFile.parentFile?.mkdirs()
             if (!targetFile.exists()) {
                 targetFile.writeBytes(data)
             }
+            onProgress(
+                BackupProgress(
+                    "Restoring files",
+                    0.70f + 0.30f * ((i + 1).toFloat() / fileTotal),
+                    detail = "$i of $fileTotal",
+                )
+            )
         }
     }
 
@@ -210,15 +254,40 @@ class BackupManager(
         }
     }
 
-    suspend fun exportBackupToUri(uri: Uri, vaultPassword: String): Boolean = withContext(NonCancellable + Dispatchers.IO) {
+    suspend fun exportBackupToUri(
+        uri: Uri,
+        vaultPassword: String,
+        onProgress: (BackupProgress) -> Unit = {},
+    ): Boolean = withContext(NonCancellable + Dispatchers.IO) {
         try {
             val tempFile = File(context.cacheDir, "backup_export_${System.currentTimeMillis()}.vault")
-            val success = exportBackup(tempFile, vaultPassword)
+            val success = exportBackup(tempFile, vaultPassword, onProgress)
             if (!success) return@withContext false
+
+            onProgress(BackupProgress("Writing to file", 0.80f))
             context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                tempFile.inputStream().use { it.copyTo(outputStream) }
+                val totalBytes = tempFile.length()
+                val buffer = ByteArray(8192)
+                var bytesWritten = 0L
+                tempFile.inputStream().use { input ->
+                    var read = input.read(buffer)
+                    while (read >= 0) {
+                        outputStream.write(buffer, 0, read)
+                        bytesWritten += read
+                        if (totalBytes > 0) {
+                            onProgress(
+                                BackupProgress(
+                                    "Writing to file",
+                                    0.80f + 0.20f * (bytesWritten.toFloat() / totalBytes),
+                                )
+                            )
+                        }
+                        read = input.read(buffer)
+                    }
+                }
             } ?: return@withContext false
             tempFile.delete()
+            onProgress(BackupProgress("Export complete", 1.0f))
             true
         } catch (e: Exception) {
             Log.e(TAG, "exportBackupToUri failed", e)
@@ -226,15 +295,21 @@ class BackupManager(
         }
     }
 
-    suspend fun importBackupFromUri(uri: Uri, vaultPassword: String): Boolean = withContext(NonCancellable + Dispatchers.IO) {
+    suspend fun importBackupFromUri(
+        uri: Uri,
+        vaultPassword: String,
+        onProgress: (BackupProgress) -> Unit = {},
+    ): Boolean = withContext(NonCancellable + Dispatchers.IO) {
         try {
             val tempFile = File(context.cacheDir, "backup_import_${System.currentTimeMillis()}.vault")
+            onProgress(BackupProgress("Reading backup file", 0.0f))
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 tempFile.outputStream().use { outputStream ->
                     inputStream.copyTo(outputStream)
                 }
             } ?: return@withContext false
-            val success = importBackup(tempFile, vaultPassword)
+            onProgress(BackupProgress("Reading backup file", 0.10f))
+            val success = importBackup(tempFile, vaultPassword, onProgress)
             tempFile.delete()
             success
         } catch (e: Exception) {

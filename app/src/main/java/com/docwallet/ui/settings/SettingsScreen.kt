@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.docwallet.data.AppPreferencesStore
+import com.docwallet.domain.BackupProgress
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -77,6 +79,9 @@ fun SettingsScreen(
     val importVaultPassword by viewModel.importVaultPassword.collectAsState()
     val showExportPasswordDialog by viewModel.showExportPasswordDialog.collectAsState()
     val showImportPasswordDialog by viewModel.showImportPasswordDialog.collectAsState()
+    val backupProgress by viewModel.backupProgress.collectAsState()
+
+    val isBackupInProgress = backupProgress != null
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -405,6 +410,7 @@ fun SettingsScreen(
                             viewModel.showExportPasswordDialog.value = true
                         },
                         modifier = Modifier.fillMaxWidth(),
+                        enabled = !isBackupInProgress,
                     ) {
                         Text("Export Backup")
                     }
@@ -413,11 +419,46 @@ fun SettingsScreen(
 
                     OutlinedButton(
                         onClick = {
-                            importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                            if (!isBackupInProgress) {
+                                importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text("Import Backup")
+                    }
+                }
+            }
+
+            if (isBackupInProgress) {
+                backupProgress?.let { progress ->
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                        ),
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = progress.phase,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { progress.fraction },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            if (progress.detail.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = progress.detail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     }
                 }
             }
