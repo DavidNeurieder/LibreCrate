@@ -28,6 +28,25 @@ class VaultSearchEngine(private val db: SqlHandle) {
         }
     }
 
+    fun searchInDocument(documentId: String, query: String): List<InDocumentMatch> {
+        if (query.isBlank()) return emptyList()
+        val sanitized = sanitizeFtsQuery(query)
+        val sql = """SELECT d.text_content, highlight(documents_fts, 3, ?, ?) AS hl
+                     FROM documents d
+                     INNER JOIN documents_fts fts ON d.rowid = fts.rowid
+                     WHERE documents_fts MATCH ? AND d.id = ?"""
+        db.query(sql, arrayOf("\u0001", "\u0002", sanitized, documentId)).use { cursor ->
+            while (cursor.moveToNext()) {
+                val textContent = cursor.getStringOrNull("text_content")
+                val highlightContent = cursor.getStringOrNull("hl")
+                if (highlightContent != null && textContent != null) {
+                    return parseHighlight(highlightContent, textContent).take(10)
+                }
+            }
+        }
+        return emptyList()
+    }
+
     private fun queryAll(): List<VaultDocument> {
         return readDocuments(db, "SELECT * FROM documents ORDER BY imported_at DESC")
     }
@@ -113,6 +132,58 @@ class VaultSearchEngine(private val db: SqlHandle) {
                 .split("\\s+".toRegex())
                 .filter { it.isNotBlank() }
                 .joinToString(" ") { "${it}*" }
+        }
+
+        internal fun parseHighlight(highlightContent: String, textContent: String): List<InDocumentMatch> {
+            if (highlightContent.isBlank()) return emptyList()
+            val matchList = mutableListOf<InDocumentMatch>()
+            var rawOffset = 0
+            var matchStart = -1
+            for (ch in highlightContent) {
+                when (ch) {
+                    '\u0001' -> matchStart = rawOffset
+                    '\u0002' -> {
+                        if (matchStart >= 0) {
+                            val snippet = extractSnippet(textContent, matchStart, rawOffset)
+                            if (snippet.isNotBlank()) {
+                                val cleaned = stripMarkers(snippet)
+                                val pageNumber = extractPageNumber(textContent, matchStart)
+                                matchList.add(InDocumentMatch(snippet = cleaned, pageNumber = pageNumber))
+                            }
+                            matchStart = -1
+                        }
+                    }
+                    else -> rawOffset++
+                }
+            }
+            return matchList
+        }
+
+        internal fun extractSnippet(text: String, startOffset: Int, endOffset: Int): String {
+            val contextBefore = 120
+            val contextAfter = 120
+            val snippetStart = (startOffset - contextBefore).coerceAtLeast(0)
+            val snippetEnd = (endOffset + contextAfter).coerceAtMost(text.length)
+            val prefix = text.substring(snippetStart, startOffset)
+            val match = text.substring(startOffset, endOffset)
+            val suffix = text.substring(endOffset, snippetEnd)
+            return "${prefix}<b>$match</b>$suffix"
+        }
+
+        internal fun stripMarkers(text: String): String {
+            return text.replace(Regex("\\[PAGE=\\d+\\]"), "")
+                .replace(Regex("\\[SECTION=\\d+\\]"), "")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+        }
+
+        internal fun extractPageNumber(text: String, offset: Int): Int {
+            val before = text.substring(0, offset.coerceAtMost(text.length))
+            val pageMatches = Regex("\\[PAGE=(\\d+)\\]").findAll(before)
+            val sectionMatches = Regex("\\[SECTION=(\\d+)\\]").findAll(before)
+            val lastPage = pageMatches.lastOrNull()?.groupValues?.get(1)?.toIntOrNull()
+            val lastSection = sectionMatches.lastOrNull()?.groupValues?.get(1)?.toIntOrNull()
+            return lastPage ?: lastSection ?: 0
         }
     }
 }
