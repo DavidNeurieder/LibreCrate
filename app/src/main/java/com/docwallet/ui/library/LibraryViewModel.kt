@@ -315,7 +315,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val contextAfter = 120
         val snippetStart = (startOffset - contextBefore).coerceAtLeast(0)
         val snippetEnd = (endOffset + contextAfter).coerceAtMost(text.length)
-        return text.substring(snippetStart, snippetEnd)
+        val prefix = text.substring(snippetStart, startOffset)
+        val match = text.substring(startOffset, endOffset)
+        val suffix = text.substring(endOffset, snippetEnd)
+        return "${prefix}<b>$match</b>$suffix"
     }
 
     private fun stripMarkers(text: String): String {
