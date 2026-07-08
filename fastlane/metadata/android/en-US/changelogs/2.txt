@@ -1,8 +1,10 @@
 • Redesigned library: search in top bar, sort & filter dropdowns
-• Reading progress shown on document cards (PDF page, EPUB %)
-• Merged continue reading into main list
-• Unified viewer headers with overflow menus
-• Removed fullscreen mode
-• EPUB reader now has rename dialog
-• Default sort by recently opened
-• Various fixes and optimizations
+• Reading progress on document cards (PDF page, EPUB %)
+• Merged continue reading into main list; default sort by recently opened
+• Unified viewer headers with overflow menus; fullscreen removed
+• EPUB reader: rename dialog, reading position saved as percentage
+• Edit button removed from main screen DocumentCard
+• Collections & Tags entry points removed from Settings
+• Fixed thumbnail loading race condition
+• Fixed PDF scroll position on return from viewer
+• Fixed scroll position loss when returning from a document
