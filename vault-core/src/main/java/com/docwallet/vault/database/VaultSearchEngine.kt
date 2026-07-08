@@ -131,7 +131,9 @@ class VaultSearchEngine(private val db: SqlHandle) {
             return query.trim()
                 .split("\\s+".toRegex())
                 .filter { it.isNotBlank() }
-                .joinToString(" ") { "${it}*" }
+                .joinToString(" ") { term ->
+                    "\"${term.replace("\"", "\"\"")}\""
+                }
         }
 
         internal fun parseHighlight(highlightContent: String, textContent: String): List<InDocumentMatch> {

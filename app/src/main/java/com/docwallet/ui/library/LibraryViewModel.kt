@@ -15,6 +15,7 @@ import com.docwallet.data.db.SearchResultItem
 import com.docwallet.data.db.SearchResultMatch
 import com.docwallet.data.db.SearchResultWithOffsets
 import com.docwallet.data.model.Document
+import com.docwallet.vault.database.VaultSearchEngine
 import com.docwallet.vault.model.DocumentType
 import com.docwallet.ui.common.ThumbnailCache
 import kotlinx.coroutines.Dispatchers
@@ -61,20 +62,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             if (query.isBlank()) {
                 documentDao.getDocumentList()
             } else {
-                val sanitized = query.trim()
-                    .split("\\s+".toRegex())
-                    .filter { it.isNotBlank() }
-                    .joinToString(" ") { "${it}*" }
-                (try {
-                    documentDao.searchDocuments(
-                        SimpleSQLiteQuery(
-                            "SELECT d.id, d.title, d.file_name, d.mime_type, d.file_size, d.page_count, d.author, d.description, d.thumbnail_path, d.imported_at, d.last_opened_at, d.is_favorite, d.collection_id, d.barcode_format, d.barcode_value, d.current_page, d.reading_position FROM documents d INNER JOIN documents_fts fts ON d.rowid = fts.rowid WHERE documents_fts MATCH ? ORDER BY rank",
-                            arrayOf(sanitized)
-                        )
+                val sanitized = VaultSearchEngine.sanitizeFtsQuery(query)
+                documentDao.searchDocuments(
+                    SimpleSQLiteQuery(
+                        "SELECT d.id, d.title, d.file_name, d.mime_type, d.file_size, d.page_count, d.author, d.description, d.thumbnail_path, d.imported_at, d.last_opened_at, d.is_favorite, d.collection_id, d.barcode_format, d.barcode_value, d.current_page, d.reading_position FROM documents d INNER JOIN documents_fts fts ON d.rowid = fts.rowid WHERE documents_fts MATCH ? ORDER BY rank",
+                        arrayOf(sanitized)
                     )
-                } catch (_: Exception) {
-                    flowOf(emptyList())
-                }).catch { _ ->
+                ).catch { _ ->
                     emit(emptyList())
                 }
             }
@@ -133,22 +127,15 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             if (query.isBlank()) {
                 flowOf(emptyList())
             } else {
-                val sanitized = query.trim()
-                    .split("\\s+".toRegex())
-                    .filter { it.isNotBlank() }
-                    .joinToString(" ") { "${it}*" }
-                ((try {
-                    documentDao.searchDocumentsWithOffsets(
-                        SimpleSQLiteQuery(
-                            "SELECT d.id, d.title, d.mime_type, d.page_count, d.author, d.thumbnail_path, d.text_content, highlight(documents_fts, 3, '\u0001', '\u0002') AS highlight_content FROM documents d INNER JOIN documents_fts fts ON d.rowid = fts.rowid WHERE documents_fts MATCH ? ORDER BY rank",
-                            arrayOf(sanitized)
-                        )
+                val sanitized = VaultSearchEngine.sanitizeFtsQuery(query)
+                documentDao.searchDocumentsWithOffsets(
+                    SimpleSQLiteQuery(
+                        "SELECT d.id, d.title, d.mime_type, d.page_count, d.author, d.thumbnail_path, d.text_content, highlight(documents_fts, 3, '\u0001', '\u0002') AS highlight_content FROM documents d INNER JOIN documents_fts fts ON d.rowid = fts.rowid WHERE documents_fts MATCH ? ORDER BY rank",
+                        arrayOf(sanitized)
                     )
-                } catch (_: Exception) {
-                    flowOf(emptyList())
-                }).catch { _ ->
+                ).catch { _ ->
                     emit(emptyList())
-                }).map { results ->
+                }.map { results ->
                     results.map { row -> row.toSearchResultItem() }
                 }
             }
