@@ -18,6 +18,7 @@ import com.docwallet.vault.crypto.KdfParams
 import com.docwallet.vault.crypto.KeyDerivation
 import com.docwallet.vault.crypto.KeyWrap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -209,7 +210,7 @@ class BackupManager(
         }
     }
 
-    suspend fun exportBackupToUri(uri: Uri, vaultPassword: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun exportBackupToUri(uri: Uri, vaultPassword: String): Boolean = withContext(NonCancellable + Dispatchers.IO) {
         try {
             val tempFile = File(context.cacheDir, "backup_export_${System.currentTimeMillis()}.vault")
             val success = exportBackup(tempFile, vaultPassword)
@@ -225,7 +226,7 @@ class BackupManager(
         }
     }
 
-    suspend fun importBackupFromUri(uri: Uri, vaultPassword: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun importBackupFromUri(uri: Uri, vaultPassword: String): Boolean = withContext(NonCancellable + Dispatchers.IO) {
         try {
             val tempFile = File(context.cacheDir, "backup_import_${System.currentTimeMillis()}.vault")
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
