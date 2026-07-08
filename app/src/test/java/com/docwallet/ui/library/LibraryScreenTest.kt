@@ -131,7 +131,7 @@ class LibraryScreenTest {
     }
 
     @Test
-    fun `search shows bottom sheet with results`() {
+    fun `search shows results inline`() {
         every { mockDao.searchDocumentsWithSnippets(any()) } returns flowOf(
             listOf(
                 SearchResultItem(
@@ -160,12 +160,25 @@ class LibraryScreenTest {
         composeTestRule.onNode(hasSetTextAction()).performTextInput("fox")
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Search Results").assertExists()
         composeTestRule.onNodeWithText("Doc One").assertExists()
     }
 
     @Test
-    fun `search clears results on dismiss`() {
+    fun `search clears results on close`() {
+        every { mockDao.searchDocumentsWithSnippets(any()) } returns flowOf(
+            listOf(
+                SearchResultItem(
+                    id = "1",
+                    title = "Doc One",
+                    mimeType = "application/pdf",
+                    pageCount = 10,
+                    author = "Author",
+                    thumbnailPath = null,
+                    snippet = "The quick <b>fox</b> jumps",
+                )
+            )
+        )
+
         composeTestRule.setContent {
             MaterialTheme {
                 LibraryScreen(
@@ -179,11 +192,12 @@ class LibraryScreenTest {
         composeTestRule.onNodeWithContentDescription("Search").performClick()
         composeTestRule.onNode(hasSetTextAction()).performTextInput("fox")
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Search Results").assertExists()
+        composeTestRule.onNodeWithText("Doc One").assertExists()
 
         composeTestRule.onNodeWithContentDescription("Close search").performClick()
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("DocWallet").assertExists()
+        composeTestRule.onNodeWithText("Doc One").assertDoesNotExist()
     }
 }

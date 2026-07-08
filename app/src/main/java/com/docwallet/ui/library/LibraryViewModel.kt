@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -61,7 +62,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     .split("\\s+".toRegex())
                     .filter { it.isNotBlank() }
                     .joinToString(" ") { "${it}*" }
-                try {
+                (try {
                     documentDao.searchDocuments(
                         SimpleSQLiteQuery(
                             "SELECT d.id, d.title, d.file_name, d.mime_type, d.file_size, d.page_count, d.author, d.description, d.thumbnail_path, d.imported_at, d.last_opened_at, d.is_favorite, d.collection_id, d.barcode_format, d.barcode_value, d.current_page, d.reading_position FROM documents d INNER JOIN documents_fts fts ON d.rowid = fts.rowid WHERE documents_fts MATCH ? ORDER BY rank",
@@ -70,6 +71,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     )
                 } catch (_: Exception) {
                     flowOf(emptyList())
+                }).catch { _ ->
+                    emit(emptyList())
                 }
             }
         },
@@ -131,7 +134,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     .split("\\s+".toRegex())
                     .filter { it.isNotBlank() }
                     .joinToString(" ") { "${it}*" }
-                try {
+                (try {
                     documentDao.searchDocumentsWithSnippets(
                         SimpleSQLiteQuery(
                             "SELECT d.id, d.title, d.mime_type, d.page_count, d.author, d.thumbnail_path, highlight(documents_fts, 3, '<b>', '</b>') AS snippet FROM documents d INNER JOIN documents_fts fts ON d.rowid = fts.rowid WHERE documents_fts MATCH ? ORDER BY rank",
@@ -140,6 +143,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     )
                 } catch (_: Exception) {
                     flowOf(emptyList())
+                }).catch { _ ->
+                    emit(emptyList())
                 }
             }
         }
