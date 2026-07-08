@@ -91,6 +91,7 @@ dependencies {
     implementation(libs.compose.material.icons)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
+    implementation(libs.splash.screen)
     implementation(libs.lifecycle.runtime)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.process)
