@@ -9,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.docwallet.ui.collection.CollectionScreen
 import com.docwallet.ui.library.LibraryScreen
+import com.docwallet.ui.export.ExportScreen
 import com.docwallet.ui.settings.SettingsScreen
 import com.docwallet.ui.tag.TagScreen
 import com.docwallet.ui.unlock.PasswordSetupScreen
@@ -21,6 +22,7 @@ object Routes {
     const val LIBRARY = "library"
     const val VIEWER = "viewer/{documentId}?isNewNote={isNewNote}&pageNumber={pageNumber}"
     const val SETTINGS = "settings"
+    const val EXPORT = "export"
     const val COLLECTIONS = "collections"
     const val TAGS = "tags"
 
@@ -87,6 +89,12 @@ fun DocWalletNavGraph(
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToExport = { navController.navigate(Routes.EXPORT) },
+            )
+        }
+        composable(Routes.EXPORT) {
+            ExportScreen(
                 onBack = { navController.popBackStack() },
             )
         }

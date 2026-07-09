@@ -16,21 +16,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Card
@@ -67,7 +62,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.docwallet.data.AppPreferencesStore
-import com.docwallet.data.model.Document
 import com.docwallet.domain.BackupProgress
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -77,6 +71,7 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onNavigateToExport: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(),
 ) {
     val currentPassword by viewModel.currentPassword.collectAsState()
@@ -91,10 +86,6 @@ fun SettingsScreen(
 
     val isBackupInProgress = backupProgress != null
 
-    val documents by viewModel.documents.collectAsState()
-    val selectedDocIds by viewModel.selectedDocIds.collectAsState()
-    val isExporting by viewModel.isExporting.collectAsState()
-
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var screenshotsEnabled by remember { mutableStateOf(AppPreferencesStore.isScreenshotsEnabled(context)) }
@@ -105,12 +96,6 @@ fun SettingsScreen(
         uri?.let { viewModel.onExportConfirmed(it) }
     }
 
-    val documentExportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/zip"),
-    ) { uri ->
-        uri?.let { viewModel.onExportDocumentsConfirmed(it) }
-    }
-
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -118,10 +103,6 @@ fun SettingsScreen(
             viewModel.pendingImportUri.value = it
             viewModel.showImportPasswordDialog.value = true
         }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.refreshDocuments()
     }
 
     LaunchedEffect(message) {
@@ -532,124 +513,17 @@ fun SettingsScreen(
                 ),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    if (documents.isEmpty()) {
-                        Text(
-                            text = "No documents to export",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        Text(
-                            text = "${selectedDocIds.size} of ${documents.size} selected",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            OutlinedButton(
-                                onClick = { viewModel.selectAllDocuments() },
-                                modifier = Modifier.weight(1f),
-                                enabled = !isExporting,
-                            ) {
-                                Text("Select All")
-                            }
-                            OutlinedButton(
-                                onClick = { viewModel.deselectAllDocuments() },
-                                modifier = Modifier.weight(1f),
-                                enabled = !isExporting,
-                            ) {
-                                Text("Deselect All")
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        val displayList = remember(documents, selectedDocIds) {
-                            documents.map { doc ->
-                                val size = when {
-                                    doc.fileSize < 1024 -> "${doc.fileSize} B"
-                                    doc.fileSize < 1024 * 1024 -> "${doc.fileSize / 1024} KB"
-                                    else -> "%.1f MB".format(doc.fileSize.toDouble() / (1024 * 1024))
-                                }
-                                DocumentItem(doc = doc, size = size, isSelected = doc.id in selectedDocIds)
-                            }
-                        }
-
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(240.dp),
-                        ) {
-                            items(displayList) { item ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable(enabled = !isExporting) {
-                                            viewModel.toggleDocumentSelection(item.doc.id)
-                                        }
-                                        .padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Checkbox(
-                                        checked = item.isSelected,
-                                        onCheckedChange = { viewModel.toggleDocumentSelection(item.doc.id) },
-                                        enabled = !isExporting,
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = item.doc.title.ifBlank { item.doc.fileName },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            maxLines = 1,
-                                        )
-                                        Text(
-                                            text = item.size,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Button(
-                            onClick = {
-                                val dateStr = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
-                                documentExportLauncher.launch("DocWallet-documents-$dateStr.zip")
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = selectedDocIds.isNotEmpty() && !isExporting,
-                        ) {
-                            Text("Export Selected (${selectedDocIds.size})")
-                        }
-                    }
-                }
-            }
-
-            if (isExporting) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                    ),
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Exporting documents...",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                    Text(
+                        text = "Export selected documents to a ZIP file",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = onNavigateToExport,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Select Documents to Export")
                     }
                 }
             }
@@ -691,12 +565,6 @@ fun SettingsScreen(
         }
     }
 }
-
-private data class DocumentItem(
-    val doc: Document,
-    val size: String,
-    val isSelected: Boolean,
-)
 
 @Composable
 private fun SectionHeader(title: String) {
