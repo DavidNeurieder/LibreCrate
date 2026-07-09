@@ -88,6 +88,9 @@ class DocWalletApplication : Application() {
         super.onCreate()
         encryptionManager = EncryptionManager(this)
         registerActivityLifecycleCallbacks(ActivityLifecycleLockCallbacks(encryptionManager, this))
+        if (AppPreferencesStore.isPinEnabled(this)) {
+            PinLockManager.lock()
+        }
     }
 
     companion object {

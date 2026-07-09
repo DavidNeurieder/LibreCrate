@@ -425,9 +425,13 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        var pinEnabled by remember { mutableStateOf(AppPreferencesStore.isPinEnabled(context)) }
                         Switch(
-                            checked = viewModel.isPinEnabled,
-                            onCheckedChange = { viewModel.setPinEnabled(it) },
+                            checked = pinEnabled,
+                            onCheckedChange = { enabled ->
+                                pinEnabled = enabled
+                                AppPreferencesStore.setPinEnabled(context, enabled)
+                            },
                         )
                     }
                 }

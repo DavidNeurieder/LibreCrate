@@ -176,6 +176,15 @@ private fun PinUnlockOverlay() {
         }
     }
 
+    LaunchedEffect(Unit) {
+        if (PinLockManager.isLocked && keyguardManager.isKeyguardSecure) {
+            val intent = keyguardManager.createConfirmDeviceCredentialIntent("Unlock DocWallet", null)
+            if (intent != null) {
+                pinLauncher.launch(intent)
+            }
+        }
+    }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
