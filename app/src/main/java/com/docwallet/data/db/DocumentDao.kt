@@ -72,6 +72,9 @@ interface DocumentDao {
     @Query("SELECT * FROM documents ORDER BY imported_at DESC")
     fun getAllDocuments(): Flow<List<Document>>
 
+    @Query("SELECT * FROM documents ORDER BY imported_at DESC")
+    suspend fun getAllDocumentsOnce(): List<Document>
+
     @Query("SELECT * FROM documents WHERE id = :id")
     suspend fun getDocumentById(id: String): Document?
 
