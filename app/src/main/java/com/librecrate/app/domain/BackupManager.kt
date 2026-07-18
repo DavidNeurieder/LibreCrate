@@ -142,6 +142,8 @@ class BackupManager(
 
         val backupMasterKey: ByteArray? = deriveBackupMasterKey(contents, vaultPassword)
 
+        Log.d(TAG, "Restore: currentDb=${currentDb != null}, backupMasterKey=${backupMasterKey != null}, dbFile=${contents.dbFile != null}, keys=${contents.keys.size}")
+
         if (backupMasterKey == null && currentDb == null) {
             Log.e(TAG, "No valid master key for backup restoration")
             return
@@ -155,6 +157,7 @@ class BackupManager(
 
                 onProgress(BackupProgress("Merging database", 0.35f))
                 if (currentDb != null && backupMasterKey != null) {
+                    Log.d(TAG, "Branch A: merging backup into existing database")
                     val backupHandle = SqlCipherOpener(context, backupMasterKey).open(tempDb.absolutePath)
                     val currentSqlHandle = getDatabase()?.openHelper?.writableDatabase
                         ?.let { SqlHandleSupportAndroid(it) } ?: return
@@ -177,7 +180,17 @@ class BackupManager(
                     } finally {
                         backupHandle.close()
                     }
+                    Log.d(TAG, "Branch A: merge complete — cleaning WAL")
+                    val dbFile = context.getDatabasePath("librecrate.db")
+                    try {
+                        currentSqlHandle.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
+                            cursor.moveToNext()
+                        }
+                    } catch (_: Exception) {}
+                    File(dbFile.parentFile, "${dbFile.name}-wal").delete()
+                    File(dbFile.parentFile, "${dbFile.name}-shm").delete()
                 } else if (currentDb == null && backupMasterKey != null) {
+                    Log.d(TAG, "Branch B: fresh install restore")
                     val origWrappedKey = File(encryptionDir, "wrapped_master_key").let { f ->
                         if (f.exists()) f.readBytes() else null
                     }
@@ -203,6 +216,7 @@ class BackupManager(
                         }
                         return
                     }
+                    Log.d(TAG, "Branch B: password verified, master key cached")
 
                     val deviceKeySetup = encryptionManager.setupDeviceKeyForDailyUnlock()
                     if (!deviceKeySetup) {
@@ -219,12 +233,14 @@ class BackupManager(
                         }
                         return
                     }
+                    Log.d(TAG, "Branch B: device key setup complete")
 
                     val dbFile = context.getDatabasePath("librecrate.db")
                     dbFile.parentFile?.mkdirs()
                     tempDb.copyTo(dbFile, overwrite = true)
                     File(dbFile.parentFile, "${dbFile.name}-wal").delete()
                     File(dbFile.parentFile, "${dbFile.name}-shm").delete()
+                    Log.d(TAG, "Branch B: DB copied and WAL/SHM cleaned")
                 } else if (currentDb != null && backupMasterKey == null) {
                     Log.w(TAG, "Legacy backup without key material — merging with current key")
                     val mk = encryptionManager.getMasterKeyForSession()

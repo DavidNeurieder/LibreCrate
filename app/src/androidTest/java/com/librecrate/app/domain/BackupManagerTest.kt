@@ -92,6 +92,10 @@ class BackupManagerTest {
         File(context.cacheDir, "src_doc_b_cross.txt").delete()
         File(context.cacheDir, "verify_doc_a_cross.txt").delete()
         File(context.cacheDir, "verify_doc_b_cross.txt").delete()
+        File(context.cacheDir, "survive_backup.vault").delete()
+        File(context.cacheDir, "src_survive.txt").delete()
+        File(context.cacheDir, "verify_survive.txt").delete()
+        File(context.cacheDir, "verify_survive2.txt").delete()
     }
 
     @Suppress("BlockingMethodInNonBlockingContext")
@@ -510,6 +514,101 @@ class BackupManagerTest {
         val reopenedDao = reopenedDb.documentDao()
         val reopenedDocs = reopenedDao.getAllDocuments().first()
         assertEquals("Reopened DB should have 2 docs", 2, reopenedDocs.size)
+        reopenedDb.close()
+    }
+
+    @Suppress("BlockingMethodInNonBlockingContext")
+    @Test
+    fun backupUninstallReinstallImportCloseReopen() = runTest {
+        val filesDir = File(context.filesDir, "files").also { it.mkdirs() }
+
+        // ── 1. First install: create data and export backup ──
+        val docContent = "Data survives reinstall-import-close-reopen".toByteArray()
+        val docFile = File(filesDir, "survive.enc")
+        val srcFile = File(context.cacheDir, "src_survive.txt").apply { writeBytes(docContent) }
+        val docIv = fileEncryptor.encrypt(srcFile, docFile, masterKey)
+        srcFile.delete()
+
+        val doc = Document(
+            id = "survive-doc-1",
+            title = "Survival Doc",
+            fileName = "survive.txt",
+            mimeType = "text/plain",
+            filePath = docFile.absolutePath,
+            fileSize = docContent.size.toLong(),
+            encryptionIv = docIv,
+        )
+        dao.insert(doc)
+        assertEquals(1, dao.getAllDocuments().first().size)
+
+        val backupFile = File(context.cacheDir, "survive_backup.vault")
+        assertTrue(backupManager.exportBackup(backupFile, TEST_PASSWORD))
+        db.close()
+
+        // ── 2. Simulate uninstall: wipe everything ──
+        context.getDatabasePath("librecrate.db").let { f ->
+            f.delete()
+            File(f.parentFile, "${f.name}-wal").delete()
+            File(f.parentFile, "${f.name}-shm").delete()
+        }
+        File(context.filesDir, "files").deleteRecursively()
+        File(context.filesDir, "encryption").deleteRecursively()
+
+        // ── 3. Simulate reinstall: fresh EncryptionManager, no keys ──
+        val freshEm = EncryptionManager(context, DeterministicHasher(), TestKeyStoreCryptographer())
+        assertTrue("Should be first launch after wipe", freshEm.isFirstLaunch())
+
+        val freshBm = BackupManager(context, freshEm, { null }, DeterministicHasher())
+        assertTrue("Import into fresh install should succeed",
+            freshBm.importBackup(backupFile, TEST_PASSWORD))
+
+        // Keys should be restored and master key recoverable
+        val restoredKey = freshEm.getMasterKeyForSession()
+        assertNotNull("Master key recoverable after import", restoredKey)
+        assertArrayEquals("Master key matches original", masterKey, restoredKey)
+
+        // Open DB with restored key and verify data
+        val dbAfterImport = LibreCrateDatabase.create(context, restoredKey!!)
+        val daoAfterImport = dbAfterImport.documentDao()
+        var docs = daoAfterImport.getAllDocuments().first()
+        assertEquals(1, docs.size)
+        assertEquals("survive-doc-1", docs[0].id)
+
+        val restoredFile = File(docs[0].filePath)
+        assertTrue("Encrypted file exists", restoredFile.exists())
+
+        val decrypted = File(context.cacheDir, "verify_survive.txt")
+        fileEncryptor.decrypt(restoredFile, decrypted, restoredKey, docs[0].encryptionIv!!)
+        assertArrayEquals(docContent, decrypted.readBytes())
+        decrypted.delete()
+
+        // ── 4. Simulate app close: close DB, delete WAL/SHM ──
+        dbAfterImport.close()
+        context.getDatabasePath("librecrate.db").let { f ->
+            File(f.parentFile, "${f.name}-wal").delete()
+            File(f.parentFile, "${f.name}-shm").delete()
+        }
+
+        // ── 5. Simulate app reopen: get key from session and create new DB ──
+        val reopenKey = freshEm.getMasterKeyForSession()
+        assertNotNull("Master key still recoverable after close", reopenKey)
+        assertArrayEquals("Master key unchanged", masterKey, reopenKey)
+
+        val reopenedDb = LibreCrateDatabase.create(context, reopenKey!!)
+        val reopenedDao = reopenedDb.documentDao()
+        docs = reopenedDao.getAllDocuments().first()
+        assertEquals("Data survives close+reopen", 1, docs.size)
+        assertEquals("survive-doc-1", docs[0].id)
+        assertEquals("Survival Doc", docs[0].title)
+
+        val reopenedFile = File(docs[0].filePath)
+        assertTrue("File exists after reopen", reopenedFile.exists())
+
+        val decrypted2 = File(context.cacheDir, "verify_survive2.txt")
+        fileEncryptor.decrypt(reopenedFile, decrypted2, reopenKey, docs[0].encryptionIv!!)
+        assertArrayEquals(docContent, decrypted2.readBytes())
+        decrypted2.delete()
+
         reopenedDb.close()
     }
 

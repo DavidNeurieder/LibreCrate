@@ -14,6 +14,7 @@ import com.librecrate.app.data.encryption.EncryptionManager
 import com.librecrate.app.data.import.DocumentImporter
 import com.librecrate.app.domain.BackupManager
 import com.librecrate.app.vault.crypto.FileEncryptor
+import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 
@@ -56,6 +57,7 @@ class LibreCrateApplication : Application() {
             ?: return false
         return try {
             val newDb = LibreCrateDatabase.create(this, passphrase)
+            newDb.openHelper.writableDatabase
             database = newDb
             _documentDao = newDb.documentDao()
             _collectionDao = newDb.collectionDao()
@@ -69,19 +71,31 @@ class LibreCrateApplication : Application() {
 
     @Synchronized
     fun reopenDatabase(): Boolean {
-        val oldDb = database
         val passphrase = encryptionManager.getMasterKeyForSession()
-            ?: return false
+            ?: run {
+                Log.e(TAG, "Cannot reopen: no master key available")
+                return false
+            }
+        if (database != null) {
+            Log.d(TAG, "Database already open, no reopen needed")
+            return true
+        }
         return try {
+            val dbFile = getDatabasePath("librecrate.db")
+            dbFile.parentFile?.let { dir ->
+                File(dir, "${dbFile.name}-wal").delete()
+                File(dir, "${dbFile.name}-shm").delete()
+            }
             val newDb = LibreCrateDatabase.create(this, passphrase)
+            newDb.openHelper.writableDatabase
             database = newDb
             _documentDao = newDb.documentDao()
             _collectionDao = newDb.collectionDao()
             _tagDao = newDb.tagDao()
-            try { oldDb?.close() } catch (_: Exception) {}
+            Log.d(TAG, "Database initialized successfully")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to reopen database", e)
+            Log.e(TAG, "Failed to initialize database", e)
             false
         }
     }
