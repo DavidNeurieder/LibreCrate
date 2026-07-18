@@ -382,7 +382,8 @@ fun ViewerScreen(
                             LaunchedEffect(file) {
                                 EpubReaderActivity.start(
                                     context = context,
-                                    filePath = file.absolutePath,
+                                    encryptedFilePath = doc.filePath,
+                                    encryptionIv = doc.encryptionIv,
                                     documentId = doc.id,
                                     targetSection = if (targetPage >= 0) targetPage else null,
                                 )

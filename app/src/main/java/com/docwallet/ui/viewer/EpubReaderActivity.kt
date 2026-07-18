@@ -84,6 +84,7 @@ import androidx.fragment.app.FragmentContainerView
 import androidx.lifecycle.lifecycleScope
 import androidx.fragment.app.commit
 import com.docwallet.DocWalletApplication
+import com.docwallet.vault.crypto.FileEncryptor
 import com.docwallet.data.AppPreferencesStore
 import com.docwallet.data.FontFamilyName
 import com.docwallet.data.ReaderPreferences
@@ -120,13 +121,17 @@ private const val TAG = "EpubReaderActivity"
 class EpubReaderActivity : FragmentActivity() {
 
     companion object {
-        private const val EXTRA_FILE_PATH = "epub_file_path"
+        private const val EXTRA_ENCRYPTED_FILE_PATH = "encrypted_file_path"
+        private const val EXTRA_ENCRYPTION_IV = "encryption_iv"
         private const val EXTRA_DOCUMENT_ID = "document_id"
         private const val EXTRA_TARGET_SECTION = "target_section"
 
-        fun start(context: Context, filePath: String, documentId: String, targetSection: Int? = null) {
+        fun start(context: Context, encryptedFilePath: String, encryptionIv: ByteArray?, documentId: String, targetSection: Int? = null) {
             val intent = Intent(context, EpubReaderActivity::class.java).apply {
-                putExtra(EXTRA_FILE_PATH, filePath)
+                putExtra(EXTRA_ENCRYPTED_FILE_PATH, encryptedFilePath)
+                if (encryptionIv != null) {
+                    putExtra(EXTRA_ENCRYPTION_IV, encryptionIv)
+                }
                 putExtra(EXTRA_DOCUMENT_ID, documentId)
                 if (targetSection != null) {
                     putExtra(EXTRA_TARGET_SECTION, targetSection)
@@ -140,18 +145,30 @@ class EpubReaderActivity : FragmentActivity() {
     internal var containerId: Int = View.generateViewId()
     private var documentId: String? = null
     private var targetSection: Int? = null
+    private var encryptedFile: File? = null
+    private var encryptionIv: ByteArray? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         documentId = intent?.getStringExtra(EXTRA_DOCUMENT_ID)
         documentId?.let { SessionStore.saveLastDocumentId(this, it) }
         targetSection = intent?.getIntExtra(EXTRA_TARGET_SECTION, -1)?.takeIf { it >= 0 }
-        val filePath = intent?.getStringExtra(EXTRA_FILE_PATH) ?: run {
+
+        val encryptedFilePath = intent?.getStringExtra(EXTRA_ENCRYPTED_FILE_PATH)
+        val legacyFilePath = intent?.getStringExtra("epub_file_path")
+        val path = encryptedFilePath ?: legacyFilePath ?: run {
             finish()
             return
         }
-        val file = File(filePath).takeIf { it.exists() } ?: run {
+        val file = File(path).takeIf { it.exists() } ?: run {
             finish()
             return
+        }
+        if (encryptedFilePath != null) {
+            encryptedFile = file
+            encryptionIv = intent?.getByteArrayExtra(EXTRA_ENCRYPTION_IV)
+        } else {
+            encryptedFile = null
+            encryptionIv = null
         }
 
         super.onCreate(savedInstanceState)
@@ -166,7 +183,8 @@ class EpubReaderActivity : FragmentActivity() {
             MaterialTheme(colorScheme = colorScheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     EpubReaderHost(
-                        file = file,
+                        encryptedFile = encryptedFile,
+                        encryptionIv = encryptionIv,
                         documentId = documentId,
                         targetSection = targetSection,
                         containerId = containerId,
@@ -251,7 +269,8 @@ class EpubReaderActivity : FragmentActivity() {
 @OptIn(ExperimentalReadiumApi::class)
 @Composable
 private fun EpubReaderHost(
-    file: File,
+    encryptedFile: File?,
+    encryptionIv: ByteArray?,
     documentId: String?,
     targetSection: Int?,
     containerId: Int,
@@ -274,6 +293,20 @@ private fun EpubReaderHost(
             }
             document = doc
 
+            val fileToOpen = withContext(Dispatchers.IO) {
+                if (encryptedFile != null && encryptionIv != null) {
+                    val masterKey = app.encryptionManager.getMasterKeyForSession()
+                        ?: throw RuntimeException("No master key available")
+                    val tempFile = File(context.cacheDir, "epub_${documentId}_${System.currentTimeMillis()}")
+                    tempFile.deleteOnExit()
+                    val fe = FileEncryptor()
+                    fe.decrypt(encryptedFile, tempFile, masterKey, encryptionIv)
+                    tempFile
+                } else {
+                    encryptedFile
+                }
+            } ?: throw RuntimeException("No EPUB file available")
+
             val pub = withContext(Dispatchers.IO) {
                 val httpClient = DefaultHttpClient()
                 val assetRetriever = AssetRetriever(context.contentResolver, httpClient)
@@ -284,7 +317,7 @@ private fun EpubReaderHost(
                     pdfFactory = null
                 )
                 val opener = PublicationOpener(parser)
-                val asset = when (val result = assetRetriever.retrieve(file)) {
+                val asset = when (val result = assetRetriever.retrieve(fileToOpen)) {
                     is Try.Success -> result.value
                     is Try.Failure -> throw RuntimeException(
                         "Asset retrieval failed: ${result.value.message}"
