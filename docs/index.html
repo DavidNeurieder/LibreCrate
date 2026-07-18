@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LibreCrate — Encrypted document vault for Android</title>
+  <meta name="description" content="LibreCrate is an encrypted document vault for Android. Stores, views, and searches PDFs, EPUBs, passes, comics, images, and notes — all encrypted at rest, with zero network access.">
+  <link rel="canonical" href="https://davidneurieder.github.io/LibreCrate/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LibreCrate">
+  <meta property="og:title" content="LibreCrate — Encrypted document vault for Android">
+  <meta property="og:description" content="Encrypted document vault for Android. PDFs, EPUBs, passes, comics, images, and notes — all encrypted at rest, zero network access.">
+  <meta property="og:url" content="https://davidneurieder.github.io/LibreCrate/">
+  <meta property="og:image" content="https://davidneurieder.github.io/LibreCrate/og-banner.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://davidneurieder.github.io/LibreCrate/og-banner.png">
+  <meta name="twitter:title" content="LibreCrate — Encrypted document vault for Android">
+  <meta name="twitter:description" content="Encrypted document vault for Android. PDFs, EPUBs, passes, comics, images, and notes — all encrypted at rest, zero network access.">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "LibreCrate",
+    "operatingSystem": "Android",
+    "applicationCategory": "SecurityApplication",
+    "description": "Encrypted document vault for Android. Stores, views, organizes, and searches PDFs, EPUBs, Apple Wallet passes, comics, images, and notes — all encrypted at rest, with zero network access.",
+    "url": "https://davidneurieder.github.io/LibreCrate/",
+    "softwareVersion": "0.3.0",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "author": { "@type": "Person", "name": "David Neurieder" }
+  }
+  </script>
+</head>
+<body>
+  <header class="hero">
+    <div class="container">
+      <h1>LibreCrate</h1>
+      <p class="tagline">Encrypted document vault for Android</p>
+      <p class="lead">Stores, views, organizes, and searches PDFs, EPUBs, Apple&nbsp;Wallet passes, comics, images, and notes — all encrypted at rest, with zero network access.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#get">Coming soon to F-Droid</a>
+        <a class="btn btn-ghost" href="https://github.com/DavidNeurieder/librecrate">View source</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="features">
+      <div class="container">
+        <h2>Features</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Six document types</h3>
+            <p>PDF, EPUB, PKPass (Apple Wallet passes), CBZ/CBR comics, images, and Markdown notes.</p>
+          </div>
+          <div class="card">
+            <h3>Encryption at rest</h3>
+            <p>AES-256-GCM per-file encryption; master key wrapped via Argon2id + AES-256 Key Wrap (RFC 3394).</p>
+          </div>
+          <div class="card">
+            <h3>Optional password</h3>
+            <p>Even with the phone unlocked, content can't be read without your password.</p>
+          </div>
+          <div class="card">
+            <h3>No network</h3>
+            <p>Zero internet permission — your documents never leave the device.</p>
+          </div>
+          <div class="card">
+            <h3>Library &amp; search</h3>
+            <p>Grid/list views, filters, favorites, reading-progress indicators, and full-text FTS5 search.</p>
+          </div>
+          <div class="card">
+            <h3>Backup</h3>
+            <p>Single encrypted <code>.librecrate-backup</code> file verified by your password.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="security">
+      <div class="container">
+        <h2>Security model</h2>
+        <div class="security-table">
+          <div class="row head"><span>Layer</span><span>Mechanism</span></div>
+          <div class="row"><span>Key derivation</span><span>Argon2id (19 MiB memory, 2 iterations, 2 parallelism)</span></div>
+          <div class="row"><span>Key wrapping</span><span>AES-256 Key Wrap (RFC 3394)</span></div>
+          <div class="row"><span>File encryption</span><span>AES-256-GCM (12-byte IV, 128-bit tag)</span></div>
+          <div class="row"><span>Password mode</span><span>Master key wrapped with password-derived key; device key deleted</span></div>
+          <div class="row"><span>Device-key mode</span><span>Master key wrapped with per-device AES key (no password)</span></div>
+          <div class="row"><span>Lock</span><span>Clears in-memory master key when backgrounded; requires password re-entry</span></div>
+          <div class="row"><span>Backup</span><span>Encrypted Zip bundle with wrapped master key + DB + files</span></div>
+        </div>
+        <p class="note">No Google Play Services, Firebase, Crashlytics, or AdMob. F-Droid only.</p>
+      </div>
+    </section>
+
+    <section class="section" id="screenshots">
+      <div class="container">
+        <h2>Screenshots</h2>
+        <div class="shots">
+          <img src="../fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" alt="LibreCrate screenshot 1" loading="lazy">
+          <img src="../fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" alt="LibreCrate screenshot 2" loading="lazy">
+          <img src="../fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" alt="LibreCrate screenshot 3" loading="lazy">
+          <img src="../fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" alt="LibreCrate screenshot 4" loading="lazy">
+          <img src="../fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" alt="LibreCrate screenshot 5" loading="lazy">
+          <img src="../fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" alt="LibreCrate screenshot 6" loading="lazy">
+          <img src="../fastlane/metadata/android/en-US/images/phoneScreenshots/7.png" alt="LibreCrate screenshot 7" loading="lazy">
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="get">
+      <div class="container">
+        <h2>Get LibreCrate</h2>
+        <p>Install from F-Droid (no Google Play account required):</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="#get">Coming soon</a>
+        </div>
+        <h3>Build from source</h3>
+        <pre><code>git clone https://github.com/DavidNeurieder/librecrate
+cd librecrate
+./gradlew assembleDebug</code></pre>
+        <p>APK at <code>app/build/outputs/apk/debug/app-debug.apk</code>.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>LibreCrate — version 0.3.0. Zero network access. <a href="https://github.com/DavidNeurieder/librecrate/blob/main/LICENSE">License</a> · <a href="https://github.com/DavidNeurieder/librecrate">Source</a></p>
+    </div>
+  </footer>
+</body>
+</html>

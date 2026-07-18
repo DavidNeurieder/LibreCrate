@@ -223,6 +223,8 @@ class BackupManager(
                     val dbFile = context.getDatabasePath("librecrate.db")
                     dbFile.parentFile?.mkdirs()
                     tempDb.copyTo(dbFile, overwrite = true)
+                    File(dbFile.parentFile, "${dbFile.name}-wal").delete()
+                    File(dbFile.parentFile, "${dbFile.name}-shm").delete()
                 } else if (currentDb != null && backupMasterKey == null) {
                     Log.w(TAG, "Legacy backup without key material — merging with current key")
                     val mk = encryptionManager.getMasterKeyForSession()

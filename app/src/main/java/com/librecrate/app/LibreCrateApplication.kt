@@ -69,6 +69,7 @@ class LibreCrateApplication : Application() {
 
     @Synchronized
     fun reopenDatabase(): Boolean {
+        val oldDb = database
         val passphrase = encryptionManager.getMasterKeyForSession()
             ?: return false
         return try {
@@ -77,6 +78,7 @@ class LibreCrateApplication : Application() {
             _documentDao = newDb.documentDao()
             _collectionDao = newDb.collectionDao()
             _tagDao = newDb.tagDao()
+            try { oldDb?.close() } catch (_: Exception) {}
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to reopen database", e)
