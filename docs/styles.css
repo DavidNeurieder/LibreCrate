@@ -37,6 +37,13 @@ a:hover { text-decoration: underline; }
   background: radial-gradient(1200px 400px at 50% -10%, rgba(91,141,239,0.18), transparent);
   border-bottom: 1px solid var(--border);
 }
+.app-icon {
+  width: 104px;
+  height: 104px;
+  border-radius: 22%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  margin-bottom: 20px;
+}
 .hero h1 {
   margin: 0;
   font-size: clamp(2.4rem, 6vw, 3.6rem);
