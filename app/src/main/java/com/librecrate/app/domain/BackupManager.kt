@@ -146,9 +146,13 @@ class BackupManager(
             return SqlCipherOpener(context, password).open(path)
         }
 
-        override fun getCurrentSqlHandle(): SqlHandle? {
+        override fun getCurrentSqlHandle(masterKey: ByteArray?): SqlHandle? {
             return getDatabase()?.openHelper?.writableDatabase
                 ?.let { SqlHandleSupportAndroid(it) }
+        }
+
+        override fun getLocalMasterKey(password: String): ByteArray? {
+            return encryptionManager.getMasterKeyForSession()
         }
 
         override fun getSessionMasterKey(): ByteArray? {

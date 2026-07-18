@@ -2,6 +2,7 @@ package com.librecrate.app.cli
 
 import com.librecrate.app.vault.database.SqlCursor
 import com.librecrate.app.vault.database.SqlHandle
+import org.sqlite.mc.SQLiteMCSqlCipherConfig
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
@@ -28,9 +29,11 @@ class SqlHandleJdbc private constructor(private val conn: Connection) : SqlHandl
 
         fun openEncrypted(path: String, masterKey: ByteArray): SqlHandleJdbc {
             Class.forName(DRIVER)
-            val keyHex = masterKey.joinToString("") { "%02x".format(it) }
+            val config = SQLiteMCSqlCipherConfig.getV4Defaults()
+            config.withRawUnsaltedKey(masterKey)
+            val mcConfig = config.build()
             val conn = DriverManager.getConnection(
-                "jdbc:sqlite:$path?cipher=sqlcipher&key=x'$keyHex'"
+                "jdbc:sqlite:$path", mcConfig.toProperties()
             )
             return SqlHandleJdbc(conn)
         }

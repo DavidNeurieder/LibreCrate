@@ -41,12 +41,13 @@ class BackupRestoreService(
         env: RestoreEnvironment,
     ): Boolean {
         env.onProgress(0.10f, "Decrypting backup")
-        env.log("Restore: currentDb=${env.getCurrentSqlHandle() != null}, " +
+        val localMasterKey = env.getLocalMasterKey(vaultPassword)
+        env.log("Restore: currentDb=${env.getCurrentSqlHandle(localMasterKey) != null}, " +
             "backupMasterKey=${deriveBackupMasterKey(contents, vaultPassword) != null}, " +
             "dbFile=${contents.dbFile != null}, keys=${contents.keys.size}")
 
         env.encryptionDir.mkdirs()
-        val currentDb = env.getCurrentSqlHandle()
+        val currentDb = env.getCurrentSqlHandle(localMasterKey)
         val backupMasterKey = deriveBackupMasterKey(contents, vaultPassword)
 
         if (backupMasterKey == null && currentDb == null) {
@@ -65,7 +66,7 @@ class BackupRestoreService(
                 when {
                     currentDb != null && backupMasterKey != null -> {
                         env.log("Branch A: merging backup into existing database")
-                        branchAmerge(contents, backupMasterKey, tempDb, env)
+                        branchAmerge(contents, backupMasterKey, tempDb, env, localMasterKey)
                     }
                     currentDb == null && backupMasterKey != null -> {
                         env.log("Branch B: fresh install restore")
@@ -73,7 +74,7 @@ class BackupRestoreService(
                     }
                     currentDb != null && backupMasterKey == null -> {
                         env.log("Legacy backup without key material — merging with current key")
-                        branchClegacyMerge(tempDb, env)
+                        branchClegacyMerge(tempDb, env, localMasterKey)
                     }
                     else -> {
                         env.log("Unhandled restore branch — skipping DB restore")
@@ -107,9 +108,10 @@ class BackupRestoreService(
         backupMasterKey: ByteArray,
         tempDb: File,
         env: RestoreEnvironment,
+        localMasterKey: ByteArray?,
     ) {
         val backupHandle = env.openBackupDb(tempDb.absolutePath, backupMasterKey)
-        val currentSqlHandle = env.getCurrentSqlHandle() ?: return
+        val currentSqlHandle = env.getCurrentSqlHandle(localMasterKey) ?: return
         val localKey = env.getSessionMasterKey()
         try {
             val merger = VaultDatabaseMerger()
@@ -201,13 +203,14 @@ class BackupRestoreService(
     private fun branchClegacyMerge(
         tempDb: File,
         env: RestoreEnvironment,
+        localMasterKey: ByteArray?,
     ) {
         val mk = env.getSessionMasterKey()
         if (mk != null) {
             val legacyOpener: (String) -> com.librecrate.app.vault.database.SqlHandle = { path ->
                 env.openBackupDb(path, mk)
             }
-            val currentHandle = env.getCurrentSqlHandle()
+            val currentHandle = env.getCurrentSqlHandle(localMasterKey)
             if (currentHandle != null) {
                 val backupHandle = legacyOpener(tempDb.absolutePath)
                 try {

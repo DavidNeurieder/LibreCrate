@@ -5,7 +5,8 @@ import java.io.File
 
 interface RestoreEnvironment {
     fun openBackupDb(path: String, password: ByteArray): SqlHandle
-    fun getCurrentSqlHandle(): SqlHandle?
+    fun getCurrentSqlHandle(masterKey: ByteArray? = null): SqlHandle?
+    fun getLocalMasterKey(password: String): ByteArray?
     fun getSessionMasterKey(): ByteArray?
     fun verifyPassword(password: String): Boolean
     fun setupDeviceKey(): Boolean

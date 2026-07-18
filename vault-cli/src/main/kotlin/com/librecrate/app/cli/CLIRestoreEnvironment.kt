@@ -23,12 +23,33 @@ fun createCLIRestoreEnvironment(
 
     return object : RestoreEnvironment {
         override fun openBackupDb(path: String, password: ByteArray): SqlHandle {
-            return jdbcOpener.open(path)
+            return jdbcOpener.openEncrypted(path, password)
         }
 
-        override fun getCurrentSqlHandle(): SqlHandle? {
+        override fun getCurrentSqlHandle(masterKey: ByteArray?): SqlHandle? {
             val dbFile = File(databaseDir, "librecrate.db")
-            return if (dbFile.exists()) jdbcOpener.open(dbFile.absolutePath) else null
+            if (!dbFile.exists()) return null
+            return if (masterKey != null) {
+                jdbcOpener.openEncrypted(dbFile.absolutePath, masterKey)
+            } else {
+                jdbcOpener.open(dbFile.absolutePath)
+            }
+        }
+
+        override fun getLocalMasterKey(password: String): ByteArray? {
+            val wrappedKey = File(encryptionDir, "wrapped_master_key")
+            val salt = File(encryptionDir, "salt")
+            if (!wrappedKey.exists() || !salt.exists()) return null
+            return try {
+                val userKey = keyDerivation.deriveAndZero(password, salt.readBytes(), kdfParams)
+                try {
+                    KeyWrap.unwrap(wrappedKey.readBytes(), userKey).copyOf()
+                } finally {
+                    userKey.fill(0)
+                }
+            } catch (e: Exception) {
+                null
+            }
         }
 
         override fun getSessionMasterKey(): ByteArray? {
