@@ -277,17 +277,20 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val matchList = mutableListOf<SearchResultMatch>()
         var rawOffset = 0
         var matchStart = -1
+        var currentPage = 0
+        var lastMatchEnd = 0
         for (ch in highlightContent) {
             when (ch) {
                 '\u0001' -> matchStart = rawOffset
                 '\u0002' -> {
                     if (matchStart >= 0) {
+                        currentPage = findPageInRange(textContent, lastMatchEnd, matchStart, currentPage)
                         val snippet = extractSnippet(textContent, matchStart, rawOffset)
                         if (snippet.isNotBlank()) {
                             val cleaned = stripMarkers(snippet)
-                            val pageNumber = extractPageNumber(textContent, matchStart)
-                            matchList.add(SearchResultMatch(snippet = cleaned, pageNumber = pageNumber))
+                            matchList.add(SearchResultMatch(snippet = cleaned, pageNumber = currentPage))
                         }
+                        lastMatchEnd = rawOffset
                         matchStart = -1
                     }
                 }
@@ -309,18 +312,38 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun stripMarkers(text: String): String {
-        return text.replace(Regex("\\[PAGE=\\d+\\]"), "")
-            .replace(Regex("\\[SECTION=\\d+\\]"), "")
-            .replace(Regex("\\s+"), " ")
+        return text.replace(PAGE_MARKER_REGEX, "")
+            .replace(SECTION_MARKER_REGEX, "")
+            .replace(WHITESPACE_REGEX, " ")
             .trim()
     }
 
-    private fun extractPageNumber(text: String, offset: Int): Int {
-        val before = text.substring(0, offset.coerceAtMost(text.length))
-        val pageMatches = Regex("\\[PAGE=(\\d+)\\]").findAll(before)
-        val sectionMatches = Regex("\\[SECTION=(\\d+)\\]").findAll(before)
-        val lastPage = pageMatches.lastOrNull()?.groupValues?.get(1)?.toIntOrNull()
-        val lastSection = sectionMatches.lastOrNull()?.groupValues?.get(1)?.toIntOrNull()
-        return lastPage ?: lastSection ?: 0
+    private fun findPageInRange(text: String, rangeStart: Int, rangeEnd: Int, currentPage: Int): Int {
+        if (rangeEnd <= rangeStart) return currentPage
+        val start = rangeStart.coerceAtLeast(0)
+        val end = rangeEnd.coerceAtMost(text.length)
+        if (start >= end) return currentPage
+        val section = text.substring(start, end)
+        val pageIdx = section.lastIndexOf("[PAGE=")
+        if (pageIdx >= 0) {
+            val close = section.indexOf(']', pageIdx)
+            if (close > pageIdx) {
+                return section.substring(pageIdx + 6, close).toIntOrNull() ?: currentPage
+            }
+        }
+        val sectionIdx = section.lastIndexOf("[SECTION=")
+        if (sectionIdx >= 0) {
+            val close = section.indexOf(']', sectionIdx)
+            if (close > sectionIdx) {
+                return section.substring(sectionIdx + 9, close).toIntOrNull() ?: currentPage
+            }
+        }
+        return currentPage
+    }
+
+    companion object {
+        private val PAGE_MARKER_REGEX = Regex("\\[PAGE=\\d+\\]")
+        private val SECTION_MARKER_REGEX = Regex("\\[SECTION=\\d+\\]")
+        private val WHITESPACE_REGEX = Regex("\\s+")
     }
 }
