@@ -5,7 +5,7 @@ plugins {
 }
 
 application {
-    mainClass = "com.docwallet.cli.CliAppKt"
+    mainClass = "com.librecrate.app.cli.CliAppKt"
 }
 
 dependencies {

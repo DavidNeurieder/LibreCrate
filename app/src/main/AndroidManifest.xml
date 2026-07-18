@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:name=".DocWalletApplication"
+        android:name=".LibreCrateApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
@@ -10,13 +10,13 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:theme="@style/Theme.DocWallet.Splash">
+        android:theme="@style/Theme.LibreCrate.Splash">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.DocWallet.Splash">
+            android:theme="@style/Theme.LibreCrate.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -42,6 +42,6 @@
         <activity
             android:name=".ui.viewer.EpubReaderActivity"
             android:exported="false"
-            android:theme="@style/Theme.DocWallet" />
+            android:theme="@style/Theme.LibreCrate" />
     </application>
 </manifest>

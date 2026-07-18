@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-group = "com.docwallet"
+group = "com.librecrate.app"
 
 dependencies {
     implementation(libs.kotlinx.serialization.json)

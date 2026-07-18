@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 (2026-07-18)
+
+### Features
+
+- Initial release of the new version
+
 ## 0.2.0 (2026-07-08)
 
 ### Features

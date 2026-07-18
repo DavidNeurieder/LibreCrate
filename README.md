@@ -1,6 +1,6 @@
-# DocWallet
+# LibreCrate
 
-**Version 0.2.0**
+**Version 0.3.0**
 
 Encrypted document vault for Android — stores, views, organizes, and searches PDFs, EPUBs, PKPass files, comic archives (CBZ/CBR), images, and personal notes. All documents are encrypted at rest with optional password protection and zero network access.
 
@@ -14,7 +14,7 @@ Encrypted document vault for Android — stores, views, organizes, and searches 
 - **Reading position**: Remembers last page for PDFs and comics, last location for EPUBs; shows "Page X of Y" / "% read" on cards
 - **Full-text search**: FTS5 search across title, author, description, and extracted document text, with highlighted snippets
 - **Import**: Share intents (single or multiple) and SAF file picker (bulk import)
-- **Backup**: Single encrypted `.docwallet-backup` file via SAF, verified by your password
+- **Backup**: Single encrypted `.librecrate-backup` file via SAF, verified by your password
 - **F-Droid only**: No Google Play Services, Firebase, Crashlytics, or AdMob
 
 ### Viewers
@@ -53,8 +53,8 @@ Encrypted document vault for Android — stores, views, organizes, and searches 
 ## Building
 
 ```sh
-git clone https://github.com/anomalyco/docwallet-android
-cd docwallet-android
+git clone https://github.com/DavidNeurieder/librecrate
+cd librecrate
 ./gradlew assembleDebug
 ```
 

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.docwallet"
+    namespace = "com.librecrate.app"
     compileSdk = 36
 
     dependenciesInfo {
@@ -15,11 +15,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.docwallet"
+        applicationId = "com.librecrate.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -93,6 +93,7 @@ dependencies {
     implementation(libs.core.ktx)
     implementation(libs.splash.screen)
     implementation(libs.lifecycle.runtime)
+    implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.process)
     implementation(libs.navigation.compose)
