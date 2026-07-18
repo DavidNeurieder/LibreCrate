@@ -53,7 +53,7 @@ Encrypted document vault for Android — stores, views, organizes, and searches 
 ## Building
 
 ```sh
-git clone https://github.com/anomalyco/librecrate
+git clone https://github.com/DavidNeurieder/librecrate
 cd librecrate
 ./gradlew assembleDebug
 ```
