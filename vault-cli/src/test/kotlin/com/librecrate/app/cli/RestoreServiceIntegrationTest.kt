@@ -428,6 +428,156 @@ class RestoreServiceIntegrationTest {
         }
     }
 
+    @Test
+    fun `CLI export import roundtrip with encrypted DB and files`() {
+        val masterKey = AesKeyGenerator.generateKey()
+        val salt = ByteArray(16) { (it * 23 + 11).toByte() }
+        val userKey = keyDerivation.deriveAndZero(vaultPassword, salt, kdfParams)
+        val wrappedKey = KeyWrap.wrap(masterKey, userKey)
+        val fileEncryptor = FileEncryptor()
+
+        val sourceDir = createTempDir("roundtrip-source-")
+        val targetDir = createTempDir("roundtrip-target-")
+
+        try {
+            val plaintext1 = "First document content for roundtrip".encodeToByteArray()
+            val (iv1, ct1) = fileEncryptor.encryptBytes(plaintext1, masterKey)
+            val encrypted1 = iv1 + ct1
+
+            val plaintext2 = "Second document with different content".encodeToByteArray()
+            val (iv2, ct2) = fileEncryptor.encryptBytes(plaintext2, masterKey)
+            val encrypted2 = iv2 + ct2
+
+            File(sourceDir, "encryption").mkdirs()
+            File(sourceDir, "encryption/wrapped_master_key").writeBytes(wrappedKey)
+            File(sourceDir, "encryption/salt").writeBytes(salt)
+
+            File(sourceDir, "files").mkdirs()
+            File(sourceDir, "files/doc1.txt").writeBytes(encrypted1)
+            File(sourceDir, "files/doc2.txt").writeBytes(encrypted2)
+
+            val dbPath = File(sourceDir, "databases/librecrate.db").apply {
+                parentFile?.mkdirs()
+            }.absolutePath
+            SqlHandleJdbc.openEncrypted(dbPath, masterKey).use { handle ->
+                DatabaseSchema.createAllTables(handle)
+                handle.execSQL(
+                    "INSERT INTO documents(id, title, file_name, mime_type, file_path, file_size, page_count, " +
+                        "author, description, imported_at, last_opened_at, modified_at, " +
+                        "is_favorite, is_conflict, current_page, encryption_iv) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf("rt-doc1", "Roundtrip Doc 1", "doc1.txt", "text/plain",
+                        "files/doc1.txt", plaintext1.size.toLong(), 1,
+                        "Author1", "Desc1", 1000L, 1000L, 1000L, 0, 0, 0, iv1)
+                )
+                handle.execSQL(
+                    "INSERT INTO documents(id, title, file_name, mime_type, file_path, file_size, page_count, " +
+                        "author, description, imported_at, last_opened_at, modified_at, " +
+                        "is_favorite, is_conflict, current_page, encryption_iv) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf("rt-doc2", "Roundtrip Doc 2", "doc2.txt", "application/pdf",
+                        "files/doc2.txt", plaintext2.size.toLong(), 3,
+                        "Author2", "Desc2", 2000L, 2000L, 2000L, 1, 0, 5, iv2)
+                )
+                handle.execSQL(
+                    "INSERT INTO collections(id, name, icon, sort_order) VALUES (?, ?, ?, ?)",
+                    arrayOf("col1", "Test Collection", "book", 1)
+                )
+                handle.execSQL(
+                    "INSERT INTO tags(id, name, color) VALUES (?, ?, ?)",
+                    arrayOf("tag1", "favorite", 0xFF0000)
+                )
+                handle.execSQL(
+                    "INSERT INTO document_tags(document_id, tag_id) VALUES (?, ?)",
+                    arrayOf("rt-doc2", "tag1")
+                )
+            }
+
+            val dbBytes = File(dbPath).readBytes()
+
+            // --- Export step (same code path as CLI VaultExport) ---
+            val vaultBytes = VaultExporter(keyDerivation).export(
+                files = mapOf(
+                    "doc1.txt" to encrypted1,
+                    "doc2.txt" to encrypted2,
+                ),
+                dbFile = dbBytes,
+                vaultPassword = vaultPassword,
+                keys = mapOf("wrapped_master_key" to wrappedKey, "salt" to salt)
+            )
+
+            // --- Import step (same code path as CLI VaultImport --use-shared) ---
+            val contents = VaultImporter(keyDerivation).`import`(vaultBytes, vaultPassword)
+            assertNotNull("vault imports successfully", contents)
+
+            val env = createCLIRestoreEnvironment(targetDir)
+            val success = backupService.restore(contents!!, vaultPassword, env)
+            assertTrue("restore succeeds", success)
+
+            // --- Verification ---
+            val localKey = env.getLocalMasterKey(vaultPassword)!!
+            assertNotNull("local key derivable", localKey)
+            assertArrayEquals("master key preserved", masterKey, localKey)
+
+            assertTrue("wrapped_master_key restored",
+                File(targetDir, "encryption/wrapped_master_key").exists())
+            assertTrue("salt restored",
+                File(targetDir, "encryption/salt").exists())
+
+            val restoredDbPath = File(targetDir, "databases/librecrate.db")
+            assertTrue("DB restored", restoredDbPath.exists())
+            SqlHandleJdbc.openEncrypted(restoredDbPath.absolutePath, localKey).use { handle ->
+                handle.query("SELECT id, title, file_path, file_size, encryption_iv FROM documents ORDER BY id").use { cursor ->
+                    assertTrue("doc1 exists", cursor.moveToNext())
+                    assertEquals("rt-doc1", cursor.getString(0))
+                    assertEquals("files/doc1.txt", cursor.getString(2))
+                    assertArrayEquals("doc1 iv matches source", iv1, cursor.getBlob(4))
+
+                    assertTrue("doc2 exists", cursor.moveToNext())
+                    assertEquals("rt-doc2", cursor.getString(0))
+                    assertEquals("files/doc2.txt", cursor.getString(2))
+                    assertArrayEquals("doc2 iv matches source", iv2, cursor.getBlob(4))
+
+                    assertFalse("no extra docs", cursor.moveToNext())
+                }
+
+                handle.query("SELECT id, name FROM collections").use { cursor ->
+                    assertTrue("collection exists", cursor.moveToNext())
+                    assertEquals("col1", cursor.getString(0))
+                    assertFalse("only one collection", cursor.moveToNext())
+                }
+
+                handle.query("SELECT id, name FROM tags").use { cursor ->
+                    assertTrue("tag exists", cursor.moveToNext())
+                    assertEquals("tag1", cursor.getString(0))
+                }
+
+                handle.query("SELECT document_id, tag_id FROM document_tags").use { cursor ->
+                    assertTrue("doc-tag exists", cursor.moveToNext())
+                    assertEquals("rt-doc2", cursor.getString(0))
+                    assertEquals("tag1", cursor.getString(1))
+                }
+            }
+
+            fun decryptStoredFile(path: String): ByteArray {
+                val bytes = File(targetDir, path).readBytes()
+                val storedIv = bytes.copyOfRange(0, FileEncryptor.IV_LENGTH)
+                val ciphertext = bytes.copyOfRange(FileEncryptor.IV_LENGTH, bytes.size)
+                return fileEncryptor.decryptBytes(ciphertext, localKey, storedIv)
+            }
+
+            assertTrue("doc1.txt exists", File(targetDir, "files/doc1.txt").exists())
+            assertArrayEquals("doc1.txt content preserved", plaintext1, decryptStoredFile("files/doc1.txt"))
+
+            assertTrue("doc2.txt exists", File(targetDir, "files/doc2.txt").exists())
+            assertArrayEquals("doc2.txt content preserved", plaintext2, decryptStoredFile("files/doc2.txt"))
+        } finally {
+            sourceDir.deleteRecursively()
+            targetDir.deleteRecursively()
+            userKey.fill(0)
+        }
+    }
+
     private fun createTempDir(prefix: String): File {
         val tmp = File.createTempFile(prefix, "")
         tmp.delete()
