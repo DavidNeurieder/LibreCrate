@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.docwallet"
+    namespace = "com.librecrate.app"
     compileSdk = 36
 
     dependenciesInfo {
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.docwallet"
+        applicationId = "com.librecrate.app"
         minSdk = 26
         targetSdk = 36
         versionCode = 2

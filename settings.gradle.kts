@@ -15,7 +15,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "DocWallet"
+rootProject.name = "LibreCrate"
 include(":app")
 include(":vault-core")
 include(":vault-reader")

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.DocWallet.Splash" parent="Theme.SplashScreen">
+    <style name="Theme.LibreCrate.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/black</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
-        <item name="postSplashScreenTheme">@style/Theme.DocWallet</item>
+        <item name="postSplashScreenTheme">@style/Theme.LibreCrate</item>
     </style>
     <style name="Theme.ActivityTrace" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>

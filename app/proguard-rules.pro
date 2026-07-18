@@ -1,4 +1,4 @@
-# DocWallet ProGuard rules
+# LibreCrate ProGuard rules
 -keepattributes *Annotation*
 
 # MuPDF (JNI)

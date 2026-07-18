@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.docwallet.reader.pdf"
+    namespace = "com.librecrate.app.reader.pdf"
     compileSdk = 36
 
     defaultConfig {

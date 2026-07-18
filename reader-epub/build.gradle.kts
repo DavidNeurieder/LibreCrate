@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.docwallet.reader.epub"
+    namespace = "com.librecrate.app.reader.epub"
     compileSdk = 36
 
     defaultConfig {
