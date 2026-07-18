@@ -399,7 +399,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            SectionHeader("Security")
+            SectionHeader("PIN Lock")
 
             Card(
                 modifier = Modifier.fillMaxWidth(),

@@ -40,7 +40,6 @@ Encrypted document vault for Android — stores, views, organizes, and searches 
 
 ## Known Limitations (current build)
 
-- **No biometric unlock** — unlock is by password only.
 - **No idle auto-lock** — the vault locks only when the app is backgrounded.
 - **Collections & Tags** exist internally but are not reachable from the current UI and cannot be assigned to documents.
 - **No in-document search** — search covers the whole library, not find-within a PDF/EPUB.

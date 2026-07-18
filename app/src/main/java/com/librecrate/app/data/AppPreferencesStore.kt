@@ -21,7 +21,7 @@ object AppPreferencesStore {
 
     fun isPinEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_PIN_ENABLED, true)
+            .getBoolean(KEY_PIN_ENABLED, false)
     }
 
     fun setPinEnabled(context: Context, enabled: Boolean) {
