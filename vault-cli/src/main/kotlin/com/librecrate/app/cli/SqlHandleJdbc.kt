@@ -12,15 +12,26 @@ class SqlHandleJdbc private constructor(private val conn: Connection) : SqlHandl
     private var transactionSuccessful = false
 
     companion object {
+        private const val DRIVER = "org.sqlite.JDBC"
+
         fun open(path: String): SqlHandleJdbc {
-            Class.forName("org.sqlite.JDBC")
+            Class.forName(DRIVER)
             val conn = DriverManager.getConnection("jdbc:sqlite:$path")
             return SqlHandleJdbc(conn)
         }
 
         fun openInMemory(): SqlHandleJdbc {
-            Class.forName("org.sqlite.JDBC")
+            Class.forName(DRIVER)
             val conn = DriverManager.getConnection("jdbc:sqlite:")
+            return SqlHandleJdbc(conn)
+        }
+
+        fun openEncrypted(path: String, masterKey: ByteArray): SqlHandleJdbc {
+            Class.forName(DRIVER)
+            val keyHex = masterKey.joinToString("") { "%02x".format(it) }
+            val conn = DriverManager.getConnection(
+                "jdbc:sqlite:$path?cipher=sqlcipher&key=x'$keyHex'"
+            )
             return SqlHandleJdbc(conn)
         }
     }

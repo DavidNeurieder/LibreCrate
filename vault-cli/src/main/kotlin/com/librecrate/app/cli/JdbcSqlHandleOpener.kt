@@ -12,6 +12,10 @@ class JdbcSqlHandleOpener : SqlHandleOpener {
         return SqlHandleJdbc.openInMemory()
     }
 
+    fun openEncrypted(path: String, masterKey: ByteArray): SqlHandleJdbc {
+        return SqlHandleJdbc.openEncrypted(path, masterKey)
+    }
+
     override fun delete(path: String) {
         File(path).delete()
     }

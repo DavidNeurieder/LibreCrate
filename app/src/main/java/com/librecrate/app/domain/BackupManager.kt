@@ -5,18 +5,19 @@ import android.net.Uri
 import android.util.Log
 import com.librecrate.app.data.db.LibreCrateDatabase
 import com.librecrate.app.data.encryption.EncryptionManager
+import com.librecrate.app.vault.backup.BackupContents
+import com.librecrate.app.vault.backup.BackupRestoreService
+import com.librecrate.app.vault.backup.RestoreEnvironment
 import com.librecrate.app.vault.backup.VaultExporter
-import com.librecrate.app.vault.database.SqlCipherOpener
-import com.librecrate.app.vault.database.SqlHandle
-import com.librecrate.app.vault.database.SqlHandleSupportAndroid
-import com.librecrate.app.vault.database.VaultDatabaseMerger
 import com.librecrate.app.vault.backup.VaultImporter
 import com.librecrate.app.vault.crypto.Argon2Hasher
 import com.librecrate.app.vault.crypto.Argon2HasherImpl
 import com.librecrate.app.vault.crypto.FileEncryptor
 import com.librecrate.app.vault.crypto.KdfParams
 import com.librecrate.app.vault.crypto.KeyDerivation
-import com.librecrate.app.vault.crypto.KeyWrap
+import com.librecrate.app.vault.database.SqlCipherOpener
+import com.librecrate.app.vault.database.SqlHandle
+import com.librecrate.app.vault.database.SqlHandleSupportAndroid
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -120,11 +121,17 @@ class BackupManager(
                     ?: return@withContext false
                 onProgress(BackupProgress("Decrypting backup", 0.30f))
 
-                restoreContents(contents, vaultPassword, onProgress)
+                val service = BackupRestoreService(keyDerivation, kdfParams, fileEncryptor)
+                val env = androidRestoreEnv(onProgress)
+                val success = service.restore(contents, vaultPassword, env)
 
-                onProgress(BackupProgress("Restore complete", 1.0f))
-                Log.d(TAG, "Import complete from vault format")
-                true
+                if (success) {
+                    onProgress(BackupProgress("Restore complete", 1.0f))
+                    Log.d(TAG, "Import complete from vault format")
+                } else {
+                    Log.e(TAG, "Import failed during restore")
+                }
+                success
             } catch (e: Exception) {
                 Log.e(TAG, "importBackup failed", e)
                 false
@@ -132,177 +139,47 @@ class BackupManager(
         }
     }
 
-    private suspend fun restoreContents(
-        contents: com.librecrate.app.vault.backup.BackupContents,
-        vaultPassword: String,
-        onProgress: (BackupProgress) -> Unit = {},
-    ) {
-        val encryptionDir = File(context.filesDir, "encryption").also { it.mkdirs() }
-        val currentDb = getDatabase()
-
-        val backupMasterKey: ByteArray? = deriveBackupMasterKey(contents, vaultPassword)
-
-        Log.d(TAG, "Restore: currentDb=${currentDb != null}, backupMasterKey=${backupMasterKey != null}, dbFile=${contents.dbFile != null}, keys=${contents.keys.size}")
-
-        if (backupMasterKey == null && currentDb == null) {
-            Log.e(TAG, "No valid master key for backup restoration")
-            return
+    private fun androidRestoreEnv(
+        onProgress: (BackupProgress) -> Unit,
+    ): RestoreEnvironment = object : RestoreEnvironment {
+        override fun openBackupDb(path: String, password: ByteArray): SqlHandle {
+            return SqlCipherOpener(context, password).open(path)
         }
 
-        onProgress(BackupProgress("Restoring keys", 0.30f))
-        contents.dbFile?.let { dbData ->
-            val tempDb = File(context.cacheDir, "restore_db_${System.currentTimeMillis()}.db")
-            try {
-                tempDb.writeBytes(dbData)
-
-                onProgress(BackupProgress("Merging database", 0.35f))
-                if (currentDb != null && backupMasterKey != null) {
-                    Log.d(TAG, "Branch A: merging backup into existing database")
-                    val backupHandle = SqlCipherOpener(context, backupMasterKey).open(tempDb.absolutePath)
-                    val currentSqlHandle = getDatabase()?.openHelper?.writableDatabase
-                        ?.let { SqlHandleSupportAndroid(it) } ?: return
-                    val localKey = encryptionManager.getMasterKeyForSession()
-                    val filesDir = File(context.filesDir, "files")
-                    try {
-                        val merger = VaultDatabaseMerger()
-                        if (localKey != null) {
-                            merger.mergeWithFileReencryption(
-                                backupDb = backupHandle,
-                                currentDb = currentSqlHandle,
-                                files = contents.files,
-                                backupKey = backupMasterKey,
-                                localKey = localKey,
-                                filesDirPath = filesDir.absolutePath,
-                            )
-                        } else {
-                            merger.merge(backupHandle, currentSqlHandle)
-                        }
-                    } finally {
-                        backupHandle.close()
-                    }
-                    Log.d(TAG, "Branch A: merge complete — cleaning WAL")
-                    val dbFile = context.getDatabasePath("librecrate.db")
-                    try {
-                        currentSqlHandle.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
-                            cursor.moveToNext()
-                        }
-                    } catch (_: Exception) {}
-                    File(dbFile.parentFile, "${dbFile.name}-wal").delete()
-                    File(dbFile.parentFile, "${dbFile.name}-shm").delete()
-                } else if (currentDb == null && backupMasterKey != null) {
-                    Log.d(TAG, "Branch B: fresh install restore")
-                    val origWrappedKey = File(encryptionDir, "wrapped_master_key").let { f ->
-                        if (f.exists()) f.readBytes() else null
-                    }
-                    val origSalt = File(encryptionDir, "salt").let { f ->
-                        if (f.exists()) f.readBytes() else null
-                    }
-
-                    contents.keys["wrapped_master_key"]?.let {
-                        File(encryptionDir, "wrapped_master_key").writeBytes(it)
-                    }
-                    contents.keys["salt"]?.let {
-                        File(encryptionDir, "salt").writeBytes(it)
-                    }
-
-                    val passwordVerified = encryptionManager.verifyPassword(vaultPassword)
-                    if (!passwordVerified) {
-                        Log.e(TAG, "Password verification failed — restoring original key material")
-                        if (origWrappedKey != null) {
-                            File(encryptionDir, "wrapped_master_key").writeBytes(origWrappedKey)
-                        }
-                        if (origSalt != null) {
-                            File(encryptionDir, "salt").writeBytes(origSalt)
-                        }
-                        return
-                    }
-                    Log.d(TAG, "Branch B: password verified, master key cached")
-
-                    val deviceKeySetup = encryptionManager.setupDeviceKeyForDailyUnlock()
-                    if (!deviceKeySetup) {
-                        Log.e(TAG, "Device key setup failed — restoring original key material and aborting")
-                        if (origWrappedKey != null) {
-                            File(encryptionDir, "wrapped_master_key").writeBytes(origWrappedKey)
-                        } else {
-                            File(encryptionDir, "wrapped_master_key").delete()
-                        }
-                        if (origSalt != null) {
-                            File(encryptionDir, "salt").writeBytes(origSalt)
-                        } else {
-                            File(encryptionDir, "salt").delete()
-                        }
-                        return
-                    }
-                    Log.d(TAG, "Branch B: device key setup complete")
-
-                    val dbFile = context.getDatabasePath("librecrate.db")
-                    dbFile.parentFile?.mkdirs()
-                    tempDb.copyTo(dbFile, overwrite = true)
-                    File(dbFile.parentFile, "${dbFile.name}-wal").delete()
-                    File(dbFile.parentFile, "${dbFile.name}-shm").delete()
-                    Log.d(TAG, "Branch B: DB copied and WAL/SHM cleaned")
-                } else if (currentDb != null && backupMasterKey == null) {
-                    Log.w(TAG, "Legacy backup without key material — merging with current key")
-                    val mk = encryptionManager.getMasterKeyForSession()
-                    if (mk != null) {
-                        val legacyOpener: (String) -> SqlHandle = { path ->
-                            SqlCipherOpener(context, mk).open(path)
-                        }
-                        val currentHandle: () -> SqlHandle? = {
-                            getDatabase()?.openHelper?.writableDatabase?.let { SqlHandleSupportAndroid(it) }
-                        }
-                        DatabaseMerger(legacyOpener, currentHandle).merge(tempDb.absolutePath)
-                    } else {
-                        Log.w(TAG, "No master key available for legacy merge")
-                    }
-                } else {
-                    Log.w(TAG, "Unhandled restore branch — skipping DB restore")
-                }
-            } finally {
-                tempDb.delete()
-            }
+        override fun getCurrentSqlHandle(): SqlHandle? {
+            return getDatabase()?.openHelper?.writableDatabase
+                ?.let { SqlHandleSupportAndroid(it) }
         }
 
-        val filesDir = File(context.filesDir, "files").also { it.mkdirs() }
-        val fileList = contents.files.entries.toList()
-        val fileTotal = fileList.size.coerceAtLeast(1)
-        fileList.forEachIndexed { i, (entryName, data) ->
-            val targetFile = File(filesDir, entryName)
-            targetFile.parentFile?.mkdirs()
-            if (!targetFile.exists()) {
-                targetFile.writeBytes(data)
-            }
-            onProgress(
-                BackupProgress(
-                    "Restoring files",
-                    0.70f + 0.30f * ((i + 1).toFloat() / fileTotal),
-                    detail = "$i of $fileTotal",
-                )
-            )
+        override fun getSessionMasterKey(): ByteArray? {
+            return encryptionManager.getMasterKeyForSession()
+        }
+
+        override fun verifyPassword(password: String): Boolean {
+            return encryptionManager.verifyPassword(password)
+        }
+
+        override fun setupDeviceKey(): Boolean {
+            return encryptionManager.setupDeviceKeyForDailyUnlock()
+        }
+
+        override val encryptionDir: File get() = File(context.filesDir, "encryption")
+        override val databaseDir: File
+            get() = context.getDatabasePath("librecrate.db").parentFile
+                ?: error("Cannot determine database directory")
+        override val filesDir: File get() = File(context.filesDir, "files")
+        override val cacheDir: File get() = context.cacheDir
+
+        override fun log(message: String) {
+            Log.d(TAG, message)
+        }
+
+        override fun onProgress(fraction: Float, phase: String) {
+            onProgress(BackupProgress(phase, fraction))
         }
     }
 
-    private fun deriveBackupMasterKey(
-        contents: com.librecrate.app.vault.backup.BackupContents,
-        vaultPassword: String,
-    ): ByteArray? {
-        if (!contents.keys.containsKey("wrapped_master_key") ||
-            !contents.keys.containsKey("salt")) return null
-
-        return try {
-            val salt = contents.keys["salt"]!!
-            val wrappedKey = contents.keys["wrapped_master_key"]!!
-            val userKey = keyDerivation.deriveAndZero(vaultPassword, salt, kdfParams)
-            try {
-                KeyWrap.unwrap(wrappedKey, userKey).copyOf()
-            } finally {
-                userKey.fill(0)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to derive backup master key", e)
-            null
-        }
-    }
+    val fileEncryptor: FileEncryptor by lazy { FileEncryptor() }
 
     suspend fun exportBackupToUri(
         uri: Uri,

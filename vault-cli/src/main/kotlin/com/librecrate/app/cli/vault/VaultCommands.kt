@@ -1,18 +1,22 @@
 package com.librecrate.app.cli.vault
 
-import com.librecrate.app.vault.crypto.Argon2HasherImpl
-import com.librecrate.app.cli.DirectoryStorage
-import com.librecrate.app.cli.JdbcSqlHandleOpener
+import com.librecrate.app.vault.backup.BackupRestoreService
 import com.librecrate.app.vault.backup.VaultExporter
 import com.librecrate.app.vault.backup.VaultImporter
+import com.librecrate.app.vault.crypto.Argon2HasherImpl
 import com.librecrate.app.vault.crypto.KeyDerivation
 import com.librecrate.app.vault.database.VaultDatabase
+import com.librecrate.app.vault.database.VaultDatabaseMerger
 import com.librecrate.app.vault.database.columnIndexOrThrow
 import com.librecrate.app.vault.database.getStringOrNull
 import com.librecrate.app.vault.format.VaultPackage
+import com.librecrate.app.cli.DirectoryStorage
+import com.librecrate.app.cli.JdbcSqlHandleOpener
+import com.librecrate.app.cli.createCLIRestoreEnvironment
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import java.io.File
@@ -144,14 +148,32 @@ class VaultImport : CliktCommand(name = "import", help = "Import a .vault backup
     private val password by option("--password", "-p").required()
     private val input by option("--input", "-i").required()
     private val dir by option("--dir", "-d").required()
+    private val useShared by option(
+        "--use-shared", help = "Use BackupRestoreService (checks password, decrypts files, handles Branch A/B/C)"
+    ).flag()
 
     override fun run() {
         val keyDerivation = KeyDerivation(Argon2HasherImpl())
         val vaultBytes = File(input).readBytes()
+        val outputDir = File(dir)
+
+        if (useShared) {
+            val contents = VaultImporter(keyDerivation).`import`(vaultBytes, password)
+                ?: throw IllegalStateException("Failed to import vault (wrong password or corrupt file)")
+            val env = createCLIRestoreEnvironment(outputDir)
+            val success = BackupRestoreService().restore(contents, password, env)
+            if (success) {
+                echo("Restored via BackupRestoreService (Branch ${if (outputDir.resolve("databases/librecrate.db").exists()) "A" else "B"})")
+            } else {
+                echo("Restore completed with warnings — check logs above")
+            }
+            return
+        }
+
         val contents = VaultImporter(keyDerivation).`import`(vaultBytes, password)
             ?: throw IllegalStateException("Failed to import vault (wrong password or corrupt file)")
 
-        val outputDir = File(dir).also { it.mkdirs() }
+        outputDir.mkdirs()
 
         var keyCount = 0
         for ((name, data) in contents.keys) {
@@ -200,38 +222,40 @@ class VaultMerge : CliktCommand(name = "merge", help = "Merge a .vault backup in
             ?: throw IllegalStateException("Vault does not contain a database")
 
         val opener = JdbcSqlHandleOpener()
+
+        // Open current database and ensure schema exists
         VaultDatabase(opener.open(db)).use { vault ->
             vault.initialize()
-            // import into a temp in-memory db, then merge
-            val tempDb = opener.openInMemory()
+
+            // Open backup database directly from vault content
             val tempFile = File.createTempFile("vault-merge-", ".db").apply { deleteOnExit() }
             try {
                 tempFile.writeBytes(dbFile)
-                tempDb.execSQL("ATTACH DATABASE ? AS backup", arrayOf(tempFile.absolutePath))
-                tempDb.execSQL("CREATE TABLE merged_docs AS SELECT * FROM backup.documents")
-                tempDb.execSQL("DETACH DATABASE backup")
+                val backupHandle = opener.open(tempFile.absolutePath)
+                try {
+                    val result = VaultDatabaseMerger().merge(backupHandle, vault.handle)
 
-                val result = vault.mergeFrom(tempDb)
-
-                // store files from vault
-                if (contents.files.isNotEmpty()) {
-                    val storage = DirectoryStorage(File(db).parentFile ?: File("."))
-                    for ((name, data) in contents.files) {
-                        storage.save("files/$name", data)
+                    // store files from vault
+                    if (contents.files.isNotEmpty()) {
+                        val storage = DirectoryStorage(File(db).parentFile ?: File("."))
+                        for ((name, data) in contents.files) {
+                            storage.save("files/$name", data)
+                        }
+                        echo("  Stored ${contents.files.size} file(s)")
                     }
-                    echo("  Stored ${contents.files.size} file(s)")
-                }
 
-                echo("Merge complete:")
-                echo("  Added: ${result.documentsAdded}")
-                echo("  Updated: ${result.documentsUpdated}")
-                echo("  Conflicts: ${result.documentsConflicted}")
-                echo("  Skipped: ${result.documentsSkipped}")
-                if (result.hasConflicts) {
-                    echo("  WARNING: ${result.documentsConflicted} conflict(s) detected — use 'vault conflicts' to view")
+                    echo("Merge complete:")
+                    echo("  Added: ${result.documentsAdded}")
+                    echo("  Updated: ${result.documentsUpdated}")
+                    echo("  Conflicts: ${result.documentsConflicted}")
+                    echo("  Skipped: ${result.documentsSkipped}")
+                    if (result.hasConflicts) {
+                        echo("  WARNING: ${result.documentsConflicted} conflict(s) detected — use 'vault conflicts' to view")
+                    }
+                } finally {
+                    backupHandle.close()
                 }
             } finally {
-                tempDb.close()
                 tempFile.delete()
             }
         }
