@@ -47,7 +47,7 @@ pub fn search(conn: &Connection, query: &str) -> Result<Vec<FtsResult>> {
 pub fn search_with_snippet(conn: &Connection, query: &str) -> Result<Vec<FtsSnippetResult>> {
     let mut stmt = conn.prepare(
         "SELECT d.id, d.title, f.rank,
-                snippet(documents_fts, 0, '<b>', '</b>', '...', 32)
+                snippet(documents_fts, 3, '<b>', '</b>', '...', 64)
          FROM documents_fts f
          JOIN documents d ON d.rowid = f.rowid
          WHERE f.documents_fts MATCH ?1
@@ -73,7 +73,7 @@ pub fn search_with_snippet(conn: &Connection, query: &str) -> Result<Vec<FtsSnip
 pub fn search_in_document(conn: &Connection, document_id: &str, query: &str) -> Result<Vec<FtsSnippetResult>> {
     let mut stmt = conn.prepare(
         "SELECT d.id, d.title, f.rank,
-                snippet(documents_fts, 0, '<b>', '</b>', '...', 64)
+                snippet(documents_fts, 3, '<b>', '</b>', '...', 64)
          FROM documents_fts f
          JOIN documents d ON d.rowid = f.rowid
          WHERE d.id = ?1 AND f.documents_fts MATCH ?2
@@ -119,7 +119,12 @@ mod tests {
             params!["doc2", "Lazy dog", "dog.txt", "text/plain", "", "The lazy dog sleeps all day"],
         ).unwrap();
 
-        rebuild_index(&conn).unwrap();
+        // Manually populate FTS index from documents table
+        conn.execute(
+            "INSERT INTO documents_fts(rowid, title, author, description, text_content)
+             SELECT rowid, title, author, description, text_content FROM documents",
+            [],
+        ).unwrap();
 
         let results = search(&conn, "fox").unwrap();
         assert_eq!(results.len(), 1);

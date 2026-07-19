@@ -60,9 +60,7 @@ pub fn create_all_tables(conn: &Connection) -> rusqlite::Result<()> {
         );
 
         CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
-            title, author, description, text_content,
-            content=documents,
-            content_rowid=rowid
+            title, author, description, text_content
         );
 
         CREATE INDEX IF NOT EXISTS idx_document_tags_document_id
@@ -72,32 +70,6 @@ pub fn create_all_tables(conn: &Connection) -> rusqlite::Result<()> {
         ",
     )?;
 
-    create_fts_triggers(conn)?;
-
-    Ok(())
-}
-
-fn create_fts_triggers(conn: &Connection) -> rusqlite::Result<()> {
-    conn.execute_batch(
-        "
-        CREATE TRIGGER IF NOT EXISTS documents_fts_ai AFTER INSERT ON documents BEGIN
-            INSERT INTO documents_fts(rowid, title, author, description, text_content)
-            VALUES (new.rowid, new.title, new.author, new.description, new.text_content);
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS documents_fts_ad AFTER DELETE ON documents BEGIN
-            INSERT INTO documents_fts(documents_fts, rowid, title, author, description, text_content)
-            VALUES ('delete', old.rowid, old.title, old.author, old.description, old.text_content);
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS documents_fts_au AFTER UPDATE ON documents BEGIN
-            INSERT INTO documents_fts(documents_fts, rowid, title, author, description, text_content)
-            VALUES ('delete', old.rowid, old.title, old.author, old.description, old.text_content);
-            INSERT INTO documents_fts(rowid, title, author, description, text_content)
-            VALUES (new.rowid, new.title, new.author, new.description, new.text_content);
-        END;
-        ",
-    )?;
     Ok(())
 }
 

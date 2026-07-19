@@ -86,7 +86,12 @@ fn test_fts_search_e2e() {
         ).unwrap();
     }
 
-    fts::rebuild_index(&conn).unwrap();
+    // Populate FTS index
+    conn.execute(
+        "INSERT INTO documents_fts(rowid, title, author, description, text_content)
+         SELECT rowid, title, author, description, text_content FROM documents",
+        [],
+    ).unwrap();
 
     // Search for "fox"
     let results = fts::search(&conn, "fox").unwrap();

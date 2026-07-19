@@ -100,9 +100,9 @@ pub fn export_document_file(conn: &Connection, base_dir: &Path, id: &str) -> Opt
 
 /// Delete a document: remove file blob, delete DB row, remove FTS entry.
 pub fn delete_document_full(conn: &Connection, base_dir: &Path, id: &str) -> rusqlite::Result<bool> {
-    // Remove from FTS first
+    // Remove from FTS first — for internal content tables, DELETE is supported directly by FTS5
     conn.execute(
-        "INSERT INTO documents_fts(documents_fts, rowid) VALUES ('delete', (SELECT rowid FROM documents WHERE id = ?1))",
+        "DELETE FROM documents_fts WHERE rowid = (SELECT rowid FROM documents WHERE id = ?1)",
         rusqlite::params![id],
     )?;
     delete_file(base_dir, id);

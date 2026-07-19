@@ -89,7 +89,7 @@ class VaultRepository(private val context: Context) {
     suspend fun addDocument(doc: Document): Boolean = withContext(Dispatchers.IO) {
         try {
             handle?.addDocument(doc.toFfi())
-            invalidate()
+            refreshAll()
             true
         } catch (e: Exception) {
             Log.e(TAG, "addDocument failed", e); false
@@ -99,7 +99,7 @@ class VaultRepository(private val context: Context) {
     suspend fun addDocumentFull(doc: Document, textContent: String?): Boolean = withContext(Dispatchers.IO) {
         try {
             handle?.addDocumentFull(doc.toFfi(), textContent)
-            invalidate()
+            refreshAll()
             true
         } catch (e: Exception) {
             Log.e(TAG, "addDocumentFull failed", e); false
@@ -108,7 +108,7 @@ class VaultRepository(private val context: Context) {
 
     suspend fun deleteDocument(id: String): Boolean = withContext(Dispatchers.IO) {
         val deleted = handle?.deleteDocument(id) ?: false
-        if (deleted) invalidate()
+        if (deleted) refreshAll()
         deleted
     }
 
@@ -132,7 +132,9 @@ class VaultRepository(private val context: Context) {
         id: String, title: String, isFavorite: Boolean,
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            handle?.updateDocument(id, title, isFavorite) ?: false
+            val result = handle?.updateDocument(id, title, isFavorite) ?: false
+            if (result) refreshAll()
+            result
         } catch (e: Exception) {
             Log.e(TAG, "updateDocument failed", e); false
         }
@@ -144,10 +146,12 @@ class VaultRepository(private val context: Context) {
         conflictWith: String?, currentPage: Int, readingPosition: String?,
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            handle?.updateDocumentFull(
+            val result = handle?.updateDocumentFull(
                 id, title, author, description, collectionId,
                 isFavorite, isConflict, conflictWith, currentPage, readingPosition,
             ) ?: false
+            if (result) refreshAll()
+            result
         } catch (e: Exception) {
             Log.e(TAG, "updateDocumentFull failed", e); false
         }
@@ -176,7 +180,7 @@ class VaultRepository(private val context: Context) {
     suspend fun addCollection(collection: Collection): Boolean = withContext(Dispatchers.IO) {
         try {
             handle?.addCollection(collection.toFfi())
-            invalidate(); true
+            refreshAll(); true
         } catch (e: Exception) {
             Log.e(TAG, "addCollection failed", e); false
         }
@@ -198,7 +202,7 @@ class VaultRepository(private val context: Context) {
 
     suspend fun deleteCollection(id: String): Boolean = withContext(Dispatchers.IO) {
         val deleted = handle?.deleteCollection(id) ?: false
-        if (deleted) invalidate()
+        if (deleted) refreshAll()
         deleted
     }
 
@@ -209,7 +213,7 @@ class VaultRepository(private val context: Context) {
     suspend fun addTag(tag: Tag): Boolean = withContext(Dispatchers.IO) {
         try {
             handle?.addTag(tag.toFfi())
-            invalidate(); true
+            refreshAll(); true
         } catch (e: Exception) {
             Log.e(TAG, "addTag failed", e); false
         }
@@ -225,7 +229,7 @@ class VaultRepository(private val context: Context) {
 
     suspend fun deleteTag(id: String): Boolean = withContext(Dispatchers.IO) {
         val deleted = handle?.deleteTag(id) ?: false
-        if (deleted) invalidate()
+        if (deleted) refreshAll()
         deleted
     }
 
@@ -270,6 +274,15 @@ class VaultRepository(private val context: Context) {
         handle?.searchInDocument(documentId, query) ?: emptyList()
     }
 
+    suspend fun rebuildFtsIndex(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            handle?.rebuildFtsIndex()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "rebuildFtsIndex failed", e); false
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Storage
     // -----------------------------------------------------------------------
@@ -284,7 +297,7 @@ class VaultRepository(private val context: Context) {
                 context.filesDir.absolutePath, id, title, fileData,
                 mimeType, author, description, textContent,
             )
-            invalidate()
+            refreshAll()
             result
         } catch (e: Exception) {
             Log.e(TAG, "importDocument failed", e); null
@@ -302,7 +315,7 @@ class VaultRepository(private val context: Context) {
     suspend fun deleteDocumentFull(id: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val deleted = handle?.deleteDocumentFull(context.filesDir.absolutePath, id) ?: false
-            if (deleted) invalidate()
+            if (deleted) refreshAll()
             deleted
         } catch (e: Exception) {
             Log.e(TAG, "deleteDocumentFull failed", e); false
