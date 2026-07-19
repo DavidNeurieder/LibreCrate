@@ -7,8 +7,6 @@ import android.util.Log
 import com.librecrate.app.data.model.Document
 import com.librecrate.app.data.model.DocumentType
 import com.librecrate.app.data.vault.VaultRepository
-import com.librecrate.app.reader.pdf.PdfDocumentProcessor
-import com.librecrate.app.reader.epub.EpubDocumentProcessor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -19,8 +17,6 @@ import java.util.UUID
 class DocumentImporter(
     private val context: Context,
     private val vaultRepository: VaultRepository,
-    private val pdfProcessor: com.librecrate.app.vault.reader.DocumentProcessor = PdfDocumentProcessor(),
-    private val epubProcessor: com.librecrate.app.vault.reader.DocumentProcessor = EpubDocumentProcessor(),
 ) {
     companion object {
         private const val TAG = "DocumentImporter"
@@ -35,29 +31,12 @@ class DocumentImporter(
         try {
             val fileName = getFileName(uri) ?: "unknown"
             val fileData = tempFile.readBytes()
-            val docType = DocumentType.fromMimeType(mimeType)
-
-            var title: String? = null
-            var author: String? = null
-            var textContent: String? = null
-
-            when (docType) {
-                DocumentType.PDF -> {
-                    val result = pdfProcessor.process(tempFile, mimeType)
-                    title = result.title; author = result.author; textContent = result.textContent
-                }
-                DocumentType.EPUB -> {
-                    val result = epubProcessor.process(tempFile, mimeType)
-                    title = result.title; author = result.author; textContent = result.textContent
-                }
-                else -> {}
-            }
 
             val docId = UUID.randomUUID().toString()
             val resultId = vaultRepository.importDocument(
-                id = docId, title = title ?: fileName, fileData = fileData,
-                mimeType = mimeType, author = author ?: "",
-                description = textContent?.take(200) ?: "", textContent = textContent,
+                id = docId, title = fileName, fileData = fileData,
+                mimeType = mimeType, author = "",
+                description = "", textContent = null,
             )
             if (resultId == null) { Log.e(TAG, "importDocument returned null"); return@withContext null }
             vaultRepository.getDocument(docId)

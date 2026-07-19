@@ -53,7 +53,10 @@ class BackupManager(
             }
 
             onProgress(BackupProgress("Encrypting backup", 0.6f))
-            val vaultBytes = uniffi.vault_native.exportVault(files, dbData, vaultPassword, keyEntries, Argon2ParamsFfi())
+            val vaultBytes = exportVault(
+                files, dbData, vaultPassword, keyEntries,
+                Argon2ParamsFfi(MEMORY_COST, ITERATIONS, PARALLELISM, HASH_LENGTH),
+            )
             onProgress(BackupProgress("Encrypting backup", 0.8f))
 
             destination.writeBytes(vaultBytes)
@@ -73,20 +76,20 @@ class BackupManager(
         try {
             onProgress(BackupProgress("Decrypting backup", 0.10f))
             val vaultBytes = source.readBytes()
-            val contents = uniffi.vault_native.importVault(vaultBytes, vaultPassword) ?: return@withContext false
+            val contents = importVault(vaultBytes, vaultPassword)
             onProgress(BackupProgress("Decrypting backup", 0.30f))
 
-            val dbData = contents.dbFileData ?: return@withContext false
+            val dbData = contents.dbFile ?: return@withContext false
             onProgress(BackupProgress("Restoring database", 0.40f))
 
-            val success = uniffi.vault_native.restoreToLayout(
+            restoreToLayout(
                 contents, dbData,
                 vaultRepository.encryptionDir.absolutePath,
                 vaultRepository.databaseDir.absolutePath,
                 vaultRepository.filesDir.absolutePath,
             )
-            onProgress(if (success) BackupProgress("Restore complete", 1.0f) else BackupProgress("Restore failed", 0.0f))
-            success
+            onProgress(BackupProgress("Restore complete", 1.0f))
+            true
         } catch (e: Exception) {
             Log.e(TAG, "importBackup failed", e); false
         }
@@ -130,5 +133,9 @@ class BackupManager(
 
     companion object {
         private const val TAG = "BackupManager"
+        private const val MEMORY_COST: UInt = 16_384u
+        private const val ITERATIONS: UInt = 3u
+        private const val PARALLELISM: UInt = 2u
+        private const val HASH_LENGTH: Int = 32
     }
 }

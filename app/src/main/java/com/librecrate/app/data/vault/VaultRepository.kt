@@ -31,12 +31,13 @@ class VaultRepository(private val context: Context) {
 
     val filesDir: File get() = File(context.filesDir, "files")
     val encryptionDir: File get() = File(context.filesDir, "encryption")
-    val databaseDir: File get() = context.getDatabasePath("librecrate.db").parentFile!!
+    val databaseDir: File get() = context.getDatabasePath("librecrate.db").parentFile
+        ?: File(context.filesDir, "databases")
 
     suspend fun open(masterKey: ByteArray): Boolean = withContext(Dispatchers.IO) {
         try {
             val dbPath = context.getDatabasePath("librecrate.db").absolutePath
-            dbPath.parentFile?.mkdirs()
+            File(dbPath).parentFile?.mkdirs()
             handle = DbHandle.createEncrypted(dbPath, masterKey)
             refreshAll()
             true
@@ -330,7 +331,7 @@ class VaultRepository(private val context: Context) {
     // -----------------------------------------------------------------------
 
     suspend fun getSchemaVersion(): Long = withContext(Dispatchers.IO) {
-        handle?.schemaVersion ?: 0
+        handle?.getSchemaVersion() ?: 0
     }
 
     suspend fun setSchemaVersion(version: Long) = withContext(Dispatchers.IO) {
@@ -349,7 +350,7 @@ class VaultRepository(private val context: Context) {
         kdfParams: Argon2ParamsFfi,
     ): ByteArray? = withContext(Dispatchers.IO) {
         try {
-            uniffi.vault_native.exportVault(files, dbFile, vaultPassword, keys, kdfParams)
+            exportVault(files, dbFile, vaultPassword, keys, kdfParams)
         } catch (e: Exception) {
             Log.e(TAG, "exportVault failed", e); null
         }
@@ -357,7 +358,7 @@ class VaultRepository(private val context: Context) {
 
     suspend fun importVaultStatic(vaultData: ByteArray, vaultPassword: String): ImportedContentsFfi? = withContext(Dispatchers.IO) {
         try {
-            uniffi.vault_native.importVault(vaultData, vaultPassword)
+            importVault(vaultData, vaultPassword)
         } catch (e: Exception) {
             Log.e(TAG, "importVault failed", e); null
         }
@@ -371,7 +372,7 @@ class VaultRepository(private val context: Context) {
         filesDir: String,
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            uniffi.vault_native.restoreToLayout(contents, dbData, encryptionDir, databaseDir, filesDir)
+            restoreToLayout(contents, dbData, encryptionDir, databaseDir, filesDir)
             true
         } catch (e: Exception) {
             Log.e(TAG, "restoreToLayout failed", e); false

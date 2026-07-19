@@ -27,8 +27,7 @@ class LibreCrateApplication : Application() {
         BackupManager(this, encryptionManager, vaultRepository)
     }
 
-    @Synchronized
-    fun openVault(): Boolean {
+    suspend fun openVault(): Boolean {
         val masterKey = encryptionManager.getMasterKeyForSession() ?: return false
         return vaultRepository.open(masterKey)
     }

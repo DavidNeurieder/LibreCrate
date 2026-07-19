@@ -14,14 +14,11 @@ import com.librecrate.app.data.model.SearchResultItem
 import com.librecrate.app.data.model.SearchResultMatch
 import com.librecrate.app.ui.common.ThumbnailCache
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -36,7 +33,6 @@ enum class SortOption(val label: String) {
     DATE_OLDEST("Oldest first"),
 }
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as LibreCrateApplication
     private val vault = app.vaultRepository
@@ -50,36 +46,26 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val favoritesOnly = MutableStateFlow(false)
 
     val documents: StateFlow<List<Document>> = combine(
-        searchQuery.flatMapLatest { query ->
-            if (query.isBlank()) {
-                vault.documents
-            } else {
-                vault.searchDocumentsWithSnippet(query).map { results ->
-                    results.mapNotNull { result ->
-                        Document(
-                            id = result.documentId,
-                            title = result.title,
-                            mimeType = result.mimeType,
-                            pageCount = result.pageCount,
-                            author = result.author,
-                            thumbnailPath = result.thumbnailPath,
-                        )
-                    }
-                }
-            }
-        },
+        vault.documents,
+        searchQuery,
         selectedSort,
         filterType,
         favoritesOnly,
-    ) { items: List<Document>, sort: SortOption, type: DocumentType?, favs: Boolean ->
-        var result = items
+    ) { docs: List<Document>, query: String, sort: SortOption, type: DocumentType?, favs: Boolean ->
+        var result = docs
+        if (query.isNotBlank()) {
+            val q = query.lowercase()
+            result = result.filter { doc ->
+                doc.title.lowercase().contains(q) ||
+                doc.author.lowercase().contains(q) ||
+                doc.description.lowercase().contains(q)
+            }
+        }
         if (type != null) {
             result = result.filter { doc ->
                 if (type.mimeType.endsWith("/*")) {
                     doc.mimeType.startsWith(type.mimeType.removeSuffix("/*"))
-                } else {
-                    doc.mimeType == type.mimeType
-                }
+                } else doc.mimeType == type.mimeType
             }
         }
         if (favs) result = result.filter { it.isFavorite }
@@ -92,55 +78,41 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val searchResults: StateFlow<List<SearchResultItem>> = searchQuery
-        .flatMapLatest { query ->
-            if (query.isBlank()) {
-                kotlinx.coroutines.flow.flowOf(emptyList())
-            } else {
-                vault.searchDocumentsWithSnippet(query).map { snippetResults ->
-                    val docs = documents.value.associateBy { it.id }
-                    snippetResults.mapNotNull { sr ->
-                        val doc = docs[sr.id]
-                        SearchResultItem(
-                            id = sr.id,
-                            title = sr.title,
-                            mimeType = doc?.mimeType ?: "",
-                            pageCount = doc?.pageCount ?: 0,
-                            author = doc?.author ?: "",
-                            thumbnailPath = doc?.thumbnailPath,
-                            matches = parseSnippet(sr.snippet),
-                        )
-                    }
-                }
-            }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val searchResults: StateFlow<List<SearchResultItem>> = combine(
+        vault.documents,
+        searchQuery,
+    ) { docs: List<Document>, query: String ->
+        if (query.isBlank()) return@combine emptyList()
+        val q = query.lowercase()
+        docs.filter { doc ->
+            doc.title.lowercase().contains(q) ||
+            doc.author.lowercase().contains(q) ||
+            doc.description.lowercase().contains(q)
+        }.map { doc ->
+            SearchResultItem(
+                id = doc.id,
+                title = doc.title,
+                mimeType = doc.mimeType,
+                pageCount = doc.pageCount,
+                author = doc.author,
+                thumbnailPath = doc.thumbnailPath,
+                matches = listOf(
+                    SearchResultMatch(snippet = doc.description, pageNumber = doc.currentPage)
+                ),
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        viewModelScope.launch {
-            vault.documents.collect { _isLoading.value = false }
-        }
-    }
-
-    private fun parseSnippet(snippet: String): List<SearchResultMatch> {
-        if (snippet.isBlank()) return emptyList()
-        val regex = Regex("<b>(.*?)</b>")
-        val pages = Regex("\\[PAGE=(\\d+)\\]")
-        val currentPage = pages.findAll(snippet).lastOrNull()?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        val snippets = regex.findAll(snippet).map { it.groupValues[1] }.toList()
-        if (snippets.isEmpty()) return listOf(SearchResultMatch(snippet = snippet, pageNumber = currentPage))
-        return snippets.map { SearchResultMatch(snippet = it, pageNumber = currentPage) }
+        viewModelScope.launch { vault.documents.collect { _isLoading.value = false } }
     }
 
     fun toggleFavorite(document: Document) {
-        viewModelScope.launch {
-            vault.updateDocument(document.id, document.title, !document.isFavorite)
-        }
+        viewModelScope.launch { vault.updateDocument(document.id, document.title, !document.isFavorite) }
     }
 
     fun deleteDocument(document: Document) {
-        viewModelScope.launch {
-            vault.deleteDocumentFull(document.id)
-        }
+        viewModelScope.launch { vault.deleteDocumentFull(document.id) }
     }
 
     fun setSort(sort: SortOption) { selectedSort.value = sort }
@@ -156,9 +128,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             var failCount = 0
             for (uri in uris) {
                 try {
-                    val mimeType = withContext(Dispatchers.IO) {
-                        app.contentResolver.getType(uri) ?: "application/octet-stream"
-                    }
+                    val mimeType = withContext(Dispatchers.IO) { app.contentResolver.getType(uri) ?: "application/octet-stream" }
                     val doc = app.documentImporter.importDocument(uri, mimeType)
                     if (doc != null) successCount++ else failCount++
                 } catch (_: Exception) { failCount++ }
@@ -189,12 +159,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val bitmap = withContext(Dispatchers.IO) {
                     val thumbData = vault.loadThumbnail(documentId)
-                    if (thumbData != null) {
-                        BitmapFactory.decodeByteArray(thumbData, 0, thumbData.size)
-                    } else {
-                        val file = File(thumbnailPath)
-                        if (file.exists()) BitmapFactory.decodeFile(thumbnailPath) else null
-                    }
+                    if (thumbData != null) BitmapFactory.decodeByteArray(thumbData, 0, thumbData.size)
+                    else { val f = File(thumbnailPath); if (f.exists()) BitmapFactory.decodeFile(thumbnailPath) else null }
                 }
                 if (bitmap != null) {
                     ThumbnailCache.put(documentId, bitmap)
@@ -204,9 +170,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                         _thumbnails.value = _thumbnails.value - toEvict.toSet()
                     }
                 }
-            } finally {
-                thumbnailSemaphore.release()
-            }
+            } finally { thumbnailSemaphore.release() }
         }
     }
 }
