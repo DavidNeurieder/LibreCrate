@@ -2,22 +2,43 @@ package com.librecrate.app.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
+import com.librecrate.app.LibreCrateApplication
 import com.librecrate.app.data.model.Document
 import com.librecrate.app.ui.library.DocumentCard
 import com.librecrate.app.ui.library.LibraryScreen
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.io.File
 
 class LibraryScreenTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Before
+    fun setUp() {
+        val app = ApplicationProvider.getApplicationContext<LibreCrateApplication>()
+        app.encryptionManager.initializeDeviceKeyMode()
+    }
+
+    @After
+    fun tearDown() {
+        val app = ApplicationProvider.getApplicationContext<LibreCrateApplication>()
+        runBlocking {
+            app.vaultRepository.listDocuments().forEach { app.vaultRepository.deleteDocumentFull(it.id) }
+        }
+        app.encryptionManager.lock()
+        File(app.filesDir, "encryption").deleteRecursively()
+    }
 
     @Test
     fun displaysTitle() {
