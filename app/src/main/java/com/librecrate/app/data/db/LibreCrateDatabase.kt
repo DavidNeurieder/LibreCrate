@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.librecrate.app.data.model.Document
 import com.librecrate.app.vault.database.DatabaseSchema
+import com.librecrate.app.vault.database.SqlCipherOpener
 import net.sqlcipher.database.SupportFactory
 
 import androidx.room.migration.Migration
@@ -100,7 +101,7 @@ abstract class LibreCrateDatabase : RoomDatabase() {
         }
 
         fun create(context: Context, passphrase: ByteArray): LibreCrateDatabase {
-            val factory = SupportFactory(passphrase, null, false)
+            val factory = SupportFactory(passphrase, SqlCipherOpener.CIPHER_HOOK, false)
             return Room.databaseBuilder(
                 context.applicationContext,
                 LibreCrateDatabase::class.java,

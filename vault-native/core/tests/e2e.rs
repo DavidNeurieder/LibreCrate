@@ -200,3 +200,85 @@ fn test_vault_roundtrip_with_db() {
     assert_eq!(docs.len(), 1);
     assert_eq!(docs[0].title, "E2E Test");
 }
+
+/// Phase 0 conformance: verify the compat=4 raw-key format is correct by checking
+/// that the page_size PRAGMA takes effect and that the DB round-trips correctly.
+/// Raw-key mode bypasses the KDF, so cipher_compatibility settings affect only
+/// page size and HMAC algorithm — the key difference vs. compat=1 is page_size
+/// (4096 vs 1024 default) and HMAC algorithm. We verify page_size is 4096 as set.
+#[test]
+fn test_compat4_pragma_page_size() {
+    let mk = make_master_key();
+    let tmp = tempfile::TempDir::new().unwrap();
+    let db_path = tmp.path().join("pagesize.db");
+    let path = db_path.to_str().unwrap();
+
+    let conn = open_encrypted(path, &mk).unwrap();
+    create_all_tables(&conn).unwrap();
+
+    // Verify page_size pragma is 4096 as set
+    let page_size: i32 = conn
+        .query_row("PRAGMA page_size", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        page_size, 4096,
+        "page_size should be 4096 (compat=4 default), not 1024 (compat=1 default)"
+    );
+
+    // Verify kdf_iter pragma was set correctly (returns text)
+    let kdf_iter: String = conn
+        .query_row("PRAGMA kdf_iter", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        kdf_iter, "256000",
+        "kdf_iter should be 256000 (compat=4 default)"
+    );
+}
+
+/// Phase 0 conformance: explicitly document the exact PRAGMAs used for Android
+/// interop. Verifies self-consistency with the zetetic-expected encoding (x'<hex>' raw key).
+#[test]
+fn test_compat4_raw_key_format() {
+    let mk = make_master_key();
+    let hex_key = hex::encode(&mk);
+    let tmp = tempfile::TempDir::new().unwrap();
+    let db_path = tmp.path().join("rawkey.db");
+    let path = db_path.to_str().unwrap();
+
+    // The exact PRAGMA sequence that both Rust core and Android app must agree on.
+    // zetetic's SupportFactory hex-encodes the passphrase bytes and issues:
+    //   PRAGMA key = x'<hex>'
+    // which is the same raw-key mode the Rust core uses.
+    {
+        let conn = rusqlite::Connection::open(path).unwrap();
+        for pragma in &[
+            "PRAGMA cipher_compatibility = 4",
+            "PRAGMA cipher_kdf_algorithm = sha512",
+            "PRAGMA cipher_hmac_algorithm = sha512",
+            "PRAGMA kdf_iter = 256000",
+            "PRAGMA cipher_page_size = 4096",
+        ] {
+            let mut stmt = conn.prepare(pragma).unwrap();
+            let _ = stmt.query([]).unwrap();
+        }
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA key = \"x'{hex_key}'\""))
+            .unwrap();
+        let _ = stmt.query([]).unwrap();
+
+        // Verify
+        conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok::<_, rusqlite::Error>(())).unwrap();
+        create_all_tables(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO documents (id, title, file_name, mime_type, file_path, file_size, page_count, author, description, imported_at, last_opened_at, modified_at, is_favorite, is_conflict, current_page)
+             VALUES ('rk1', 'Raw Key Test', '', '', '', 0, 0, '', '', 0, 0, 0, 0, 0, 0)",
+            [],
+        ).unwrap();
+    }
+
+    // Re-open with the standard open_encrypted (should work)
+    let conn = open_encrypted(path, &mk).unwrap();
+    let docs = queries::list_documents(&conn).unwrap();
+    assert_eq!(docs.len(), 1);
+    assert_eq!(docs[0].title, "Raw Key Test");
+}

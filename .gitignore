@@ -18,6 +18,9 @@ vault-cli/build/
 
 # Test reports
 app/build/reports/
+
+# UniFFI generated bindings
+generated/
 vault-core/build/reports/
 vault-reader/build/reports/
 reader-pdf/build/reports/
@@ -45,3 +48,4 @@ vault-native/target/
 # docs
 /old_docs
 /Download
+/.opencode
