@@ -132,29 +132,57 @@ pub fn branch_a_merge(
 
         // Merge documents
         for doc in &backup_docs {
-            let existing = current_conn
+            let existing_row: rusqlite::Result<crate::db::queries::DocumentRow> = current_conn
                 .query_row(
-                    "SELECT id FROM documents WHERE id = ?",
+                    "SELECT id, title, file_name, mime_type, file_path, file_size, page_count,
+                     author, description, thumbnail_path, imported_at, last_opened_at,
+                     modified_at, is_favorite, is_conflict, conflict_with, collection_id,
+                     encryption_iv, current_page, reading_position, barcode_format, barcode_value
+                     FROM documents WHERE id = ?",
                     rusqlite::params![doc.id],
-                    |_| Ok(doc.id.clone()),
-                )
-                .ok();
+                    |row| crate::db::queries::document_from_row(row),
+                );
 
-            if existing.is_none() {
-                crate::db::queries::add_document(current_conn, doc)
-                    .ok();
-                stats.documents_added += 1;
-            } else {
-                if doc.modified_at > 0 {
-                    current_conn
-                        .execute(
-                            "UPDATE documents SET title = ?1, modified_at = ?2, is_favorite = ?3, current_page = ?4 WHERE id = ?5",
-                            rusqlite::params![doc.title, doc.modified_at, doc.is_favorite as i32, doc.current_page, doc.id],
-                        )
+            match existing_row {
+                Err(_) => {
+                    // No existing document — add backup doc
+                    crate::db::queries::add_document(current_conn, doc)
                         .ok();
-                    stats.documents_updated += 1;
-                } else {
-                    stats.documents_skipped += 1;
+                    stats.documents_added += 1;
+                }
+                Ok(existing) => {
+                    // Detect conflict: file content differs
+                    let content_differs = existing.file_size != doc.file_size
+                        || existing.mime_type != doc.mime_type;
+
+                    if content_differs {
+                        // Mark existing as conflict
+                        let _ = current_conn.execute(
+                            "UPDATE documents SET is_conflict = 1, modified_at = ?1 WHERE id = ?2",
+                            rusqlite::params![doc.modified_at, doc.id],
+                        );
+                        // Insert backup doc as conflict copy
+                        let conflict_id = format!("{}-conflict-{}", doc.id, std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis());
+                        let mut conflict_doc = doc.clone();
+                        conflict_doc.id = conflict_id;
+                        conflict_doc.conflict_with = Some(doc.id.clone());
+                        crate::db::queries::add_document(current_conn, &conflict_doc)
+                            .ok();
+                        stats.documents_conflicted += 1;
+                    } else if doc.modified_at > 0 {
+                        current_conn
+                            .execute(
+                                "UPDATE documents SET title = ?1, modified_at = ?2, is_favorite = ?3, current_page = ?4 WHERE id = ?5",
+                                rusqlite::params![doc.title, doc.modified_at, doc.is_favorite as i32, doc.current_page, doc.id],
+                            )
+                            .ok();
+                        stats.documents_updated += 1;
+                    } else {
+                        stats.documents_skipped += 1;
+                    }
                 }
             }
         }

@@ -65,6 +65,9 @@ pub struct DocumentFfi {
     pub collection_id: Option<String>,
     pub encryption_iv: Option<Vec<u8>>,
     pub current_page: i32,
+    pub reading_position: Option<String>,
+    pub barcode_format: Option<String>,
+    pub barcode_value: Option<String>,
 }
 
 impl From<crate::db::queries::DocumentRow> for DocumentFfi {
@@ -89,6 +92,9 @@ impl From<crate::db::queries::DocumentRow> for DocumentFfi {
             collection_id: d.collection_id,
             encryption_iv: d.encryption_iv,
             current_page: d.current_page,
+            reading_position: d.reading_position,
+            barcode_format: d.barcode_format,
+            barcode_value: d.barcode_value,
         }
     }
 }
@@ -115,6 +121,9 @@ impl From<DocumentFfi> for crate::db::queries::DocumentRow {
             collection_id: d.collection_id,
             encryption_iv: d.encryption_iv,
             current_page: d.current_page,
+            reading_position: d.reading_position,
+            barcode_format: d.barcode_format,
+            barcode_value: d.barcode_value,
         }
     }
 }
@@ -170,6 +179,25 @@ impl From<crate::db::fts::FtsResult> for SearchResultFfi {
             rank: r.rank,
             id: r.id,
             title: r.title,
+        }
+    }
+}
+
+#[derive(uniffi::Record)]
+pub struct SnippetResultFfi {
+    pub rank: f64,
+    pub id: String,
+    pub title: String,
+    pub snippet: String,
+}
+
+impl From<crate::db::fts::FtsSnippetResult> for SnippetResultFfi {
+    fn from(r: crate::db::fts::FtsSnippetResult) -> Self {
+        Self {
+            rank: r.rank,
+            id: r.id,
+            title: r.title,
+            snippet: r.snippet,
         }
     }
 }
@@ -340,6 +368,20 @@ impl DbHandle {
         Ok(results.into_iter().map(SearchResultFfi::from).collect())
     }
 
+    pub fn search_documents_with_snippet(&self, query: String) -> FfiResult<Vec<SnippetResultFfi>> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        let results = crate::db::fts::search_with_snippet(&conn, &query)
+            .map_err(|e| FfiError::Database(e.to_string()))?;
+        Ok(results.into_iter().map(SnippetResultFfi::from).collect())
+    }
+
+    pub fn search_in_document(&self, document_id: String, query: String) -> FfiResult<Vec<SnippetResultFfi>> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        let results = crate::db::fts::search_in_document(&conn, &document_id, &query)
+            .map_err(|e| FfiError::Database(e.to_string()))?;
+        Ok(results.into_iter().map(SnippetResultFfi::from).collect())
+    }
+
     pub fn rebuild_fts_index(&self) -> FfiResult<()> {
         let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
         crate::db::fts::rebuild_index(&conn)
@@ -403,6 +445,162 @@ impl DbHandle {
         )
         .map_err(map_err)?;
         Ok(MergeStatsFfi::from(stats))
+    }
+
+    pub fn list_documents_filtered(
+        &self,
+        limit: i64,
+        offset: i64,
+        collection_id: Option<String>,
+        favorite_only: bool,
+        tag_id: Option<String>,
+    ) -> FfiResult<Vec<DocumentFfi>> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        let docs = crate::db::queries::list_documents_filtered(
+            &conn, limit, offset,
+            collection_id.as_deref(),
+            favorite_only,
+            tag_id.as_deref(),
+        )
+        .map_err(|e| FfiError::Database(e.to_string()))?;
+        Ok(docs.into_iter().map(DocumentFfi::from).collect())
+    }
+
+    pub fn update_document_full(
+        &self,
+        id: String,
+        title: String,
+        author: String,
+        description: String,
+        collection_id: Option<String>,
+        is_favorite: bool,
+        is_conflict: bool,
+        conflict_with: Option<String>,
+        current_page: i32,
+        reading_position: Option<String>,
+    ) -> FfiResult<bool> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::queries::update_document_full(
+            &conn, &id, &title, &author, &description,
+            collection_id.as_deref(), is_favorite, is_conflict,
+            conflict_with.as_deref(), current_page,
+            reading_position.as_deref(),
+        )
+        .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn set_reading_position(&self, id: String, position: String) -> FfiResult<bool> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::queries::set_reading_position(&conn, &id, &position)
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn set_current_page(&self, id: String, page: i32) -> FfiResult<bool> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::queries::set_current_page(&conn, &id, page)
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn add_collection(&self, col: CollectionFfi) -> FfiResult<()> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        let row = crate::db::queries::CollectionRow {
+            id: col.id,
+            name: col.name,
+            icon: col.icon,
+            sort_order: col.sort_order,
+            parent_id: col.parent_id,
+        };
+        crate::db::queries::add_collection(&conn, &row)
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn get_collection(&self, id: String) -> FfiResult<Option<CollectionFfi>> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        let col = crate::db::queries::get_collection(&conn, &id)
+            .map_err(|e| FfiError::Database(e.to_string()))?;
+        Ok(col.map(CollectionFfi::from))
+    }
+
+    pub fn update_collection(&self, id: String, name: String, icon: String, sort_order: i32, parent_id: Option<String>) -> FfiResult<bool> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::queries::update_collection(&conn, &id, &name, &icon, sort_order, parent_id.as_deref())
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn delete_collection(&self, id: String) -> FfiResult<bool> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::queries::delete_collection(&conn, &id)
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn add_tag(&self, tag: TagFfi) -> FfiResult<()> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        let row = crate::db::queries::TagRow {
+            id: tag.id,
+            name: tag.name,
+            color: tag.color,
+        };
+        crate::db::queries::add_tag(&conn, &row)
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn update_tag(&self, id: String, name: String, color: i64) -> FfiResult<bool> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::queries::update_tag(&conn, &id, &name, color)
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn delete_tag(&self, id: String) -> FfiResult<bool> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::queries::delete_tag(&conn, &id)
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn link_document_tag(&self, document_id: String, tag_id: String) -> FfiResult<()> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::queries::link_document_tag(&conn, &document_id, &tag_id)
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn unlink_document_tag(&self, document_id: String, tag_id: String) -> FfiResult<bool> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::queries::unlink_document_tag(&conn, &document_id, &tag_id)
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn get_tags_for_document(&self, document_id: String) -> FfiResult<Vec<TagFfi>> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        let tags = crate::db::queries::get_tags_for_document(&conn, &document_id)
+            .map_err(|e| FfiError::Database(e.to_string()))?;
+        Ok(tags.into_iter().map(TagFfi::from).collect())
+    }
+
+    pub fn get_documents_for_tag(&self, tag_id: String) -> FfiResult<Vec<DocumentFfi>> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        let docs = crate::db::queries::get_documents_for_tag(&conn, &tag_id)
+            .map_err(|e| FfiError::Database(e.to_string()))?;
+        Ok(docs.into_iter().map(DocumentFfi::from).collect())
+    }
+
+    pub fn store_thumbnail(&self, base_dir: String, id: String, data: Vec<u8>) -> FfiResult<()> {
+        crate::db::storage::store_thumbnail(std::path::Path::new(&base_dir), &id, &data)
+            .map_err(|e| FfiError::Io(e.to_string()))
+    }
+
+    pub fn load_thumbnail(&self, base_dir: String, id: String) -> FfiResult<Option<Vec<u8>>> {
+        Ok(crate::db::storage::load_thumbnail(std::path::Path::new(&base_dir), &id))
+    }
+
+    pub fn get_schema_version(&self) -> FfiResult<i64> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::schema::get_schema_version(&conn)
+            .map_err(|e| FfiError::Database(e.to_string()))
+    }
+
+    pub fn set_schema_version(&self, version: i64) -> FfiResult<()> {
+        let conn = self.inner.lock().map_err(|e| FfiError::Database(e.to_string()))?;
+        crate::db::schema::set_schema_version(&conn, version)
+            .map_err(|e| FfiError::Database(e.to_string()))
     }
 }
 
@@ -546,6 +744,35 @@ pub fn import_vault(vault_data: Vec<u8>, vault_password: String) -> FfiResult<Im
 pub fn create_vault_layout(dir: String, password: String) -> FfiResult<Vec<u8>> {
     crate::format::export::create_vault_layout(std::path::Path::new(&dir), &password)
         .map_err(map_err)
+}
+
+#[uniffi::export]
+pub fn restore_to_layout(
+    contents: ImportedContentsFfi,
+    db_data: Vec<u8>,
+    encryption_dir: String,
+    database_dir: String,
+    files_dir: String,
+) -> FfiResult<()> {
+    let inner = crate::format::import::ImportedContents {
+        keys: contents.keys.into_iter()
+            .map(|kv| (kv.key, kv.value))
+            .collect(),
+        db_file: contents.db_file,
+        files: contents.files.into_iter()
+            .map(|kv| (kv.key, kv.value))
+            .collect(),
+    };
+
+    crate::merge::branch_b_fresh_install(
+        &inner,
+        "",
+        &db_data,
+        std::path::Path::new(&encryption_dir),
+        std::path::Path::new(&database_dir),
+        std::path::Path::new(&files_dir),
+    )
+    .map_err(map_err)
 }
 
 #[uniffi::export]

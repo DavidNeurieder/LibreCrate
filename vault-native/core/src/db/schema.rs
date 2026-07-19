@@ -122,6 +122,14 @@ pub fn open_plain(path: &str) -> rusqlite::Result<Connection> {
     Connection::open(path)
 }
 
+pub fn get_schema_version(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row("PRAGMA user_version", [], |row| row.get(0))
+}
+
+pub fn set_schema_version(conn: &Connection, version: i64) -> rusqlite::Result<()> {
+    conn.execute_batch(&format!("PRAGMA user_version = {version}"))
+}
+
 /// Open an encrypted DB and create all tables in one call.
 /// Creates parent directories if they don't exist.
 pub fn create_encrypted_db(path: &str, master_key: &[u8]) -> rusqlite::Result<Connection> {

@@ -2,6 +2,25 @@ use crate::db::queries::{self, DocumentRow};
 use rusqlite::Connection;
 use std::path::Path;
 
+/// Save a thumbnail blob at `base_dir/files/<id>.thumb`.
+pub fn store_thumbnail(base_dir: &Path, id: &str, data: &[u8]) -> std::io::Result<()> {
+    let path = base_dir.join("files").join(format!("{id}.thumb"));
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, data)
+}
+
+/// Load a thumbnail blob from `base_dir/files/<id>.thumb`.
+pub fn load_thumbnail(base_dir: &Path, id: &str) -> Option<Vec<u8>> {
+    let path = base_dir.join("files").join(format!("{id}.thumb"));
+    if path.exists() {
+        std::fs::read(&path).ok()
+    } else {
+        None
+    }
+}
+
 /// Save a file blob at `base_dir/files/<id>`.
 pub fn save_file(base_dir: &Path, id: &str, data: &[u8]) -> std::io::Result<()> {
     let path = base_dir.join("files").join(id);
@@ -60,19 +79,13 @@ pub fn import_document(
         mime_type: mime_type.to_string(),
         file_path,
         file_size: file_data.len() as i64,
-        page_count: 0,
         author: author.to_string(),
         description: description.to_string(),
-        thumbnail_path: None,
         imported_at: now,
         last_opened_at: now,
         modified_at: now,
-        is_favorite: false,
-        is_conflict: false,
-        conflict_with: None,
-        collection_id: None,
         encryption_iv: Some(iv),
-        current_page: 0,
+        ..Default::default()
     };
 
     queries::add_document_full(conn, &doc, text_content)?;

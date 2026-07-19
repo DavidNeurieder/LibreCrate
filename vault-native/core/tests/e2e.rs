@@ -36,16 +36,11 @@ fn test_db_lifecycle() {
             page_count: (i + 1) as i32,
             author: "Author".into(),
             description: format!("Description {}", i),
-            thumbnail_path: None,
             imported_at: now,
             last_opened_at: now,
             modified_at: now,
             is_favorite: i == 0,
-            is_conflict: false,
-            conflict_with: None,
-            collection_id: None,
-            encryption_iv: None,
-            current_page: 0,
+            ..Default::default()
         };
         queries::add_document(&conn, &doc).unwrap();
     }
@@ -124,16 +119,10 @@ fn test_vault_roundtrip_with_db() {
         page_count: 1,
         author: "Tester".into(),
         description: "Integration test".into(),
-        thumbnail_path: None,
         imported_at: 1000,
         last_opened_at: 1000,
         modified_at: 1000,
-        is_favorite: false,
-        is_conflict: false,
-        conflict_with: None,
-        collection_id: None,
-        encryption_iv: None,
-        current_page: 0,
+        ..Default::default()
     };
     queries::add_document(&conn, &doc).unwrap();
     drop(conn);
