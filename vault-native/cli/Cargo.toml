@@ -16,3 +16,4 @@ hex = "0.4"
 uuid = { version = "1", features = ["v4"] }
 mime_guess = "2"
 tempfile = "3"
+rusqlite = { version = "0.31", default-features = false, features = ["bundled-sqlcipher"] }

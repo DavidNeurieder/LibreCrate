@@ -515,6 +515,7 @@ dependencies = [
  "clap",
  "hex",
  "mime_guess",
+ "rusqlite",
  "tempfile",
  "uuid",
  "vault-native",
