@@ -16,7 +16,8 @@ class UnlockViewModel @JvmOverloads constructor(
     application: Application,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : AndroidViewModel(application) {
-    private val encryptionManager = (application as LibreCrateApplication).encryptionManager
+    private val app = application as LibreCrateApplication
+    private val encryptionManager = app.encryptionManager
 
     var password: String by mutableStateOf("")
         private set
@@ -27,40 +28,33 @@ class UnlockViewModel @JvmOverloads constructor(
     var isLoading: Boolean by mutableStateOf(false)
         private set
 
-    val isPasswordSet: Boolean
-        get() = encryptionManager.isPasswordSet()
+    val isPasswordSet: Boolean get() = encryptionManager.isPasswordSet()
 
     fun onPasswordChange(value: String) {
-        password = value
-        error = null
+        password = value; error = null
     }
 
     fun unlock(onSuccess: () -> Unit) {
-        if (password.length < 6) {
-            error = "Password must be at least 6 characters"
-            return
-        }
-
+        if (password.length < 6) { error = "Password must be at least 6 characters"; return }
         isLoading = true
         viewModelScope.launch(defaultDispatcher) {
             val verified = try {
                 encryptionManager.verifyPassword(password)
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) { error = "Error: ${e.message}" }
-                null
+                withContext(Dispatchers.Main) { error = "Error: ${e.message}" }; null
             }
             withContext(Dispatchers.Main) {
-                when (verified) {
-                    true -> onSuccess()
-                    false -> error = "Wrong password"
-                    else -> { /* error already set */ }
+                if (verified == true) {
+                    val vaultOpened = app.openVault()
+                    if (!vaultOpened) error = "Failed to open database"
+                    else onSuccess()
+                } else if (verified == false) {
+                    error = "Wrong password"
                 }
                 isLoading = false
             }
         }
     }
 
-    fun clearError() {
-        error = null
-    }
+    fun clearError() { error = null }
 }

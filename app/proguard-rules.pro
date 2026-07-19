@@ -44,7 +44,8 @@
 # SLF4J (used by junrar / commons-compress, no binding needed on Android)
 -dontwarn org.slf4j.impl.StaticLoggerBinder
 
-# Room
--keep class * extends androidx.room.RoomDatabase
--keep @androidx.room.Entity class *
--dontwarn androidx.room.paging.**
+# UniFFI / JNA
+-keep class com.sun.jna.** { *; }
+-dontwarn com.sun.jna.**
+-keep class uniffi.vault_native.** { *; }
+-dontwarn uniffi.vault_native.**

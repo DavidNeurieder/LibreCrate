@@ -5,7 +5,6 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.security.keystore.UserNotAuthenticatedException
 import android.util.Log
-import com.librecrate.app.vault.crypto.KeyStoreCryptographer
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -71,20 +70,19 @@ class AndroidKeyStoreCryptographer(@Suppress("UNUSED_PARAMETER") context: Contex
             if (!keyStore.containsAlias(KEYSTORE_DEVICE_KEY_ALIAS)) {
                 val keyGen = KeyGenerator.getInstance("AES", "AndroidKeyStore")
                 val spec = KeyGenParameterSpec.Builder(
-                        KEYSTORE_DEVICE_KEY_ALIAS,
-                        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-                    )
-                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                        .setKeySize(256)
-                        .build()
+                    KEYSTORE_DEVICE_KEY_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+                )
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setKeySize(256)
+                    .build()
                 keyGen.init(spec)
                 keyGen.generateKey()
             }
             (keyStore.getEntry(KEYSTORE_DEVICE_KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to access AndroidKeyStore", e)
-            null
+            Log.w(TAG, "Failed to access AndroidKeyStore", e); null
         }
     }
 

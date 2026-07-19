@@ -6,7 +6,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.librecrate.app.LibreCrateApplication
 import com.librecrate.app.data.model.Document
-import com.librecrate.app.vault.crypto.FileEncryptor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +19,7 @@ import java.util.zip.ZipOutputStream
 
 class ExportViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as LibreCrateApplication
+    private val vault = app.vaultRepository
 
     private val _allDocuments = MutableStateFlow<List<Document>>(emptyList())
     val searchQuery = MutableStateFlow("")
@@ -46,7 +46,7 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun loadDocuments() {
         viewModelScope.launch(Dispatchers.IO) {
-            _allDocuments.value = app.documentDao.getAllDocumentsOnce()
+            _allDocuments.value = vault.listDocuments()
         }
     }
 
@@ -65,67 +65,34 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun search(query: String) {
-        searchQuery.value = query
-    }
+    fun search(query: String) { searchQuery.value = query }
 
     fun toggleDocumentSelection(id: String) {
         val current = _selectedDocIds.value.toMutableSet()
-        if (current.contains(id)) current.remove(id)
-        else current.add(id)
+        if (current.contains(id)) current.remove(id) else current.add(id)
         _selectedDocIds.value = current
     }
 
-    fun selectAll() {
-        _selectedDocIds.value = _filteredDocuments.value.map { it.id }.toSet()
-    }
-
-    fun deselectAll() {
-        _selectedDocIds.value = emptySet()
-    }
+    fun selectAll() { _selectedDocIds.value = _filteredDocuments.value.map { it.id }.toSet() }
+    fun deselectAll() { _selectedDocIds.value = emptySet() }
 
     fun onExportDocumentsConfirmed(uri: Uri) {
         val selectedIds = _selectedDocIds.value
-        if (selectedIds.isEmpty()) {
-            _message.value = "No documents selected"
-            return
-        }
+        if (selectedIds.isEmpty()) { _message.value = "No documents selected"; return }
 
         _isExporting.value = true
         viewModelScope.launch {
             val success = withContext(Dispatchers.IO) {
                 try {
-                    val masterKey = app.encryptionManager.getMasterKeyForSession()
-                    if (masterKey == null) {
-                        _message.value = "Vault is locked"
-                        return@withContext false
-                    }
-
                     val docsToExport = _allDocuments.value.filter { it.id in selectedIds }
                     val total = docsToExport.size
-                    val fileEncryptor = FileEncryptor()
                     val nameCounts = mutableMapOf<String, Int>()
 
                     val tempZip = File(app.cacheDir, "export_${System.currentTimeMillis()}.zip")
                     ZipOutputStream(tempZip.outputStream()).use { zos ->
                         docsToExport.forEachIndexed { i, doc ->
-                            _exportProgress.value = "Decrypting ${i + 1} of $total"
-
-                            val encryptedFile = File(doc.filePath)
-                            if (!encryptedFile.exists()) {
-                                _message.value = "File not found: ${doc.title}"
-                                return@withContext false
-                            }
-
-                            val encryptedBytes = encryptedFile.readBytes()
-                            if (encryptedBytes.size < FileEncryptor.IV_LENGTH) {
-                                _message.value = "Corrupted file: ${doc.title}"
-                                return@withContext false
-                            }
-
-                            val iv = encryptedBytes.copyOfRange(0, FileEncryptor.IV_LENGTH)
-                            val ciphertext = encryptedBytes.copyOfRange(FileEncryptor.IV_LENGTH, encryptedBytes.size)
-                            val decrypted = fileEncryptor.decryptBytes(ciphertext, masterKey, iv)
+                            _exportProgress.value = "Reading ${i + 1} of $total"
+                            val fileData = vault.exportDocumentFile(doc.id) ?: return@forEachIndexed
 
                             val name = doc.fileName.ifBlank { doc.title.ifBlank { "document" } }
                             val count = nameCounts.getOrDefault(name, 0)
@@ -137,7 +104,7 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
                             } else name
 
                             zos.putNextEntry(ZipEntry(entryName))
-                            zos.write(decrypted)
+                            zos.write(fileData)
                             zos.closeEntry()
                         }
                     }
@@ -145,14 +112,8 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
                     _exportProgress.value = "Writing to file"
                     app.contentResolver.openOutputStream(uri)?.use { out ->
                         tempZip.inputStream().use { `in` -> `in`.copyTo(out) }
-                    } ?: run {
-                        _message.value = "Failed to open output file"
-                        tempZip.delete()
-                        return@withContext false
-                    }
-
-                    tempZip.delete()
-                    true
+                    } ?: run { tempZip.delete(); return@withContext false }
+                    tempZip.delete(); true
                 } catch (e: Exception) {
                     android.util.Log.e("ExportVM", "Export failed", e)
                     _message.value = "Export failed: ${e.localizedMessage ?: "Unknown error"}"
@@ -162,18 +123,11 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
 
             _exportProgress.value = null
             _isExporting.value = false
-            if (success) {
-                deselectAll()
-            }
+            if (success) deselectAll()
             _message.value = if (success) "Documents exported successfully" else null
         }
     }
 
-    fun clearMessage() {
-        _message.value = null
-    }
-
-    fun refreshDocuments() {
-        loadDocuments()
-    }
+    fun clearMessage() { _message.value = null }
+    fun refreshDocuments() { loadDocuments() }
 }

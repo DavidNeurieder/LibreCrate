@@ -1,20 +1,13 @@
 package com.librecrate.app.data.encryption
 
 import android.content.Context
-import com.librecrate.app.vault.crypto.DefaultKeyManager
-import com.librecrate.app.vault.crypto.KeyManager
 import java.io.File
 
-class EncryptionManager(
-    context: Context,
-    argon2Hasher: com.librecrate.app.vault.crypto.Argon2Hasher = com.librecrate.app.vault.crypto.Argon2HasherImpl(),
-    keyStoreCryptographer: com.librecrate.app.vault.crypto.KeyStoreCryptographer = AndroidKeyStoreCryptographer(context),
-) : KeyManager {
+class EncryptionManager(context: Context) : KeyManager {
 
-    private val inner: DefaultKeyManager = DefaultKeyManager(
+    private val inner: RustKeyManager = RustKeyManager(
         keyStore = FileKeyStore(File(context.filesDir, KEY_DIR)),
-        storeCryptographer = keyStoreCryptographer,
-        argon2Hasher = argon2Hasher,
+        crypto = AndroidKeyStoreCryptographer(context),
     )
 
     override fun isPasswordSet(): Boolean = inner.isPasswordSet()

@@ -1,35 +1,30 @@
 package com.librecrate.app.domain
 
 import android.util.Log
-import com.librecrate.app.vault.database.VaultDatabase
-import com.librecrate.app.vault.database.VaultDatabaseMerger
+import com.librecrate.app.data.vault.VaultRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import uniffi.vault_native.KeyValueFfi
 
 class DatabaseMerger(
-    private val backupOpener: (String) -> com.librecrate.app.vault.database.SqlHandle,
-    private val currentHandle: () -> com.librecrate.app.vault.database.SqlHandle?,
-    private val vaultMerger: VaultDatabaseMerger = VaultDatabaseMerger(),
+    private val vaultRepository: VaultRepository,
 ) {
-    suspend fun merge(backupDbPath: String): Boolean {
-        return withContext(Dispatchers.IO) {
-            val current = currentHandle() ?: return@withContext false
-            val backup = backupOpener(backupDbPath)
-            try {
-                val result = vaultMerger.merge(backup, current)
-                Log.d(TAG, "Merge: ${result.documentsAdded} added, ${result.documentsUpdated} updated, " +
-                    "${result.documentsConflicted} conflicts, ${result.documentsSkipped} skipped, " +
-                    "${result.collectionsAdded} collections, ${result.tagsAdded} tags")
-                if (result.hasConflicts) {
-                    Log.w(TAG, "Merge completed with ${result.documentsConflicted} conflict(s)")
-                }
+    suspend fun merge(
+        backupDbPath: String,
+        backupMasterKey: ByteArray,
+        files: List<KeyValueFfi>,
+        backupKey: ByteArray?,
+        localKey: ByteArray?,
+        filesDir: String,
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val result = vaultRepository.mergeBranchA(backupDbPath, backupMasterKey, files, backupKey, localKey, filesDir)
+            if (result != null) {
+                Log.d(TAG, "Merge: ${result.documentsAdded} added, ${result.documentsUpdated} updated, ${result.documentsConflicted} conflicts")
                 true
-            } catch (e: Exception) {
-                Log.e(TAG, "Database merge failed", e)
-                false
-            } finally {
-                backup.close()
-            }
+            } else false
+        } catch (e: Exception) {
+            Log.e(TAG, "Database merge failed", e); false
         }
     }
 

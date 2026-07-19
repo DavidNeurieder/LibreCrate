@@ -19,7 +19,6 @@ tasks {
 }
 
 dependencies {
-    implementation(project(":vault-core"))
     implementation(libs.clikt)
     implementation(libs.sqlite.jdbc)
     implementation(libs.kotlinx.serialization.json)

@@ -6,103 +6,37 @@ import android.os.Bundle
 import android.util.Log
 import com.librecrate.app.data.AppPreferencesStore
 import com.librecrate.app.data.PinLockManager
-import com.librecrate.app.data.db.CollectionDao
-import com.librecrate.app.data.db.LibreCrateDatabase
-import com.librecrate.app.data.db.DocumentDao
-import com.librecrate.app.data.db.TagDao
 import com.librecrate.app.data.encryption.EncryptionManager
 import com.librecrate.app.data.import.DocumentImporter
+import com.librecrate.app.data.vault.VaultRepository
 import com.librecrate.app.domain.BackupManager
-import com.librecrate.app.vault.crypto.FileEncryptor
-import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
-
 
 class LibreCrateApplication : Application() {
     lateinit var encryptionManager: EncryptionManager
         private set
 
-    private var database: LibreCrateDatabase? = null
-    private var _documentDao: DocumentDao? = null
-    private var _collectionDao: CollectionDao? = null
-    private var _tagDao: TagDao? = null
-
-    val documentDao: DocumentDao get() {
-        initializeDatabase()
-        return _documentDao ?: throw IllegalStateException("Database not available")
-    }
-    val collectionDao: CollectionDao get() {
-        initializeDatabase()
-        return _collectionDao ?: throw IllegalStateException("Database not available")
-    }
-    val tagDao: TagDao get() {
-        initializeDatabase()
-        return _tagDao ?: throw IllegalStateException("Database not available")
-    }
-
-    val fileEncryptor: FileEncryptor by lazy { FileEncryptor() }
+    lateinit var vaultRepository: VaultRepository
+        private set
 
     val documentImporter: DocumentImporter by lazy {
-        DocumentImporter(this, documentDao, fileEncryptor, encryptionManager)
+        DocumentImporter(this, vaultRepository)
     }
 
     val backupManager: BackupManager by lazy {
-        BackupManager(this, encryptionManager, { database })
+        BackupManager(this, encryptionManager, vaultRepository)
     }
 
     @Synchronized
-    private fun initializeDatabase(): Boolean {
-        if (database != null) return true
-        val passphrase = encryptionManager.getMasterKeyForSession()
-            ?: return false
-        return try {
-            val newDb = LibreCrateDatabase.create(this, passphrase)
-            newDb.openHelper.writableDatabase
-            database = newDb
-            _documentDao = newDb.documentDao()
-            _collectionDao = newDb.collectionDao()
-            _tagDao = newDb.tagDao()
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize database", e)
-            false
-        }
-    }
-
-    @Synchronized
-    fun reopenDatabase(): Boolean {
-        val passphrase = encryptionManager.getMasterKeyForSession()
-            ?: run {
-                Log.e(TAG, "Cannot reopen: no master key available")
-                return false
-            }
-        if (database != null) {
-            Log.d(TAG, "Database already open, no reopen needed")
-            return true
-        }
-        return try {
-            val dbFile = getDatabasePath("librecrate.db")
-            dbFile.parentFile?.let { dir ->
-                File(dir, "${dbFile.name}-wal").delete()
-                File(dir, "${dbFile.name}-shm").delete()
-            }
-            val newDb = LibreCrateDatabase.create(this, passphrase)
-            newDb.openHelper.writableDatabase
-            database = newDb
-            _documentDao = newDb.documentDao()
-            _collectionDao = newDb.collectionDao()
-            _tagDao = newDb.tagDao()
-            Log.d(TAG, "Database initialized successfully")
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize database", e)
-            false
-        }
+    fun openVault(): Boolean {
+        val masterKey = encryptionManager.getMasterKeyForSession() ?: return false
+        return vaultRepository.open(masterKey)
     }
 
     override fun onCreate() {
         super.onCreate()
         encryptionManager = EncryptionManager(this)
+        vaultRepository = VaultRepository(this)
         registerActivityLifecycleCallbacks(ActivityLifecycleLockCallbacks(encryptionManager, this))
         if (AppPreferencesStore.isPinEnabled(this)) {
             PinLockManager.lock()

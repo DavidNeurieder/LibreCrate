@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
 }
 
 android {
@@ -97,13 +96,8 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.process)
     implementation(libs.navigation.compose)
-    implementation(libs.room.runtime)
-    implementation(libs.room.ktx)
-    ksp(libs.room.compiler)
-    implementation(libs.sqlcipher)
-    implementation(libs.sqlite.ktx)
     implementation(libs.documentfile)
-    implementation(project(":vault-core"))
+    implementation("net.java.dev.jna:jna:5.14.0@aar")
     implementation(project(":vault-reader"))
     implementation(project(":reader-pdf"))
     implementation(project(":reader-epub"))

@@ -62,7 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.librecrate.app.vault.model.DocumentType
+import com.librecrate.app.data.model.DocumentType
 import com.librecrate.app.ui.common.EmptyState
 
 private val IMPORT_MIME_TYPES = arrayOf(

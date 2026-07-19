@@ -42,7 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.librecrate.app.data.model.Document
-import com.librecrate.app.vault.model.DocumentType
+import com.librecrate.app.data.model.DocumentType
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

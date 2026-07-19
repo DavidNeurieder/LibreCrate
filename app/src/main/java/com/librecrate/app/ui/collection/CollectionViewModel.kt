@@ -13,12 +13,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class CollectionViewModel(application: Application) : AndroidViewModel(application) {
-    private val collectionDao = (application as LibreCrateApplication).collectionDao
+    private val vault = (application as LibreCrateApplication).vaultRepository
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    val collections: StateFlow<List<Collection>> = collectionDao.getAllCollections()
+    val collections: StateFlow<List<Collection>> = vault.collections
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val nameInput = MutableStateFlow("")
@@ -27,15 +27,13 @@ class CollectionViewModel(application: Application) : AndroidViewModel(applicati
 
     init {
         viewModelScope.launch {
-            collectionDao.getAllCollections().collect {
-                _isLoading.value = false
-            }
+            vault.collections.collect { _isLoading.value = false }
         }
     }
 
     fun createCollection(name: String) {
         viewModelScope.launch {
-            collectionDao.insert(
+            vault.addCollection(
                 Collection(
                     name = name,
                     icon = "folder",
@@ -47,15 +45,13 @@ class CollectionViewModel(application: Application) : AndroidViewModel(applicati
 
     fun renameCollection(id: String, newName: String) {
         viewModelScope.launch {
-            val collection = collectionDao.getCollectionById(id) ?: return@launch
-            collectionDao.update(collection.copy(name = newName))
+            val collection = vault.getCollection(id) ?: return@launch
+            vault.updateCollection(id, newName, collection.icon, collection.sortOrder, collection.parentId)
         }
     }
 
     fun deleteCollection(id: String) {
-        viewModelScope.launch {
-            collectionDao.deleteById(id)
-        }
+        viewModelScope.launch { vault.deleteCollection(id) }
     }
 
     fun setEditing(collection: Collection?) {
@@ -68,11 +64,7 @@ class CollectionViewModel(application: Application) : AndroidViewModel(applicati
         val name = nameInput.value.trim()
         if (name.isEmpty()) return
         val editing = editingCollection.value
-        if (editing != null) {
-            renameCollection(editing.id, name)
-        } else {
-            createCollection(name)
-        }
+        if (editing != null) renameCollection(editing.id, name) else createCollection(name)
         showDialog.value = false
         nameInput.value = ""
         editingCollection.value = null

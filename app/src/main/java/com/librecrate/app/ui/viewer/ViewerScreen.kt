@@ -58,7 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.librecrate.app.vault.model.DocumentType
+import com.librecrate.app.data.model.DocumentType
 import com.librecrate.app.ui.common.EmptyState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -382,8 +382,7 @@ fun ViewerScreen(
                             LaunchedEffect(file) {
                                 EpubReaderActivity.start(
                                     context = context,
-                                    encryptedFilePath = doc.filePath,
-                                    encryptionIv = doc.encryptionIv,
+                                    decryptedFilePath = file.absolutePath,
                                     documentId = doc.id,
                                     targetSection = if (targetPage >= 0) targetPage else null,
                                 )
@@ -398,6 +397,7 @@ fun ViewerScreen(
                         )
                         DocumentType.NOTE -> NoteEditor(
                             document = doc,
+                            filePath = file.absolutePath,
                             onSaved = { viewModel.loadDocument(documentId) },
                         )
                         DocumentType.IMAGE -> ImageViewer(file = file, document = doc)

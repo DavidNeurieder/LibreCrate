@@ -1,6 +1,5 @@
 package com.librecrate.app.data.encryption
 
-import com.librecrate.app.vault.crypto.KeyStore
 import java.io.File
 
 class FileKeyStore(private val dir: File) : KeyStore {
@@ -18,7 +17,5 @@ class FileKeyStore(private val dir: File) : KeyStore {
         File(dir, name).delete()
     }
 
-    override fun exists(name: String): Boolean {
-        return File(dir, name).exists()
-    }
+    override fun exists(name: String): Boolean = File(dir, name).exists()
 }

@@ -6,9 +6,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.librecrate.app.LibreCrateApplication
 import com.librecrate.app.data.SessionStore
-import com.librecrate.app.vault.crypto.FileEncryptor
 import com.librecrate.app.data.model.Document
-import com.librecrate.app.vault.model.DocumentType
+import com.librecrate.app.data.model.DocumentType
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,13 +16,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.UUID
 
 class ViewerViewModel @JvmOverloads constructor(
     application: Application,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AndroidViewModel(application) {
     private val app = application as LibreCrateApplication
-    private val fileEncryptor = FileEncryptor()
+    private val vault = app.vaultRepository
 
     private val _document = MutableStateFlow<Document?>(null)
     val document: StateFlow<Document?> = _document.asStateFlow()
@@ -41,76 +41,59 @@ class ViewerViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
-            var doc = withContext(ioDispatcher) {
-                app.documentDao.getDocumentById(documentId)
-            }
+            var doc = withContext(ioDispatcher) { vault.getDocument(documentId) }
+
             if (doc == null) {
                 if (isNewNote) {
-                    doc = withContext(ioDispatcher) {
-                        val filesDir = File(app.filesDir, "files").also { it.mkdirs() }
-                        val encryptedFile = File(filesDir, "${java.util.UUID.randomUUID()}.enc")
-                        val tempFile = File(app.cacheDir, "new_note_$documentId.md")
-                        tempFile.writeText("")
-                        val masterKey = app.encryptionManager.getMasterKeyForSession()
-                            ?: throw IllegalStateException("No master key available")
-                        val iv = app.fileEncryptor.encrypt(tempFile, encryptedFile, masterKey)
-                        tempFile.delete()
-                        val document = Document(
+                    val content = ""
+                    val imported = withContext(ioDispatcher) {
+                        vault.importDocument(
                             id = documentId,
                             title = "New Note",
-                            fileName = "${documentId}.md",
+                            fileData = content.encodeToByteArray(),
                             mimeType = "text/markdown",
-                            filePath = encryptedFile.absolutePath,
-                            importedAt = System.currentTimeMillis(),
-                            encryptionIv = iv,
-                            textContent = "",
+                            author = "",
+                            description = "",
+                            textContent = content,
                         )
-                        app.documentDao.insert(document)
-                        document
                     }
-                    val emptyFile = File(app.cacheDir, "viewer_${doc.id}_${doc.fileName}")
-                    emptyFile.deleteOnExit()
-                    emptyFile.writeText("")
-                    _decryptedFile.value = emptyFile
-                    _document.value = doc
-                    SessionStore.saveLastDocumentId(app, documentId)
-                    _isLoading.value = false
-                    return@launch
+                    if (imported != null) {
+                        doc = vault.getDocument(documentId)
+                        val emptyFile = File(app.cacheDir, "viewer_${documentId}_${doc?.fileName ?: "note.md"}")
+                        emptyFile.deleteOnExit()
+                        emptyFile.writeText("")
+                        _decryptedFile.value = emptyFile
+                        _document.value = doc
+                        doc?.let { SessionStore.saveLastDocumentId(app, it.id) }
+                        _isLoading.value = false; return@launch
+                    }
                 }
-                Log.w("ViewerViewModel", "Document not found for id=$documentId")
+                Log.w(TAG, "Document not found for id=$documentId")
                 SessionStore.clearLastDocumentId(app)
                 _error.value = "Document not found"
-                _isLoading.value = false
-                return@launch
+                _isLoading.value = false; return@launch
             }
-            _document.value = doc
 
+            _document.value = doc
             val decrypted = withContext(ioDispatcher) {
-                val masterKey = app.encryptionManager.getMasterKeyForSession()
-                    ?: throw IllegalStateException("No master key available for decryption")
-                val encryptedFile = File(doc.filePath)
+                val fileData = vault.exportDocumentFile(doc.id) ?: return@withContext null
                 val tempFile = File(app.cacheDir, "viewer_${doc.id}_${doc.fileName}")
                 if (tempFile.exists()) tempFile.delete()
                 tempFile.deleteOnExit()
-                val iv = doc.encryptionIv
-                    ?: return@withContext null.also {
-                        Log.e("ViewerViewModel", "Document $documentId has no encryption IV")
-                    }
-                fileEncryptor.decrypt(encryptedFile, tempFile, masterKey, iv)
+                tempFile.writeBytes(fileData)
                 tempFile
             }
             if (decrypted == null) {
-                _error.value = "Document is corrupted or has no encryption data"
-                _isLoading.value = false
-                return@launch
+                _error.value = "Failed to read document file"
+                _isLoading.value = false; return@launch
             }
             _decryptedFile.value = decrypted
 
             withContext(ioDispatcher) {
-                val updated = doc.copy(lastOpenedAt = System.currentTimeMillis())
-                app.documentDao.update(updated)
-                _document.value = updated
-                SessionStore.saveLastDocumentId(app, documentId)
+                vault.updateDocument(doc.id, doc.title, doc.isFavorite)
+                vault.setReadingPosition(doc.id, doc.readingPosition ?: "")
+                vault.setCurrentPage(doc.id, doc.currentPage)
+                SessionStore.saveLastDocumentId(app, doc.id)
             }
             _isLoading.value = false
         }
@@ -119,33 +102,23 @@ class ViewerViewModel @JvmOverloads constructor(
     fun toggleFavorite() {
         val doc = _document.value ?: return
         viewModelScope.launch {
-            val updated = doc.copy(isFavorite = !doc.isFavorite)
-            withContext(ioDispatcher) {
-                app.documentDao.update(updated)
-            }
-            _document.value = updated
+            vault.updateDocument(doc.id, doc.title, !doc.isFavorite)
+            _document.value = doc.copy(isFavorite = !doc.isFavorite)
         }
     }
 
     fun renameDocument(newTitle: String) {
         val doc = _document.value ?: return
         viewModelScope.launch {
-            val updated = doc.copy(title = newTitle)
-            withContext(ioDispatcher) {
-                app.documentDao.update(updated)
-            }
-            _document.value = updated
+            vault.updateDocument(doc.id, newTitle, doc.isFavorite)
+            _document.value = doc.copy(title = newTitle)
         }
     }
 
     fun deleteDocument() {
         val doc = _document.value ?: return
         viewModelScope.launch {
-            withContext(ioDispatcher) {
-                File(doc.filePath).delete()
-                doc.thumbnailPath?.let { File(it).delete() }
-                app.documentDao.deleteById(doc.id)
-            }
+            vault.deleteDocumentFull(doc.id)
             _document.value = null
         }
     }
@@ -153,25 +126,17 @@ class ViewerViewModel @JvmOverloads constructor(
     fun saveReadingPosition(page: Int) {
         val doc = _document.value ?: return
         viewModelScope.launch {
-            val updated = doc.copy(currentPage = page)
-            withContext(ioDispatcher) {
-                app.documentDao.update(updated)
-            }
-            _document.value = updated
+            vault.setCurrentPage(doc.id, page)
+            vault.updateDocument(doc.id, doc.title, doc.isFavorite)
+            _document.value = doc.copy(currentPage = page)
         }
     }
 
     fun saveReadingPositionJson(positionJson: String) {
         val doc = _document.value ?: return
         viewModelScope.launch {
-            val updated = doc.copy(
-                readingPosition = positionJson,
-                lastOpenedAt = System.currentTimeMillis(),
-            )
-            withContext(ioDispatcher) {
-                app.documentDao.update(updated)
-            }
-            _document.value = updated
+            vault.setReadingPosition(doc.id, positionJson)
+            _document.value = doc.copy(readingPosition = positionJson, lastOpenedAt = System.currentTimeMillis())
         }
     }
 
@@ -187,10 +152,11 @@ class ViewerViewModel @JvmOverloads constructor(
 
     fun cleanupTempFiles() {
         _decryptedFile.value?.let { file ->
-            try {
-                if (file.exists()) file.delete()
-            } catch (_: Exception) {
-            }
+            try { if (file.exists()) file.delete() } catch (_: Exception) {}
         }
+    }
+
+    companion object {
+        private const val TAG = "ViewerViewModel"
     }
 }

@@ -7,34 +7,26 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.sqlite.db.SimpleSQLiteQuery
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import com.librecrate.app.LibreCrateApplication
-import com.librecrate.app.data.db.DocumentListItem
-import com.librecrate.app.data.db.SearchResultItem
-import com.librecrate.app.data.db.SearchResultMatch
-import com.librecrate.app.data.db.SearchResultWithOffsets
 import com.librecrate.app.data.model.Document
-import com.librecrate.app.vault.database.VaultSearchEngine
-import com.librecrate.app.vault.model.DocumentType
+import com.librecrate.app.data.model.DocumentType
+import com.librecrate.app.data.model.SearchResultItem
+import com.librecrate.app.data.model.SearchResultMatch
 import com.librecrate.app.ui.common.ThumbnailCache
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
-import java.io.DataInputStream
 import java.io.File
-import java.io.FileInputStream
 
 enum class SortOption(val label: String) {
     NAME_ASC("Name A-Z"),
@@ -47,7 +39,7 @@ enum class SortOption(val label: String) {
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as LibreCrateApplication
-    private val documentDao = app.documentDao
+    private val vault = app.vaultRepository
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -60,45 +52,27 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val documents: StateFlow<List<Document>> = combine(
         searchQuery.flatMapLatest { query ->
             if (query.isBlank()) {
-                documentDao.getDocumentList()
+                vault.documents
             } else {
-                val sanitized = VaultSearchEngine.sanitizeFtsQuery(query)
-                documentDao.searchDocuments(
-                    SimpleSQLiteQuery(
-                        "SELECT d.id, d.title, d.file_name, d.mime_type, d.file_size, d.page_count, d.author, d.description, d.thumbnail_path, d.imported_at, d.last_opened_at, d.is_favorite, d.collection_id, d.barcode_format, d.barcode_value, d.current_page, d.reading_position FROM documents d INNER JOIN documents_fts fts ON d.rowid = fts.rowid WHERE documents_fts MATCH ? ORDER BY rank",
-                        arrayOf(sanitized)
-                    )
-                ).catch { _ ->
-                    emit(emptyList())
+                vault.searchDocumentsWithSnippet(query).map { results ->
+                    results.mapNotNull { result ->
+                        Document(
+                            id = result.documentId,
+                            title = result.title,
+                            mimeType = result.mimeType,
+                            pageCount = result.pageCount,
+                            author = result.author,
+                            thumbnailPath = result.thumbnailPath,
+                        )
+                    }
                 }
             }
         },
         selectedSort,
         filterType,
-        favoritesOnly
-    ) { items: List<DocumentListItem>, sort: SortOption, type: DocumentType?, favs: Boolean ->
-        var result = items.map { item ->
-            Document(
-                id = item.id,
-                title = item.title,
-                fileName = item.fileName,
-                mimeType = item.mimeType,
-                fileSize = item.fileSize,
-                pageCount = item.pageCount,
-                author = item.author,
-                description = item.description,
-                thumbnailPath = item.thumbnailPath,
-                importedAt = item.importedAt,
-                lastOpenedAt = item.lastOpenedAt,
-                isFavorite = item.isFavorite,
-                collectionId = item.collectionId,
-                barcodeFormat = item.barcodeFormat,
-                barcodeValue = item.barcodeValue,
-                currentPage = item.currentPage,
-                readingPosition = item.readingPosition,
-            )
-        }
-
+        favoritesOnly,
+    ) { items: List<Document>, sort: SortOption, type: DocumentType?, favs: Boolean ->
+        var result = items
         if (type != null) {
             result = result.filter { doc ->
                 if (type.mimeType.endsWith("/*")) {
@@ -108,11 +82,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
-
-        if (favs) {
-            result = result.filter { it.isFavorite }
-        }
-
+        if (favs) result = result.filter { it.isFavorite }
         when (sort) {
             SortOption.NAME_ASC -> result.sortedBy { it.title.lowercase() }
             SortOption.NAME_DESC -> result.sortedByDescending { it.title.lowercase() }
@@ -125,61 +95,63 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val searchResults: StateFlow<List<SearchResultItem>> = searchQuery
         .flatMapLatest { query ->
             if (query.isBlank()) {
-                flowOf(emptyList())
+                kotlinx.coroutines.flow.flowOf(emptyList())
             } else {
-                val sanitized = VaultSearchEngine.sanitizeFtsQuery(query)
-                documentDao.searchDocumentsWithOffsets(
-                    SimpleSQLiteQuery(
-                        "SELECT d.id, d.title, d.mime_type, d.page_count, d.author, d.thumbnail_path, d.text_content, highlight(documents_fts, 3, '\u0001', '\u0002') AS highlight_content FROM documents d INNER JOIN documents_fts fts ON d.rowid = fts.rowid WHERE documents_fts MATCH ? ORDER BY rank",
-                        arrayOf(sanitized)
-                    )
-                ).catch { _ ->
-                    emit(emptyList())
-                }.map { results ->
-                    results.map { row -> row.toSearchResultItem() }
+                vault.searchDocumentsWithSnippet(query).map { snippetResults ->
+                    val docs = documents.value.associateBy { it.id }
+                    snippetResults.mapNotNull { sr ->
+                        val doc = docs[sr.id]
+                        SearchResultItem(
+                            id = sr.id,
+                            title = sr.title,
+                            mimeType = doc?.mimeType ?: "",
+                            pageCount = doc?.pageCount ?: 0,
+                            author = doc?.author ?: "",
+                            thumbnailPath = doc?.thumbnailPath,
+                            matches = parseSnippet(sr.snippet),
+                        )
+                    }
                 }
             }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
         viewModelScope.launch {
-            documentDao.getDocumentList().collect {
-                _isLoading.value = false
-            }
+            vault.documents.collect { _isLoading.value = false }
         }
+    }
+
+    private fun parseSnippet(snippet: String): List<SearchResultMatch> {
+        if (snippet.isBlank()) return emptyList()
+        val regex = Regex("<b>(.*?)</b>")
+        val pages = Regex("\\[PAGE=(\\d+)\\]")
+        val currentPage = pages.findAll(snippet).lastOrNull()?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val snippets = regex.findAll(snippet).map { it.groupValues[1] }.toList()
+        if (snippets.isEmpty()) return listOf(SearchResultMatch(snippet = snippet, pageNumber = currentPage))
+        return snippets.map { SearchResultMatch(snippet = it, pageNumber = currentPage) }
     }
 
     fun toggleFavorite(document: Document) {
         viewModelScope.launch {
-            documentDao.update(document.copy(isFavorite = !document.isFavorite))
+            vault.updateDocument(document.id, document.title, !document.isFavorite)
         }
     }
 
     fun deleteDocument(document: Document) {
         viewModelScope.launch {
-            documentDao.deleteById(document.id)
+            vault.deleteDocumentFull(document.id)
         }
     }
 
-    fun setSort(sort: SortOption) {
-        selectedSort.value = sort
-    }
-
-    fun setFilter(type: DocumentType?) {
-        filterType.value = type
-    }
-
-    fun search(query: String) {
-        searchQuery.value = query
-    }
+    fun setSort(sort: SortOption) { selectedSort.value = sort }
+    fun setFilter(type: DocumentType?) { filterType.value = type }
+    fun search(query: String) { searchQuery.value = query }
 
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
     fun importDocuments(uris: List<Uri>) {
         viewModelScope.launch {
-            val app = getApplication<LibreCrateApplication>()
             var successCount = 0
             var failCount = 0
             for (uri in uris) {
@@ -187,13 +159,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     val mimeType = withContext(Dispatchers.IO) {
                         app.contentResolver.getType(uri) ?: "application/octet-stream"
                     }
-                    val doc = withContext(Dispatchers.IO) {
-                        app.documentImporter.importDocument(uri, mimeType)
-                    }
+                    val doc = app.documentImporter.importDocument(uri, mimeType)
                     if (doc != null) successCount++ else failCount++
-                } catch (e: Exception) {
-                    failCount++
-                }
+                } catch (_: Exception) { failCount++ }
             }
             _snackbarMessage.value = when {
                 failCount == 0 -> "Imported $successCount document${if (successCount != 1) "s" else ""}"
@@ -203,16 +171,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun clearSnackbarMessage() {
-        _snackbarMessage.value = null
-    }
+    fun clearSnackbarMessage() { _snackbarMessage.value = null }
 
     private val _thumbnails = MutableStateFlow<Map<String, ImageBitmap>>(emptyMap())
     val thumbnails: StateFlow<Map<String, ImageBitmap>> = _thumbnails.asStateFlow()
-
     private val thumbnailSemaphore = Semaphore(4)
 
-    fun loadThumbnail(documentId: String, thumbnailPath: String) {
+    fun loadThumbnail(documentId: String, thumbnailPath: String?) {
+        if (thumbnailPath == null) return
         viewModelScope.launch {
             val cached = ThumbnailCache.get(documentId)
             if (cached != null) {
@@ -222,14 +188,19 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             thumbnailSemaphore.acquire()
             try {
                 val bitmap = withContext(Dispatchers.IO) {
-                    decryptThumbnail(thumbnailPath)
+                    val thumbData = vault.loadThumbnail(documentId)
+                    if (thumbData != null) {
+                        BitmapFactory.decodeByteArray(thumbData, 0, thumbData.size)
+                    } else {
+                        val file = File(thumbnailPath)
+                        if (file.exists()) BitmapFactory.decodeFile(thumbnailPath) else null
+                    }
                 }
                 if (bitmap != null) {
                     ThumbnailCache.put(documentId, bitmap)
                     _thumbnails.value = _thumbnails.value + (documentId to bitmap.asImageBitmap())
                     if (_thumbnails.value.size > 100) {
-                        val toEvict = _thumbnails.value.keys
-                            .sorted().take(_thumbnails.value.size - 50)
+                        val toEvict = _thumbnails.value.keys.sorted().take(_thumbnails.value.size - 50)
                         _thumbnails.value = _thumbnails.value - toEvict.toSet()
                     }
                 }
@@ -237,113 +208,5 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 thumbnailSemaphore.release()
             }
         }
-    }
-
-    private fun decryptThumbnail(path: String): android.graphics.Bitmap? {
-        return try {
-            val file = File(path)
-            if (!file.exists()) return null
-            val bytes = FileInputStream(file).use { input ->
-                DataInputStream(input).use { dis ->
-                    val iv = ByteArray(12)
-                    dis.readFully(iv)
-                    val encrypted = dis.readBytes()
-                    val masterKey = app.encryptionManager.getMasterKeyForSession()
-                        ?: return null
-                    app.fileEncryptor.decryptBytes(encrypted, masterKey, iv)
-                }
-            }
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun SearchResultWithOffsets.toSearchResultItem(): SearchResultItem {
-        val matches = parseHighlight(highlightContent, textContent)
-        return SearchResultItem(
-            id = id,
-            title = title,
-            mimeType = mimeType,
-            pageCount = pageCount,
-            author = author,
-            thumbnailPath = thumbnailPath,
-            matches = matches.take(10),
-        )
-    }
-
-    private fun parseHighlight(highlightContent: String, textContent: String): List<SearchResultMatch> {
-        if (highlightContent.isBlank()) return emptyList()
-        val matchList = mutableListOf<SearchResultMatch>()
-        var rawOffset = 0
-        var matchStart = -1
-        var currentPage = 0
-        var lastMatchEnd = 0
-        for (ch in highlightContent) {
-            when (ch) {
-                '\u0001' -> matchStart = rawOffset
-                '\u0002' -> {
-                    if (matchStart >= 0) {
-                        currentPage = findPageInRange(textContent, lastMatchEnd, matchStart, currentPage)
-                        val snippet = extractSnippet(textContent, matchStart, rawOffset)
-                        if (snippet.isNotBlank()) {
-                            val cleaned = stripMarkers(snippet)
-                            matchList.add(SearchResultMatch(snippet = cleaned, pageNumber = currentPage))
-                        }
-                        lastMatchEnd = rawOffset
-                        matchStart = -1
-                    }
-                }
-                else -> rawOffset++
-            }
-        }
-        return matchList
-    }
-
-    private fun extractSnippet(text: String, startOffset: Int, endOffset: Int): String {
-        val contextBefore = 120
-        val contextAfter = 120
-        val snippetStart = (startOffset - contextBefore).coerceAtLeast(0)
-        val snippetEnd = (endOffset + contextAfter).coerceAtMost(text.length)
-        val prefix = text.substring(snippetStart, startOffset)
-        val match = text.substring(startOffset, endOffset)
-        val suffix = text.substring(endOffset, snippetEnd)
-        return "${prefix}<b>$match</b>$suffix"
-    }
-
-    private fun stripMarkers(text: String): String {
-        return text.replace(PAGE_MARKER_REGEX, "")
-            .replace(SECTION_MARKER_REGEX, "")
-            .replace(WHITESPACE_REGEX, " ")
-            .trim()
-    }
-
-    private fun findPageInRange(text: String, rangeStart: Int, rangeEnd: Int, currentPage: Int): Int {
-        if (rangeEnd <= rangeStart) return currentPage
-        val start = rangeStart.coerceAtLeast(0)
-        val end = rangeEnd.coerceAtMost(text.length)
-        if (start >= end) return currentPage
-        val section = text.substring(start, end)
-        val pageIdx = section.lastIndexOf("[PAGE=")
-        if (pageIdx >= 0) {
-            val close = section.indexOf(']', pageIdx)
-            if (close > pageIdx) {
-                return section.substring(pageIdx + 6, close).toIntOrNull() ?: currentPage
-            }
-        }
-        val sectionIdx = section.lastIndexOf("[SECTION=")
-        if (sectionIdx >= 0) {
-            val close = section.indexOf(']', sectionIdx)
-            if (close > sectionIdx) {
-                return section.substring(sectionIdx + 9, close).toIntOrNull() ?: currentPage
-            }
-        }
-        return currentPage
-    }
-
-    companion object {
-        private val PAGE_MARKER_REGEX = Regex("\\[PAGE=\\d+\\]")
-        private val SECTION_MARKER_REGEX = Regex("\\[SECTION=\\d+\\]")
-        private val WHITESPACE_REGEX = Regex("\\s+")
     }
 }

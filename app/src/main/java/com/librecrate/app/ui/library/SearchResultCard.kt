@@ -32,9 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import com.librecrate.app.data.db.SearchResultItem
-import com.librecrate.app.data.db.SearchResultMatch
-import com.librecrate.app.vault.model.DocumentType
+import com.librecrate.app.data.model.SearchResultItem
+import com.librecrate.app.data.model.SearchResultMatch
+import com.librecrate.app.data.model.DocumentType
 
 @Composable
 fun SearchResultCard(

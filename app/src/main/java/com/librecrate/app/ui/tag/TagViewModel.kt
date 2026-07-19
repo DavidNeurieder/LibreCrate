@@ -14,12 +14,12 @@ import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 class TagViewModel(application: Application) : AndroidViewModel(application) {
-    private val tagDao = (application as LibreCrateApplication).tagDao
+    private val vault = (application as LibreCrateApplication).vaultRepository
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    val tags: StateFlow<List<Tag>> = tagDao.getAllTags()
+    val tags: StateFlow<List<Tag>> = vault.tags
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val nameInput = MutableStateFlow("")
@@ -29,29 +29,21 @@ class TagViewModel(application: Application) : AndroidViewModel(application) {
     val showEditDialog = MutableStateFlow(false)
 
     init {
-        viewModelScope.launch {
-            tagDao.getAllTags().collect {
-                _isLoading.value = false
-            }
-        }
+        viewModelScope.launch { vault.tags.collect { _isLoading.value = false } }
     }
 
     fun createTag(name: String, color: Long) {
-        viewModelScope.launch {
-            tagDao.insert(Tag(name = name, color = color))
-        }
+        viewModelScope.launch { vault.addTag(Tag(name = name, color = color)) }
     }
 
     fun deleteTag(id: String) {
-        viewModelScope.launch {
-            tagDao.deleteById(id)
-        }
+        viewModelScope.launch { vault.deleteTag(id) }
     }
 
     fun renameTag(id: String, newName: String) {
         viewModelScope.launch {
-            val tag = tagDao.getTagById(id) ?: return@launch
-            tagDao.update(tag.copy(name = newName))
+            val tag = tags.value.find { it.id == id } ?: return@launch
+            vault.updateTag(id, newName, tag.color)
         }
     }
 
@@ -65,9 +57,7 @@ class TagViewModel(application: Application) : AndroidViewModel(application) {
         val name = nameInput.value.trim()
         if (name.isEmpty()) return
         val editing = editingTag.value
-        if (editing != null) {
-            renameTag(editing.id, name)
-        }
+        if (editing != null) renameTag(editing.id, name)
         showEditDialog.value = false
         nameInput.value = ""
         editingTag.value = null
