@@ -12,7 +12,7 @@ argon2 = "0.5"
 aes-gcm = "0.10"
 aes = "0.8"
 cipher = "0.4"
-rusqlite = { version = "0.31", default-features = false, features = ["bundled-sqlcipher"] }
+rusqlite = { version = "0.31", default-features = false, features = ["bundled-sqlcipher-vendored-openssl"] }
 zip = { version = "2", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

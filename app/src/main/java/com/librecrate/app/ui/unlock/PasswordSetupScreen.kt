@@ -40,7 +40,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.librecrate.app.LibreCrateApplication
-import com.librecrate.app.data.encryption.EncryptionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,8 +49,7 @@ import kotlinx.coroutines.withContext
 fun PasswordSetupScreen(
     onComplete: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val encryptionManager = (context.applicationContext as LibreCrateApplication).encryptionManager
+    val app = LocalContext.current.applicationContext as LibreCrateApplication
     val scope = rememberCoroutineScope()
 
     var password by remember { mutableStateOf("") }
@@ -139,7 +137,7 @@ fun PasswordSetupScreen(
                 keyboardActions = KeyboardActions(
                     onDone = {
                         doSetPassword(
-                            password, confirmPassword, encryptionManager, scope,
+                            password, confirmPassword, app, scope,
                             onError = { error = it },
                             onSuccess = onComplete,
                         )
@@ -153,7 +151,7 @@ fun PasswordSetupScreen(
             Button(
                 onClick = {
                     doSetPassword(
-                        password, confirmPassword, encryptionManager, scope,
+                        password, confirmPassword, app, scope,
                         onError = { error = it },
                         onSuccess = onComplete,
                     )
@@ -170,7 +168,7 @@ fun PasswordSetupScreen(
 private fun doSetPassword(
     password: String,
     confirmPassword: String,
-    encryptionManager: EncryptionManager,
+    app: LibreCrateApplication,
     scope: CoroutineScope,
     onError: (String) -> Unit,
     onSuccess: () -> Unit,
@@ -180,7 +178,13 @@ private fun doSetPassword(
         password != confirmPassword -> onError("Passwords do not match")
         else -> {
             scope.launch(Dispatchers.Default) {
-                val success = encryptionManager.initializeWithPassword(password)
+                val success = app.encryptionManager.initializeWithPassword(password)
+                if (success) {
+                    val masterKey = app.encryptionManager.getMasterKeyForSession()
+                    if (masterKey != null) {
+                        app.vaultRepository.open(masterKey)
+                    }
+                }
                 withContext(Dispatchers.Main) {
                     if (success) {
                         onSuccess()
