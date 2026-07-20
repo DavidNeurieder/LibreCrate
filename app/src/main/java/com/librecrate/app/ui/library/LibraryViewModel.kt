@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.librecrate.app.LibreCrateApplication
+import com.librecrate.app.data.import.DocumentImporter
 import com.librecrate.app.data.model.Document
 import com.librecrate.app.util.ErrorLogger
 import com.librecrate.app.data.model.DocumentType
@@ -125,15 +126,20 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun importDocuments(uris: List<Uri>) {
         viewModelScope.launch {
             var successCount = 0
+            var duplicateCount = 0
             var failCount = 0
             for (uri in uris) {
                 try {
                     val mimeType = withContext(Dispatchers.IO) { app.contentResolver.getType(uri) ?: "application/octet-stream" }
-                    val doc = app.documentImporter.importDocument(uri, mimeType)
-                    if (doc != null) successCount++ else failCount++
+                    when (app.documentImporter.importDocument(uri, mimeType)) {
+                        is DocumentImporter.ImportResult.Success -> successCount++
+                        is DocumentImporter.ImportResult.Duplicate -> duplicateCount++
+                        null -> failCount++
+                    }
                 } catch (e: Exception) { ErrorLogger.logWarning(app, TAG, "importDocuments failed", e); failCount++ }
             }
             _snackbarMessage.value = when {
+                duplicateCount > 0 && successCount == 0 && failCount == 0 -> "Duplicate not imported again"
                 failCount == 0 -> "Imported $successCount document${if (successCount != 1) "s" else ""}"
                 successCount == 0 -> "Import failed"
                 else -> "Imported $successCount document${if (successCount != 1) "s" else ""}, $failCount failed"

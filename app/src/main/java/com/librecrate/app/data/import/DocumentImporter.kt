@@ -29,7 +29,12 @@ class DocumentImporter(
         private const val TAG = "DocumentImporter"
     }
 
-    suspend fun importDocument(uri: Uri, mimeType: String): Document? = withContext(Dispatchers.IO) {
+    sealed class ImportResult {
+        data class Success(val document: Document) : ImportResult()
+        data class Duplicate(val document: Document) : ImportResult()
+    }
+
+    suspend fun importDocument(uri: Uri, mimeType: String): ImportResult? = withContext(Dispatchers.IO) {
         val tempFile = try {
             copyUriToTempFile(uri)
         } catch (e: Exception) {
@@ -47,11 +52,18 @@ class DocumentImporter(
             )
             if (resultId == null) { ErrorLogger.logWarning(context, TAG, "importDocument returned null"); return@withContext null }
 
-            generateThumbnail(tempFile, mimeType)?.let { thumbData ->
-                vaultRepository.storeThumbnail(docId, thumbData)
+            val actualId = resultId
+            val isDuplicate = actualId != docId
+
+            if (!isDuplicate) {
+                generateThumbnail(tempFile, mimeType)?.let { thumbData ->
+                    vaultRepository.storeThumbnail(actualId, thumbData)
+                }
             }
 
-            vaultRepository.getDocument(docId)
+            val doc = vaultRepository.getDocument(actualId)
+            if (doc == null) { ErrorLogger.logWarning(context, TAG, "importDocument: getDocument returned null for $actualId"); return@withContext null }
+            if (isDuplicate) ImportResult.Duplicate(doc) else ImportResult.Success(doc)
         } catch (e: Exception) {
             ErrorLogger.logException(context, TAG, "Failed to import document", e); null
         } finally {
@@ -59,7 +71,7 @@ class DocumentImporter(
         }
     }
 
-    suspend fun importNote(title: String, content: String): Document? = withContext(Dispatchers.IO) {
+    suspend fun importNote(title: String, content: String): ImportResult? = withContext(Dispatchers.IO) {
         val safeName = title.replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
         val fileName = "$safeName.md"
         val docId = UUID.randomUUID().toString()
@@ -69,7 +81,11 @@ class DocumentImporter(
             description = content.take(200), textContent = content,
         )
         if (resultId == null) { ErrorLogger.logWarning(context, TAG, "importNote returned null"); return@withContext null }
-        vaultRepository.getDocument(docId)
+        val actualId = resultId
+        val isDuplicate = actualId != docId
+        val doc = vaultRepository.getDocument(actualId)
+        if (doc == null) { ErrorLogger.logWarning(context, TAG, "importNote: getDocument returned null for $actualId"); return@withContext null }
+        if (isDuplicate) ImportResult.Duplicate(doc) else ImportResult.Success(doc)
     }
 
     private fun copyUriToTempFile(uri: Uri): File {
