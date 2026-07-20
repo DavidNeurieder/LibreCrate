@@ -221,7 +221,7 @@ pub fn update_document(conn: &Connection, id: &str, title: &str, is_favorite: bo
         .unwrap_or_default()
         .as_millis() as i64;
     let affected = conn.execute(
-        "UPDATE documents SET title = ?1, is_favorite = ?2, modified_at = ?3 WHERE id = ?4",
+        "UPDATE documents SET title = ?1, is_favorite = ?2, modified_at = ?3, last_opened_at = ?3 WHERE id = ?4",
         params![title, is_favorite as i32, now, id],
     )?;
     Ok(affected > 0)
@@ -277,7 +277,7 @@ pub fn set_current_page(conn: &Connection, id: &str, page: i32) -> Result<bool> 
         .unwrap_or_default()
         .as_millis() as i64;
     let affected = conn.execute(
-        "UPDATE documents SET current_page = ?1, modified_at = ?2 WHERE id = ?3",
+        "UPDATE documents SET current_page = ?1, modified_at = ?2, last_opened_at = ?2 WHERE id = ?3",
         params![page, now, id],
     )?;
     Ok(affected > 0)
