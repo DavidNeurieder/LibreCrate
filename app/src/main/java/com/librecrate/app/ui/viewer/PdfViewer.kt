@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -30,9 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -91,9 +87,10 @@ fun PdfViewer(
         }
     }
 
-    LaunchedEffect(listState.firstVisibleItemIndex) {
+    LaunchedEffect(listState.firstVisibleItemIndex, pageCount) {
         currentPage = listState.firstVisibleItemIndex + 1
         onPageChanged(currentPage)
+        if (pageCount <= 0) return@LaunchedEffect
         val start = maxOf(0, listState.firstVisibleItemIndex - 1)
         val end = minOf(pageCount - 1, listState.firstVisibleItemIndex + 3)
         for (i in start..end) {
@@ -122,32 +119,13 @@ fun PdfViewer(
         }
     }
 
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
-
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(0.5f, 5f)
-                    offsetX += pan.x
-                    offsetY += pan.y
-                }
-            },
+        modifier = Modifier.fillMaxSize(),
     ) {
         if (pageCount > 0) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offsetX,
-                        translationY = offsetY,
-                    ),
+                modifier = Modifier.fillMaxSize(),
             ) {
                 itemsIndexed(Array(pageCount) { it }.toList()) { index, _ ->
                     val bitmap = renderedPages[index]

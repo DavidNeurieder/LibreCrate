@@ -42,19 +42,14 @@ class PdfDocumentReader(filePath: String) : DocumentReader {
             try {
                 val scale = 150f / 72f
                 val matrix = Matrix(scale, 0f, 0f, scale, 0f, 0f)
-                val alpha = !config.nightMode
-                val pixmap = page.toPixmap(matrix, ColorSpace.DeviceRGB, alpha)
+                val pixmap = page.toPixmap(matrix, ColorSpace.DeviceRGB, true)
                 try {
                     val bitmap = Bitmap.createBitmap(
                         pixmap.width, pixmap.height,
                         Bitmap.Config.ARGB_8888,
                     )
                     bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(pixmap.samples))
-                    fixTransparentPixels(bitmap)
-
-                    if (config.nightMode) {
-                        invertBitmapColors(bitmap)
-                    }
+                    compositeOverWhite(bitmap)
 
                     val buffer = ByteBuffer.allocate(bitmap.byteCount)
                     bitmap.copyPixelsToBuffer(buffer)
@@ -97,32 +92,27 @@ class PdfDocumentReader(filePath: String) : DocumentReader {
         document.destroy()
     }
 
-    private fun fixTransparentPixels(bitmap: Bitmap) {
+    private fun compositeOverWhite(bitmap: Bitmap) {
         val pixels = IntArray(bitmap.width * bitmap.height)
         bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        var hasTransparent = false
-        for (i in pixels.indices) {
-            if (pixels[i] ushr 24 == 0) {
-                pixels[i] = -0x1
-                hasTransparent = true
-            }
-        }
-        if (hasTransparent) {
-            bitmap.setPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        }
-    }
-
-    private fun invertBitmapColors(bitmap: Bitmap) {
-        val pixels = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        var changed = false
         for (i in pixels.indices) {
             val p = pixels[i]
             val a = p ushr 24
-            val r = 255 - ((p shr 16) and 0xFF)
-            val g = 255 - ((p shr 8) and 0xFF)
-            val b = 255 - (p and 0xFF)
-            pixels[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
+            if (a != 0xFF) {
+                val r = (p shr 16) and 0xFF
+                val g = (p shr 8) and 0xFF
+                val b = p and 0xFF
+                val af = a / 255f
+                val nr = (r * af + 255f * (1f - af)).toInt().coerceIn(0, 255)
+                val ng = (g * af + 255f * (1f - af)).toInt().coerceIn(0, 255)
+                val nb = (b * af + 255f * (1f - af)).toInt().coerceIn(0, 255)
+                pixels[i] = (0xFF shl 24) or (nr shl 16) or (ng shl 8) or nb
+                changed = true
+            }
         }
-        bitmap.setPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        if (changed) {
+            bitmap.setPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        }
     }
 }
