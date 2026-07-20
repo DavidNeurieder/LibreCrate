@@ -11,6 +11,9 @@ export AR_aarch64_linux_android="$TOOLCHAIN/bin/llvm-ar"
 export RANLIB_x86_64_linux_android="$TOOLCHAIN/bin/llvm-ranlib"
 export RANLIB_aarch64_linux_android="$TOOLCHAIN/bin/llvm-ranlib"
 
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/bin/aarch64-linux-android26-clang"
+export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$TOOLCHAIN/bin/x86_64-linux-android26-clang"
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VAULT_DIR="$SCRIPT_DIR/../vault-native"
 JNILIBS="$SCRIPT_DIR/../app/src/main/jniLibs"
@@ -27,5 +30,7 @@ echo "Done. .so files updated in jniLibs."
 
 if [ "${1:-}" = "--apk" ]; then
     echo "Rebuilding debug APK..."
+    # Touch jniLibs so Gradle detects the change
+    touch "$JNILIBS/arm64-v8a/libvault_native.so" "$JNILIBS/x86_64/libvault_native.so"
     "$SCRIPT_DIR/../gradlew" -p "$SCRIPT_DIR/.." assembleDebug
 fi
