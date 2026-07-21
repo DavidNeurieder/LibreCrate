@@ -52,7 +52,7 @@ publishing {
 
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/anomalyco/LibreCrate")
+            url = uri("https://maven.pkg.github.com/davidneurieder/LibreCrate")
             credentials {
                 username = System.getenv("GITHUB_ACTOR") ?: ""
                 password = System.getenv("GITHUB_TOKEN") ?: ""

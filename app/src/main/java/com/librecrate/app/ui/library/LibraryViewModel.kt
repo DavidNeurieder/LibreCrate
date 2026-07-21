@@ -38,7 +38,7 @@ enum class SortOption(val label: String) {
     DATE_OLDEST("Oldest first"),
 }
 
-class LibraryViewModel(application: Application) : AndroidViewModel(application) {
+class LibraryViewModel @JvmOverloads constructor(application: Application, private val searchDebounceMs: Long = 300) : AndroidViewModel(application) {
     companion object { private const val TAG = "LibraryViewModel" }
     private val app = application as LibreCrateApplication
     private val vault = app.vaultRepository
@@ -85,7 +85,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val searchResults: StateFlow<List<SearchResultItem>> = searchQuery
-        .debounce(300)
+        .debounce(searchDebounceMs)
         .flatMapLatest { query ->
             if (query.length < 3) return@flatMapLatest flowOf(emptyList())
             flow {

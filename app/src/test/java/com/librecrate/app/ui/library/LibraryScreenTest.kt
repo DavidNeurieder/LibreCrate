@@ -1,6 +1,7 @@
 package com.librecrate.app.ui.library
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.remember
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.performTextInput
 import com.librecrate.app.LibreCrateApplication
 import com.librecrate.app.data.model.Document
 import com.librecrate.app.data.vault.VaultRepository
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,9 +21,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uniffi.vault_native.MultiMatchResult
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
+@Suppress("RememberReturnType")
 class LibraryScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
@@ -29,25 +33,34 @@ class LibraryScreenTest {
     private val documentsFlow = MutableStateFlow<List<Document>>(emptyList())
     private val mockVault = mockk<VaultRepository>(relaxed = true)
     private val mockApp = mockk<LibreCrateApplication>(relaxed = true)
-    private lateinit var viewModel: LibraryViewModel
 
     @Before
     fun setUp() {
         documentsFlow.value = emptyList()
         every { mockApp.vaultRepository } returns mockVault
         every { mockVault.documents } returns documentsFlow
-        viewModel = LibraryViewModel(mockApp)
+        coEvery { mockVault.loadThumbnail(any()) } returns null
+        coEvery { mockVault.searchDocumentsWithAllMatches(any()) } returns listOf(
+            MultiMatchResult(
+                rank = 1.0,
+                id = "1",
+                title = "Doc One",
+                firstSnippet = "...fox...",
+                additionalMatches = emptyList(),
+            )
+        )
     }
 
     @Test
     fun `screen displays LibreCrate title`() {
         composeTestRule.setContent {
+            val vm = remember { LibraryViewModel(mockApp, searchDebounceMs = 0) }
             MaterialTheme {
                 LibraryScreen(
                     onDocumentClick = {},
                     onDocumentClickWithPage = { _, _ -> },
                     onSettingsClick = {},
-                    viewModel = viewModel,
+                    viewModel = vm,
                 )
             }
         }
@@ -57,12 +70,13 @@ class LibraryScreenTest {
     @Test
     fun `search elements exist`() {
         composeTestRule.setContent {
+            val vm = remember { LibraryViewModel(mockApp, searchDebounceMs = 0) }
             MaterialTheme {
                 LibraryScreen(
                     onDocumentClick = {},
                     onDocumentClickWithPage = { _, _ -> },
                     onSettingsClick = {},
-                    viewModel = viewModel,
+                    viewModel = vm,
                 )
             }
         }
@@ -73,12 +87,13 @@ class LibraryScreenTest {
     @Test
     fun `settings icon exists`() {
         composeTestRule.setContent {
+            val vm = remember { LibraryViewModel(mockApp, searchDebounceMs = 0) }
             MaterialTheme {
                 LibraryScreen(
                     onDocumentClick = {},
                     onDocumentClickWithPage = { _, _ -> },
                     onSettingsClick = {},
-                    viewModel = viewModel,
+                    viewModel = vm,
                 )
             }
         }
@@ -88,12 +103,13 @@ class LibraryScreenTest {
     @Test
     fun `filter chips display`() {
         composeTestRule.setContent {
+            val vm = remember { LibraryViewModel(mockApp, searchDebounceMs = 0) }
             MaterialTheme {
                 LibraryScreen(
                     onDocumentClick = {},
                     onDocumentClickWithPage = { _, _ -> },
                     onSettingsClick = {},
-                    viewModel = viewModel,
+                    viewModel = vm,
                 )
             }
         }
@@ -105,12 +121,13 @@ class LibraryScreenTest {
     @Test
     fun `FAB with New text exists`() {
         composeTestRule.setContent {
+            val vm = remember { LibraryViewModel(mockApp, searchDebounceMs = 0) }
             MaterialTheme {
                 LibraryScreen(
                     onDocumentClick = {},
                     onDocumentClickWithPage = { _, _ -> },
                     onSettingsClick = {},
-                    viewModel = viewModel,
+                    viewModel = vm,
                 )
             }
         }
@@ -120,12 +137,13 @@ class LibraryScreenTest {
     @Test
     fun `empty state displayed when no documents`() {
         composeTestRule.setContent {
+            val vm = remember { LibraryViewModel(mockApp, searchDebounceMs = 0) }
             MaterialTheme {
                 LibraryScreen(
                     onDocumentClick = {},
                     onDocumentClickWithPage = { _, _ -> },
                     onSettingsClick = {},
-                    viewModel = viewModel,
+                    viewModel = vm,
                 )
             }
         }
@@ -144,12 +162,13 @@ class LibraryScreenTest {
         )
 
         composeTestRule.setContent {
+            val vm = remember { LibraryViewModel(mockApp, searchDebounceMs = 0) }
             MaterialTheme {
                 LibraryScreen(
                     onDocumentClick = {},
                     onDocumentClickWithPage = { _, _ -> },
                     onSettingsClick = {},
-                    viewModel = viewModel,
+                    viewModel = vm,
                 )
             }
         }
@@ -172,12 +191,13 @@ class LibraryScreenTest {
         )
 
         composeTestRule.setContent {
+            val vm = remember { LibraryViewModel(mockApp, searchDebounceMs = 0) }
             MaterialTheme {
                 LibraryScreen(
                     onDocumentClick = {},
                     onDocumentClickWithPage = { _, _ -> },
                     onSettingsClick = {},
-                    viewModel = viewModel,
+                    viewModel = vm,
                 )
             }
         }
