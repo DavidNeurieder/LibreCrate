@@ -5,7 +5,7 @@ import com.librecrate.app.data.vault.VaultRepository
 import com.librecrate.app.util.ErrorLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import uniffi.vault_native.KeyValueFfi
+import uniffi.vault_native.KeyValue
 
 class DatabaseMerger(
     private val vaultRepository: VaultRepository,
@@ -13,7 +13,7 @@ class DatabaseMerger(
     suspend fun merge(
         backupDbPath: String,
         backupMasterKey: ByteArray,
-        files: List<KeyValueFfi>,
+        files: List<KeyValue>,
         backupKey: ByteArray?,
         localKey: ByteArray?,
         filesDir: String,

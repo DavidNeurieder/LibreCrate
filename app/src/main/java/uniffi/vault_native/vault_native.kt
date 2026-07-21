@@ -1188,25 +1188,25 @@ private fun uniffiCheckContractApiVersion(lib: UniffiLib) {
 
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: UniffiLib) {
-    if (lib.uniffi_vault_native_checksum_func_branch_b_fresh_install() != 28127.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_branch_b_fresh_install() != 13568.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_func_create_vault_layout() != 639.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_create_vault_layout() != 38037.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_func_decrypt_bytes() != 4195.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_decrypt_bytes() != 20298.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_func_derive_backup_master_key() != 38308.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_derive_backup_master_key() != 42465.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_func_derive_key() != 56674.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_derive_key() != 58950.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_func_encrypt_bytes() != 50338.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_encrypt_bytes() != 15788.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_func_export_vault() != 8895.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_export_vault() != 4909.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_vault_native_checksum_func_generate_aes_key() != 19738.toShort()) {
@@ -1218,133 +1218,133 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_vault_native_checksum_func_generate_salt() != 64462.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_func_import_vault() != 61536.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_import_vault() != 53338.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_func_restore_to_layout() != 9172.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_restore_to_layout() != 47863.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_func_unwrap_key() != 17308.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_unwrap_key() != 43423.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_vault_native_checksum_func_verify_password() != 59866.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_func_wrap_key() != 34950.toShort()) {
+    if (lib.uniffi_vault_native_checksum_func_wrap_key() != 53197.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_add_collection() != 40636.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_add_collection() != 2314.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_add_document() != 15624.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_add_document() != 42316.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_add_document_full() != 64656.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_add_document_full() != 8308.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_add_tag() != 16381.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_add_tag() != 18374.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_delete_collection() != 14805.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_delete_collection() != 19051.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_delete_document() != 43692.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_delete_document() != 64482.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_delete_document_full() != 21644.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_delete_document_full() != 62166.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_delete_tag() != 33369.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_delete_tag() != 32.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_export_document_file() != 10142.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_export_document_file() != 53251.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_get_collection() != 27144.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_get_collection() != 17479.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_get_document() != 65011.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_get_document() != 4400.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_get_documents_for_tag() != 46816.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_get_documents_for_tag() != 18086.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_get_schema_version() != 23742.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_get_schema_version() != 42556.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_get_tags_for_document() != 28178.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_get_tags_for_document() != 55677.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_import_document() != 52514.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_import_document() != 60418.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_link_document_tag() != 2810.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_link_document_tag() != 23318.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_list_collections() != 11113.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_list_collections() != 1832.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_list_documents() != 34257.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_list_documents() != 14668.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_list_documents_filtered() != 40128.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_list_documents_filtered() != 16437.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_list_tags() != 18256.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_list_tags() != 51459.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_load_thumbnail() != 47991.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_load_thumbnail() != 28848.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_merge_branch_a() != 2787.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_merge_branch_a() != 58500.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_rebuild_fts_index() != 32210.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_rebuild_fts_index() != 27281.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_search_documents() != 43933.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_search_documents() != 21815.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_search_documents_with_snippet() != 36627.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_search_documents_with_snippet() != 26930.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_search_in_document() != 9215.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_search_in_document() != 63327.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_set_current_page() != 13620.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_set_current_page() != 51952.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_set_reading_position() != 13710.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_set_reading_position() != 19820.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_set_schema_version() != 43281.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_set_schema_version() != 45338.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_store_thumbnail() != 60493.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_store_thumbnail() != 65019.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_unlink_document_tag() != 1984.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_unlink_document_tag() != 10462.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_update_collection() != 34810.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_update_collection() != 5389.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_update_document() != 62235.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_update_document() != 32996.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_update_document_full() != 50373.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_update_document_full() != 18313.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_method_dbhandle_update_tag() != 57903.toShort()) {
+    if (lib.uniffi_vault_native_checksum_method_dbhandle_update_tag() != 52549.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_constructor_dbhandle_create_encrypted() != 6263.toShort()) {
+    if (lib.uniffi_vault_native_checksum_constructor_dbhandle_create_encrypted() != 64426.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_constructor_dbhandle_open_encrypted() != 19292.toShort()) {
+    if (lib.uniffi_vault_native_checksum_constructor_dbhandle_open_encrypted() != 48980.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_vault_native_checksum_constructor_dbhandle_open_plain() != 22845.toShort()) {
+    if (lib.uniffi_vault_native_checksum_constructor_dbhandle_open_plain() != 24477.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -1735,6 +1735,7 @@ private fun UniffiCleaner.Companion.create(): UniffiCleaner =
         UniffiJnaCleaner()
     }
 
+@Suppress("NewApi")
 private class JavaLangRefCleaner : UniffiCleaner {
     val cleaner = java.lang.ref.Cleaner.create()
 
@@ -1742,6 +1743,7 @@ private class JavaLangRefCleaner : UniffiCleaner {
         JavaLangRefCleanable(cleaner.register(value, cleanUpTask))
 }
 
+@Suppress("NewApi")
 private class JavaLangRefCleanable(
     val cleanable: java.lang.ref.Cleaner.Cleanable
 ) : UniffiCleaner.Cleanable {
@@ -1749,13 +1751,13 @@ private class JavaLangRefCleanable(
 }
 public interface DbHandleInterface {
     
-    fun `addCollection`(`col`: CollectionFfi)
+    fun `addCollection`(`col`: CollectionRow)
     
-    fun `addDocument`(`doc`: DocumentFfi)
+    fun `addDocument`(`doc`: DocumentRow)
     
-    fun `addDocumentFull`(`doc`: DocumentFfi, `textContent`: kotlin.String?)
+    fun `addDocumentFull`(`doc`: DocumentRow, `textContent`: kotlin.String?)
     
-    fun `addTag`(`tag`: TagFfi)
+    fun `addTag`(`tag`: TagRow)
     
     fun `deleteCollection`(`id`: kotlin.String): kotlin.Boolean
     
@@ -1767,43 +1769,43 @@ public interface DbHandleInterface {
     
     fun `exportDocumentFile`(`baseDir`: kotlin.String, `id`: kotlin.String): kotlin.ByteArray?
     
-    fun `getCollection`(`id`: kotlin.String): CollectionFfi?
+    fun `getCollection`(`id`: kotlin.String): CollectionRow?
     
-    fun `getDocument`(`id`: kotlin.String): DocumentFfi?
+    fun `getDocument`(`id`: kotlin.String): DocumentRow?
     
-    fun `findDocumentByHash`(`hash`: kotlin.String): DocumentFfi?
+    fun `findDocumentByHash`(`hash`: kotlin.String): DocumentRow?
     
-    fun `getDocumentsForTag`(`tagId`: kotlin.String): List<DocumentFfi>
+    fun `getDocumentsForTag`(`tagId`: kotlin.String): List<DocumentRow>
     
     fun `getSchemaVersion`(): kotlin.Long
     
-    fun `getTagsForDocument`(`documentId`: kotlin.String): List<TagFfi>
+    fun `getTagsForDocument`(`documentId`: kotlin.String): List<TagRow>
     
     fun `importDocument`(`baseDir`: kotlin.String, `id`: kotlin.String, `title`: kotlin.String, `fileData`: kotlin.ByteArray, `mimeType`: kotlin.String, `author`: kotlin.String, `description`: kotlin.String, `textContent`: kotlin.String?): kotlin.String
     
     fun `linkDocumentTag`(`documentId`: kotlin.String, `tagId`: kotlin.String)
     
-    fun `listCollections`(): List<CollectionFfi>
+    fun `listCollections`(): List<CollectionRow>
     
-    fun `listDocuments`(): List<DocumentFfi>
+    fun `listDocuments`(): List<DocumentRow>
     
-    fun `listDocumentsFiltered`(`limit`: kotlin.Long, `offset`: kotlin.Long, `collectionId`: kotlin.String?, `favoriteOnly`: kotlin.Boolean, `tagId`: kotlin.String?): List<DocumentFfi>
+    fun `listDocumentsFiltered`(`limit`: kotlin.Long, `offset`: kotlin.Long, `collectionId`: kotlin.String?, `favoriteOnly`: kotlin.Boolean, `tagId`: kotlin.String?): List<DocumentRow>
     
-    fun `listTags`(): List<TagFfi>
+    fun `listTags`(): List<TagRow>
     
     fun `loadThumbnail`(`baseDir`: kotlin.String, `id`: kotlin.String): kotlin.ByteArray?
     
-    fun `mergeBranchA`(`backupDbPath`: kotlin.String, `backupMasterKey`: kotlin.ByteArray, `files`: List<KeyValueFfi>, `backupKey`: kotlin.ByteArray?, `localKey`: kotlin.ByteArray?, `filesDir`: kotlin.String): MergeStatsFfi
+    fun `mergeBranchA`(`backupDbPath`: kotlin.String, `backupMasterKey`: kotlin.ByteArray, `files`: List<KeyValue>, `backupKey`: kotlin.ByteArray?, `localKey`: kotlin.ByteArray?, `filesDir`: kotlin.String): MergeStats
     
     fun `rebuildFtsIndex`()
     
-    fun `searchDocuments`(`query`: kotlin.String): List<SearchResultFfi>
+    fun `searchDocuments`(`query`: kotlin.String): List<FtsResult>
     
-    fun `searchDocumentsWithSnippet`(`query`: kotlin.String): List<SnippetResultFfi>
+    fun `searchDocumentsWithSnippet`(`query`: kotlin.String): List<FtsSnippetResult>
     
-    fun `searchDocumentsWithAllMatches`(`query`: kotlin.String): List<MultiMatchResultFfi>
+    fun `searchDocumentsWithAllMatches`(`query`: kotlin.String): List<MultiMatchResult>
     
-    fun `searchInDocument`(`documentId`: kotlin.String, `query`: kotlin.String): List<SnippetResultFfi>
+    fun `searchInDocument`(`documentId`: kotlin.String, `query`: kotlin.String): List<FtsSnippetResult>
     
     fun `setCurrentPage`(`id`: kotlin.String, `page`: kotlin.Int): kotlin.Boolean
     
@@ -1908,58 +1910,58 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     }
 
     
-    @Throws(FfiException::class)override fun `addCollection`(`col`: CollectionFfi)
+    @Throws(VaultException::class)override fun `addCollection`(`col`: CollectionRow)
         = 
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_add_collection(
-        it, FfiConverterTypeCollectionFfi.lower(`col`),_status)
+        it, FfiConverterTypeCollectionRow.lower(`col`),_status)
 }
     }
     
     
 
     
-    @Throws(FfiException::class)override fun `addDocument`(`doc`: DocumentFfi)
+    @Throws(VaultException::class)override fun `addDocument`(`doc`: DocumentRow)
         = 
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_add_document(
-        it, FfiConverterTypeDocumentFfi.lower(`doc`),_status)
+        it, FfiConverterTypeDocumentRow.lower(`doc`),_status)
 }
     }
     
     
 
     
-    @Throws(FfiException::class)override fun `addDocumentFull`(`doc`: DocumentFfi, `textContent`: kotlin.String?)
+    @Throws(VaultException::class)override fun `addDocumentFull`(`doc`: DocumentRow, `textContent`: kotlin.String?)
         = 
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_add_document_full(
-        it, FfiConverterTypeDocumentFfi.lower(`doc`),FfiConverterOptionalString.lower(`textContent`),_status)
+        it, FfiConverterTypeDocumentRow.lower(`doc`),FfiConverterOptionalString.lower(`textContent`),_status)
 }
     }
     
     
 
     
-    @Throws(FfiException::class)override fun `addTag`(`tag`: TagFfi)
+    @Throws(VaultException::class)override fun `addTag`(`tag`: TagRow)
         = 
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_add_tag(
-        it, FfiConverterTypeTagFfi.lower(`tag`),_status)
+        it, FfiConverterTypeTagRow.lower(`tag`),_status)
 }
     }
     
     
 
     
-    @Throws(FfiException::class)override fun `deleteCollection`(`id`: kotlin.String): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `deleteCollection`(`id`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_delete_collection(
         it, FfiConverterString.lower(`id`),_status)
 }
@@ -1969,10 +1971,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `deleteDocument`(`id`: kotlin.String): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `deleteDocument`(`id`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_delete_document(
         it, FfiConverterString.lower(`id`),_status)
 }
@@ -1982,10 +1984,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `deleteDocumentFull`(`baseDir`: kotlin.String, `id`: kotlin.String): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `deleteDocumentFull`(`baseDir`: kotlin.String, `id`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_delete_document_full(
         it, FfiConverterString.lower(`baseDir`),FfiConverterString.lower(`id`),_status)
 }
@@ -1995,10 +1997,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `deleteTag`(`id`: kotlin.String): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `deleteTag`(`id`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_delete_tag(
         it, FfiConverterString.lower(`id`),_status)
 }
@@ -2008,10 +2010,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `exportDocumentFile`(`baseDir`: kotlin.String, `id`: kotlin.String): kotlin.ByteArray? {
+    @Throws(VaultException::class)override fun `exportDocumentFile`(`baseDir`: kotlin.String, `id`: kotlin.String): kotlin.ByteArray? {
             return FfiConverterOptionalByteArray.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_export_document_file(
         it, FfiConverterString.lower(`baseDir`),FfiConverterString.lower(`id`),_status)
 }
@@ -2021,10 +2023,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `getCollection`(`id`: kotlin.String): CollectionFfi? {
-            return FfiConverterOptionalTypeCollectionFfi.lift(
+    @Throws(VaultException::class)override fun `getCollection`(`id`: kotlin.String): CollectionRow? {
+            return FfiConverterOptionalTypeCollectionRow.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_get_collection(
         it, FfiConverterString.lower(`id`),_status)
 }
@@ -2034,10 +2036,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `getDocument`(`id`: kotlin.String): DocumentFfi? {
-            return FfiConverterOptionalTypeDocumentFfi.lift(
+    @Throws(VaultException::class)override fun `getDocument`(`id`: kotlin.String): DocumentRow? {
+            return FfiConverterOptionalTypeDocumentRow.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_get_document(
         it, FfiConverterString.lower(`id`),_status)
 }
@@ -2047,10 +2049,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `findDocumentByHash`(`hash`: kotlin.String): DocumentFfi? {
-            return FfiConverterOptionalTypeDocumentFfi.lift(
+    @Throws(VaultException::class)override fun `findDocumentByHash`(`hash`: kotlin.String): DocumentRow? {
+            return FfiConverterOptionalTypeDocumentRow.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_find_document_by_hash(
         it, FfiConverterString.lower(`hash`),_status)
 }
@@ -2060,10 +2062,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `getDocumentsForTag`(`tagId`: kotlin.String): List<DocumentFfi> {
-            return FfiConverterSequenceTypeDocumentFfi.lift(
+    @Throws(VaultException::class)override fun `getDocumentsForTag`(`tagId`: kotlin.String): List<DocumentRow> {
+            return FfiConverterSequenceTypeDocumentRow.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_get_documents_for_tag(
         it, FfiConverterString.lower(`tagId`),_status)
 }
@@ -2073,10 +2075,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `getSchemaVersion`(): kotlin.Long {
+    @Throws(VaultException::class)override fun `getSchemaVersion`(): kotlin.Long {
             return FfiConverterLong.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_get_schema_version(
         it, _status)
 }
@@ -2086,10 +2088,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `getTagsForDocument`(`documentId`: kotlin.String): List<TagFfi> {
-            return FfiConverterSequenceTypeTagFfi.lift(
+    @Throws(VaultException::class)override fun `getTagsForDocument`(`documentId`: kotlin.String): List<TagRow> {
+            return FfiConverterSequenceTypeTagRow.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_get_tags_for_document(
         it, FfiConverterString.lower(`documentId`),_status)
 }
@@ -2099,10 +2101,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `importDocument`(`baseDir`: kotlin.String, `id`: kotlin.String, `title`: kotlin.String, `fileData`: kotlin.ByteArray, `mimeType`: kotlin.String, `author`: kotlin.String, `description`: kotlin.String, `textContent`: kotlin.String?): kotlin.String {
+    @Throws(VaultException::class)override fun `importDocument`(`baseDir`: kotlin.String, `id`: kotlin.String, `title`: kotlin.String, `fileData`: kotlin.ByteArray, `mimeType`: kotlin.String, `author`: kotlin.String, `description`: kotlin.String, `textContent`: kotlin.String?): kotlin.String {
             return FfiConverterString.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_import_document(
         it, FfiConverterString.lower(`baseDir`),FfiConverterString.lower(`id`),FfiConverterString.lower(`title`),FfiConverterByteArray.lower(`fileData`),FfiConverterString.lower(`mimeType`),FfiConverterString.lower(`author`),FfiConverterString.lower(`description`),FfiConverterOptionalString.lower(`textContent`),_status)
 }
@@ -2112,10 +2114,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `linkDocumentTag`(`documentId`: kotlin.String, `tagId`: kotlin.String)
+    @Throws(VaultException::class)override fun `linkDocumentTag`(`documentId`: kotlin.String, `tagId`: kotlin.String)
         = 
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_link_document_tag(
         it, FfiConverterString.lower(`documentId`),FfiConverterString.lower(`tagId`),_status)
 }
@@ -2124,10 +2126,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `listCollections`(): List<CollectionFfi> {
-            return FfiConverterSequenceTypeCollectionFfi.lift(
+    @Throws(VaultException::class)override fun `listCollections`(): List<CollectionRow> {
+            return FfiConverterSequenceTypeCollectionRow.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_list_collections(
         it, _status)
 }
@@ -2137,10 +2139,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `listDocuments`(): List<DocumentFfi> {
-            return FfiConverterSequenceTypeDocumentFfi.lift(
+    @Throws(VaultException::class)override fun `listDocuments`(): List<DocumentRow> {
+            return FfiConverterSequenceTypeDocumentRow.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_list_documents(
         it, _status)
 }
@@ -2150,10 +2152,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `listDocumentsFiltered`(`limit`: kotlin.Long, `offset`: kotlin.Long, `collectionId`: kotlin.String?, `favoriteOnly`: kotlin.Boolean, `tagId`: kotlin.String?): List<DocumentFfi> {
-            return FfiConverterSequenceTypeDocumentFfi.lift(
+    @Throws(VaultException::class)override fun `listDocumentsFiltered`(`limit`: kotlin.Long, `offset`: kotlin.Long, `collectionId`: kotlin.String?, `favoriteOnly`: kotlin.Boolean, `tagId`: kotlin.String?): List<DocumentRow> {
+            return FfiConverterSequenceTypeDocumentRow.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_list_documents_filtered(
         it, FfiConverterLong.lower(`limit`),FfiConverterLong.lower(`offset`),FfiConverterOptionalString.lower(`collectionId`),FfiConverterBoolean.lower(`favoriteOnly`),FfiConverterOptionalString.lower(`tagId`),_status)
 }
@@ -2163,10 +2165,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `listTags`(): List<TagFfi> {
-            return FfiConverterSequenceTypeTagFfi.lift(
+    @Throws(VaultException::class)override fun `listTags`(): List<TagRow> {
+            return FfiConverterSequenceTypeTagRow.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_list_tags(
         it, _status)
 }
@@ -2176,10 +2178,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `loadThumbnail`(`baseDir`: kotlin.String, `id`: kotlin.String): kotlin.ByteArray? {
+    @Throws(VaultException::class)override fun `loadThumbnail`(`baseDir`: kotlin.String, `id`: kotlin.String): kotlin.ByteArray? {
             return FfiConverterOptionalByteArray.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_load_thumbnail(
         it, FfiConverterString.lower(`baseDir`),FfiConverterString.lower(`id`),_status)
 }
@@ -2189,12 +2191,12 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `mergeBranchA`(`backupDbPath`: kotlin.String, `backupMasterKey`: kotlin.ByteArray, `files`: List<KeyValueFfi>, `backupKey`: kotlin.ByteArray?, `localKey`: kotlin.ByteArray?, `filesDir`: kotlin.String): MergeStatsFfi {
-            return FfiConverterTypeMergeStatsFfi.lift(
+    @Throws(VaultException::class)override fun `mergeBranchA`(`backupDbPath`: kotlin.String, `backupMasterKey`: kotlin.ByteArray, `files`: List<KeyValue>, `backupKey`: kotlin.ByteArray?, `localKey`: kotlin.ByteArray?, `filesDir`: kotlin.String): MergeStats {
+            return FfiConverterTypeMergeStats.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_merge_branch_a(
-        it, FfiConverterString.lower(`backupDbPath`),FfiConverterByteArray.lower(`backupMasterKey`),FfiConverterSequenceTypeKeyValueFfi.lower(`files`),FfiConverterOptionalByteArray.lower(`backupKey`),FfiConverterOptionalByteArray.lower(`localKey`),FfiConverterString.lower(`filesDir`),_status)
+        it, FfiConverterString.lower(`backupDbPath`),FfiConverterByteArray.lower(`backupMasterKey`),FfiConverterSequenceTypeKeyValue.lower(`files`),FfiConverterOptionalByteArray.lower(`backupKey`),FfiConverterOptionalByteArray.lower(`localKey`),FfiConverterString.lower(`filesDir`),_status)
 }
     }
     )
@@ -2202,10 +2204,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `rebuildFtsIndex`()
+    @Throws(VaultException::class)override fun `rebuildFtsIndex`()
         = 
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_rebuild_fts_index(
         it, _status)
 }
@@ -2214,10 +2216,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `searchDocuments`(`query`: kotlin.String): List<SearchResultFfi> {
-            return FfiConverterSequenceTypeSearchResultFfi.lift(
+    @Throws(VaultException::class)override fun `searchDocuments`(`query`: kotlin.String): List<FtsResult> {
+            return FfiConverterSequenceTypeFtsResult.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_search_documents(
         it, FfiConverterString.lower(`query`),_status)
 }
@@ -2227,10 +2229,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `searchDocumentsWithSnippet`(`query`: kotlin.String): List<SnippetResultFfi> {
-            return FfiConverterSequenceTypeSnippetResultFfi.lift(
+    @Throws(VaultException::class)override fun `searchDocumentsWithSnippet`(`query`: kotlin.String): List<FtsSnippetResult> {
+            return FfiConverterSequenceTypeFtsSnippetResult.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_search_documents_with_snippet(
         it, FfiConverterString.lower(`query`),_status)
 }
@@ -2238,10 +2240,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     )
     }
     
-    @Throws(FfiException::class)override fun `searchDocumentsWithAllMatches`(`query`: kotlin.String): List<MultiMatchResultFfi> {
-            return FfiConverterSequenceTypeMultiMatchResultFfi.lift(
+    @Throws(VaultException::class)override fun `searchDocumentsWithAllMatches`(`query`: kotlin.String): List<MultiMatchResult> {
+            return FfiConverterSequenceTypeMultiMatchResult.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_search_documents_with_all_matches(
         it, FfiConverterString.lower(`query`),_status)
 }
@@ -2249,10 +2251,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     )
     }
     
-    @Throws(FfiException::class)override fun `searchInDocument`(`documentId`: kotlin.String, `query`: kotlin.String): List<SnippetResultFfi> {
-            return FfiConverterSequenceTypeSnippetResultFfi.lift(
+    @Throws(VaultException::class)override fun `searchInDocument`(`documentId`: kotlin.String, `query`: kotlin.String): List<FtsSnippetResult> {
+            return FfiConverterSequenceTypeFtsSnippetResult.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_search_in_document(
         it, FfiConverterString.lower(`documentId`),FfiConverterString.lower(`query`),_status)
 }
@@ -2262,10 +2264,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `setCurrentPage`(`id`: kotlin.String, `page`: kotlin.Int): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `setCurrentPage`(`id`: kotlin.String, `page`: kotlin.Int): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_set_current_page(
         it, FfiConverterString.lower(`id`),FfiConverterInt.lower(`page`),_status)
 }
@@ -2275,10 +2277,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `setReadingPosition`(`id`: kotlin.String, `position`: kotlin.String): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `setReadingPosition`(`id`: kotlin.String, `position`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_set_reading_position(
         it, FfiConverterString.lower(`id`),FfiConverterString.lower(`position`),_status)
 }
@@ -2288,10 +2290,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `setSchemaVersion`(`version`: kotlin.Long)
+    @Throws(VaultException::class)override fun `setSchemaVersion`(`version`: kotlin.Long)
         = 
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_set_schema_version(
         it, FfiConverterLong.lower(`version`),_status)
 }
@@ -2300,10 +2302,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `storeThumbnail`(`baseDir`: kotlin.String, `id`: kotlin.String, `data`: kotlin.ByteArray)
+    @Throws(VaultException::class)override fun `storeThumbnail`(`baseDir`: kotlin.String, `id`: kotlin.String, `data`: kotlin.ByteArray)
         = 
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_store_thumbnail(
         it, FfiConverterString.lower(`baseDir`),FfiConverterString.lower(`id`),FfiConverterByteArray.lower(`data`),_status)
 }
@@ -2312,10 +2314,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `unlinkDocumentTag`(`documentId`: kotlin.String, `tagId`: kotlin.String): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `unlinkDocumentTag`(`documentId`: kotlin.String, `tagId`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_unlink_document_tag(
         it, FfiConverterString.lower(`documentId`),FfiConverterString.lower(`tagId`),_status)
 }
@@ -2325,10 +2327,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `updateCollection`(`id`: kotlin.String, `name`: kotlin.String, `icon`: kotlin.String, `sortOrder`: kotlin.Int, `parentId`: kotlin.String?): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `updateCollection`(`id`: kotlin.String, `name`: kotlin.String, `icon`: kotlin.String, `sortOrder`: kotlin.Int, `parentId`: kotlin.String?): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_update_collection(
         it, FfiConverterString.lower(`id`),FfiConverterString.lower(`name`),FfiConverterString.lower(`icon`),FfiConverterInt.lower(`sortOrder`),FfiConverterOptionalString.lower(`parentId`),_status)
 }
@@ -2338,10 +2340,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `updateDocument`(`id`: kotlin.String, `title`: kotlin.String, `isFavorite`: kotlin.Boolean): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `updateDocument`(`id`: kotlin.String, `title`: kotlin.String, `isFavorite`: kotlin.Boolean): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_update_document(
         it, FfiConverterString.lower(`id`),FfiConverterString.lower(`title`),FfiConverterBoolean.lower(`isFavorite`),_status)
 }
@@ -2351,10 +2353,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `updateDocumentFull`(`id`: kotlin.String, `title`: kotlin.String, `author`: kotlin.String, `description`: kotlin.String, `collectionId`: kotlin.String?, `isFavorite`: kotlin.Boolean, `isConflict`: kotlin.Boolean, `conflictWith`: kotlin.String?, `currentPage`: kotlin.Int, `readingPosition`: kotlin.String?): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `updateDocumentFull`(`id`: kotlin.String, `title`: kotlin.String, `author`: kotlin.String, `description`: kotlin.String, `collectionId`: kotlin.String?, `isFavorite`: kotlin.Boolean, `isConflict`: kotlin.Boolean, `conflictWith`: kotlin.String?, `currentPage`: kotlin.Int, `readingPosition`: kotlin.String?): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_update_document_full(
         it, FfiConverterString.lower(`id`),FfiConverterString.lower(`title`),FfiConverterString.lower(`author`),FfiConverterString.lower(`description`),FfiConverterOptionalString.lower(`collectionId`),FfiConverterBoolean.lower(`isFavorite`),FfiConverterBoolean.lower(`isConflict`),FfiConverterOptionalString.lower(`conflictWith`),FfiConverterInt.lower(`currentPage`),FfiConverterOptionalString.lower(`readingPosition`),_status)
 }
@@ -2364,10 +2366,10 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
     
-    @Throws(FfiException::class)override fun `updateTag`(`id`: kotlin.String, `name`: kotlin.String, `color`: kotlin.Long): kotlin.Boolean {
+    @Throws(VaultException::class)override fun `updateTag`(`id`: kotlin.String, `name`: kotlin.String, `color`: kotlin.Long): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_method_dbhandle_update_tag(
         it, FfiConverterString.lower(`id`),FfiConverterString.lower(`name`),FfiConverterLong.lower(`color`),_status)
 }
@@ -2381,9 +2383,9 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
     companion object {
         
-    @Throws(FfiException::class) fun `createEncrypted`(`path`: kotlin.String, `masterKey`: kotlin.ByteArray): DbHandle {
+    @Throws(VaultException::class) fun `createEncrypted`(`path`: kotlin.String, `masterKey`: kotlin.ByteArray): DbHandle {
             return FfiConverterTypeDbHandle.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_constructor_dbhandle_create_encrypted(
         FfiConverterString.lower(`path`),FfiConverterByteArray.lower(`masterKey`),_status)
 }
@@ -2392,9 +2394,9 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
         
-    @Throws(FfiException::class) fun `openEncrypted`(`path`: kotlin.String, `masterKey`: kotlin.ByteArray): DbHandle {
+    @Throws(VaultException::class) fun `openEncrypted`(`path`: kotlin.String, `masterKey`: kotlin.ByteArray): DbHandle {
             return FfiConverterTypeDbHandle.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_constructor_dbhandle_open_encrypted(
         FfiConverterString.lower(`path`),FfiConverterByteArray.lower(`masterKey`),_status)
 }
@@ -2403,9 +2405,9 @@ open class DbHandle: Disposable, AutoCloseable, DbHandleInterface {
     
 
         
-    @Throws(FfiException::class) fun `openPlain`(`path`: kotlin.String): DbHandle {
+    @Throws(VaultException::class) fun `openPlain`(`path`: kotlin.String): DbHandle {
             return FfiConverterTypeDbHandle.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_constructor_dbhandle_open_plain(
         FfiConverterString.lower(`path`),_status)
 }
@@ -2448,7 +2450,7 @@ public object FfiConverterTypeDbHandle: FfiConverter<DbHandle, Pointer> {
 
 
 
-data class Argon2ParamsFfi (
+data class Argon2Params (
     var `memoryCost`: kotlin.UInt, 
     var `iterations`: kotlin.UInt, 
     var `parallelism`: kotlin.UInt, 
@@ -2461,9 +2463,9 @@ data class Argon2ParamsFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeArgon2ParamsFfi: FfiConverterRustBuffer<Argon2ParamsFfi> {
-    override fun read(buf: ByteBuffer): Argon2ParamsFfi {
-        return Argon2ParamsFfi(
+public object FfiConverterTypeArgon2Params: FfiConverterRustBuffer<Argon2Params> {
+    override fun read(buf: ByteBuffer): Argon2Params {
+        return Argon2Params(
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
@@ -2471,14 +2473,14 @@ public object FfiConverterTypeArgon2ParamsFfi: FfiConverterRustBuffer<Argon2Para
         )
     }
 
-    override fun allocationSize(value: Argon2ParamsFfi) = (
+    override fun allocationSize(value: Argon2Params) = (
             FfiConverterUInt.allocationSize(value.`memoryCost`) +
             FfiConverterUInt.allocationSize(value.`iterations`) +
             FfiConverterUInt.allocationSize(value.`parallelism`) +
             FfiConverterInt.allocationSize(value.`hashLength`)
     )
 
-    override fun write(value: Argon2ParamsFfi, buf: ByteBuffer) {
+    override fun write(value: Argon2Params, buf: ByteBuffer) {
             FfiConverterUInt.write(value.`memoryCost`, buf)
             FfiConverterUInt.write(value.`iterations`, buf)
             FfiConverterUInt.write(value.`parallelism`, buf)
@@ -2488,7 +2490,7 @@ public object FfiConverterTypeArgon2ParamsFfi: FfiConverterRustBuffer<Argon2Para
 
 
 
-data class CollectionFfi (
+data class CollectionRow (
     var `id`: kotlin.String, 
     var `name`: kotlin.String, 
     var `icon`: kotlin.String, 
@@ -2502,9 +2504,9 @@ data class CollectionFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeCollectionFfi: FfiConverterRustBuffer<CollectionFfi> {
-    override fun read(buf: ByteBuffer): CollectionFfi {
-        return CollectionFfi(
+public object FfiConverterTypeCollectionRow: FfiConverterRustBuffer<CollectionRow> {
+    override fun read(buf: ByteBuffer): CollectionRow {
+        return CollectionRow(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
@@ -2513,7 +2515,7 @@ public object FfiConverterTypeCollectionFfi: FfiConverterRustBuffer<CollectionFf
         )
     }
 
-    override fun allocationSize(value: CollectionFfi) = (
+    override fun allocationSize(value: CollectionRow) = (
             FfiConverterString.allocationSize(value.`id`) +
             FfiConverterString.allocationSize(value.`name`) +
             FfiConverterString.allocationSize(value.`icon`) +
@@ -2521,7 +2523,7 @@ public object FfiConverterTypeCollectionFfi: FfiConverterRustBuffer<CollectionFf
             FfiConverterOptionalString.allocationSize(value.`parentId`)
     )
 
-    override fun write(value: CollectionFfi, buf: ByteBuffer) {
+    override fun write(value: CollectionRow, buf: ByteBuffer) {
             FfiConverterString.write(value.`id`, buf)
             FfiConverterString.write(value.`name`, buf)
             FfiConverterString.write(value.`icon`, buf)
@@ -2532,7 +2534,7 @@ public object FfiConverterTypeCollectionFfi: FfiConverterRustBuffer<CollectionFf
 
 
 
-data class DocumentFfi (
+data class DocumentRow (
     var `id`: kotlin.String, 
     var `title`: kotlin.String, 
     var `fileName`: kotlin.String, 
@@ -2564,9 +2566,9 @@ data class DocumentFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeDocumentFfi: FfiConverterRustBuffer<DocumentFfi> {
-    override fun read(buf: ByteBuffer): DocumentFfi {
-        return DocumentFfi(
+public object FfiConverterTypeDocumentRow: FfiConverterRustBuffer<DocumentRow> {
+    override fun read(buf: ByteBuffer): DocumentRow {
+        return DocumentRow(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
@@ -2593,7 +2595,7 @@ public object FfiConverterTypeDocumentFfi: FfiConverterRustBuffer<DocumentFfi> {
         )
     }
 
-    override fun allocationSize(value: DocumentFfi) = (
+    override fun allocationSize(value: DocumentRow) = (
             FfiConverterString.allocationSize(value.`id`) +
             FfiConverterString.allocationSize(value.`title`) +
             FfiConverterString.allocationSize(value.`fileName`) +
@@ -2619,7 +2621,7 @@ public object FfiConverterTypeDocumentFfi: FfiConverterRustBuffer<DocumentFfi> {
             FfiConverterOptionalString.allocationSize(value.`contentHash`)
     )
 
-    override fun write(value: DocumentFfi, buf: ByteBuffer) {
+    override fun write(value: DocumentRow, buf: ByteBuffer) {
             FfiConverterString.write(value.`id`, buf)
             FfiConverterString.write(value.`title`, buf)
             FfiConverterString.write(value.`fileName`, buf)
@@ -2648,7 +2650,7 @@ public object FfiConverterTypeDocumentFfi: FfiConverterRustBuffer<DocumentFfi> {
 
 
 
-data class EncryptedDataFfi (
+data class EncryptedData (
     var `iv`: kotlin.ByteArray, 
     var `ciphertext`: kotlin.ByteArray
 ) {
@@ -2659,20 +2661,20 @@ data class EncryptedDataFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeEncryptedDataFfi: FfiConverterRustBuffer<EncryptedDataFfi> {
-    override fun read(buf: ByteBuffer): EncryptedDataFfi {
-        return EncryptedDataFfi(
+public object FfiConverterTypeEncryptedData: FfiConverterRustBuffer<EncryptedData> {
+    override fun read(buf: ByteBuffer): EncryptedData {
+        return EncryptedData(
             FfiConverterByteArray.read(buf),
             FfiConverterByteArray.read(buf),
         )
     }
 
-    override fun allocationSize(value: EncryptedDataFfi) = (
+    override fun allocationSize(value: EncryptedData) = (
             FfiConverterByteArray.allocationSize(value.`iv`) +
             FfiConverterByteArray.allocationSize(value.`ciphertext`)
     )
 
-    override fun write(value: EncryptedDataFfi, buf: ByteBuffer) {
+    override fun write(value: EncryptedData, buf: ByteBuffer) {
             FfiConverterByteArray.write(value.`iv`, buf)
             FfiConverterByteArray.write(value.`ciphertext`, buf)
     }
@@ -2680,10 +2682,10 @@ public object FfiConverterTypeEncryptedDataFfi: FfiConverterRustBuffer<Encrypted
 
 
 
-data class ImportedContentsFfi (
-    var `keys`: List<KeyValueFfi>, 
+data class ImportedContents (
+    var `keys`: List<KeyValue>, 
     var `dbFile`: kotlin.ByteArray?, 
-    var `files`: List<KeyValueFfi>
+    var `files`: List<KeyValue>
 ) {
     
     companion object
@@ -2692,31 +2694,31 @@ data class ImportedContentsFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeImportedContentsFfi: FfiConverterRustBuffer<ImportedContentsFfi> {
-    override fun read(buf: ByteBuffer): ImportedContentsFfi {
-        return ImportedContentsFfi(
-            FfiConverterSequenceTypeKeyValueFfi.read(buf),
+public object FfiConverterTypeImportedContents: FfiConverterRustBuffer<ImportedContents> {
+    override fun read(buf: ByteBuffer): ImportedContents {
+        return ImportedContents(
+            FfiConverterSequenceTypeKeyValue.read(buf),
             FfiConverterOptionalByteArray.read(buf),
-            FfiConverterSequenceTypeKeyValueFfi.read(buf),
+            FfiConverterSequenceTypeKeyValue.read(buf),
         )
     }
 
-    override fun allocationSize(value: ImportedContentsFfi) = (
-            FfiConverterSequenceTypeKeyValueFfi.allocationSize(value.`keys`) +
+    override fun allocationSize(value: ImportedContents) = (
+            FfiConverterSequenceTypeKeyValue.allocationSize(value.`keys`) +
             FfiConverterOptionalByteArray.allocationSize(value.`dbFile`) +
-            FfiConverterSequenceTypeKeyValueFfi.allocationSize(value.`files`)
+            FfiConverterSequenceTypeKeyValue.allocationSize(value.`files`)
     )
 
-    override fun write(value: ImportedContentsFfi, buf: ByteBuffer) {
-            FfiConverterSequenceTypeKeyValueFfi.write(value.`keys`, buf)
+    override fun write(value: ImportedContents, buf: ByteBuffer) {
+            FfiConverterSequenceTypeKeyValue.write(value.`keys`, buf)
             FfiConverterOptionalByteArray.write(value.`dbFile`, buf)
-            FfiConverterSequenceTypeKeyValueFfi.write(value.`files`, buf)
+            FfiConverterSequenceTypeKeyValue.write(value.`files`, buf)
     }
 }
 
 
 
-data class KeyValueFfi (
+data class KeyValue (
     var `key`: kotlin.String, 
     var `value`: kotlin.ByteArray
 ) {
@@ -2727,20 +2729,20 @@ data class KeyValueFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeKeyValueFfi: FfiConverterRustBuffer<KeyValueFfi> {
-    override fun read(buf: ByteBuffer): KeyValueFfi {
-        return KeyValueFfi(
+public object FfiConverterTypeKeyValue: FfiConverterRustBuffer<KeyValue> {
+    override fun read(buf: ByteBuffer): KeyValue {
+        return KeyValue(
             FfiConverterString.read(buf),
             FfiConverterByteArray.read(buf),
         )
     }
 
-    override fun allocationSize(value: KeyValueFfi) = (
+    override fun allocationSize(value: KeyValue) = (
             FfiConverterString.allocationSize(value.`key`) +
             FfiConverterByteArray.allocationSize(value.`value`)
     )
 
-    override fun write(value: KeyValueFfi, buf: ByteBuffer) {
+    override fun write(value: KeyValue, buf: ByteBuffer) {
             FfiConverterString.write(value.`key`, buf)
             FfiConverterByteArray.write(value.`value`, buf)
     }
@@ -2748,7 +2750,7 @@ public object FfiConverterTypeKeyValueFfi: FfiConverterRustBuffer<KeyValueFfi> {
 
 
 
-data class MergeStatsFfi (
+data class MergeStats (
     var `documentsAdded`: kotlin.UInt, 
     var `documentsUpdated`: kotlin.UInt, 
     var `documentsConflicted`: kotlin.UInt, 
@@ -2763,9 +2765,9 @@ data class MergeStatsFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeMergeStatsFfi: FfiConverterRustBuffer<MergeStatsFfi> {
-    override fun read(buf: ByteBuffer): MergeStatsFfi {
-        return MergeStatsFfi(
+public object FfiConverterTypeMergeStats: FfiConverterRustBuffer<MergeStats> {
+    override fun read(buf: ByteBuffer): MergeStats {
+        return MergeStats(
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
@@ -2775,7 +2777,7 @@ public object FfiConverterTypeMergeStatsFfi: FfiConverterRustBuffer<MergeStatsFf
         )
     }
 
-    override fun allocationSize(value: MergeStatsFfi) = (
+    override fun allocationSize(value: MergeStats) = (
             FfiConverterUInt.allocationSize(value.`documentsAdded`) +
             FfiConverterUInt.allocationSize(value.`documentsUpdated`) +
             FfiConverterUInt.allocationSize(value.`documentsConflicted`) +
@@ -2784,7 +2786,7 @@ public object FfiConverterTypeMergeStatsFfi: FfiConverterRustBuffer<MergeStatsFf
             FfiConverterUInt.allocationSize(value.`tagsAdded`)
     )
 
-    override fun write(value: MergeStatsFfi, buf: ByteBuffer) {
+    override fun write(value: MergeStats, buf: ByteBuffer) {
             FfiConverterUInt.write(value.`documentsAdded`, buf)
             FfiConverterUInt.write(value.`documentsUpdated`, buf)
             FfiConverterUInt.write(value.`documentsConflicted`, buf)
@@ -2796,7 +2798,7 @@ public object FfiConverterTypeMergeStatsFfi: FfiConverterRustBuffer<MergeStatsFf
 
 
 
-data class SearchResultFfi (
+data class FtsResult (
     var `rank`: kotlin.Double, 
     var `id`: kotlin.String, 
     var `title`: kotlin.String
@@ -2808,22 +2810,22 @@ data class SearchResultFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeSearchResultFfi: FfiConverterRustBuffer<SearchResultFfi> {
-    override fun read(buf: ByteBuffer): SearchResultFfi {
-        return SearchResultFfi(
+public object FfiConverterTypeFtsResult: FfiConverterRustBuffer<FtsResult> {
+    override fun read(buf: ByteBuffer): FtsResult {
+        return FtsResult(
             FfiConverterDouble.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
     }
 
-    override fun allocationSize(value: SearchResultFfi) = (
+    override fun allocationSize(value: FtsResult) = (
             FfiConverterDouble.allocationSize(value.`rank`) +
             FfiConverterString.allocationSize(value.`id`) +
             FfiConverterString.allocationSize(value.`title`)
     )
 
-    override fun write(value: SearchResultFfi, buf: ByteBuffer) {
+    override fun write(value: FtsResult, buf: ByteBuffer) {
             FfiConverterDouble.write(value.`rank`, buf)
             FfiConverterString.write(value.`id`, buf)
             FfiConverterString.write(value.`title`, buf)
@@ -2832,7 +2834,7 @@ public object FfiConverterTypeSearchResultFfi: FfiConverterRustBuffer<SearchResu
 
 
 
-data class SnippetResultFfi (
+data class FtsSnippetResult (
     var `rank`: kotlin.Double, 
     var `id`: kotlin.String, 
     var `title`: kotlin.String, 
@@ -2845,9 +2847,9 @@ data class SnippetResultFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeSnippetResultFfi: FfiConverterRustBuffer<SnippetResultFfi> {
-    override fun read(buf: ByteBuffer): SnippetResultFfi {
-        return SnippetResultFfi(
+public object FfiConverterTypeFtsSnippetResult: FfiConverterRustBuffer<FtsSnippetResult> {
+    override fun read(buf: ByteBuffer): FtsSnippetResult {
+        return FtsSnippetResult(
             FfiConverterDouble.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
@@ -2855,14 +2857,14 @@ public object FfiConverterTypeSnippetResultFfi: FfiConverterRustBuffer<SnippetRe
         )
     }
 
-    override fun allocationSize(value: SnippetResultFfi) = (
+    override fun allocationSize(value: FtsSnippetResult) = (
             FfiConverterDouble.allocationSize(value.`rank`) +
             FfiConverterString.allocationSize(value.`id`) +
             FfiConverterString.allocationSize(value.`title`) +
             FfiConverterString.allocationSize(value.`snippet`)
     )
 
-    override fun write(value: SnippetResultFfi, buf: ByteBuffer) {
+    override fun write(value: FtsSnippetResult, buf: ByteBuffer) {
             FfiConverterDouble.write(value.`rank`, buf)
             FfiConverterString.write(value.`id`, buf)
             FfiConverterString.write(value.`title`, buf)
@@ -2872,7 +2874,7 @@ public object FfiConverterTypeSnippetResultFfi: FfiConverterRustBuffer<SnippetRe
 
 
 
-data class MatchFfi (
+data class PageMatch (
     var `snippet`: kotlin.String, 
     var `pageNumber`: kotlin.Int
 ) {
@@ -2883,20 +2885,20 @@ data class MatchFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeMatchFfi: FfiConverterRustBuffer<MatchFfi> {
-    override fun read(buf: ByteBuffer): MatchFfi {
-        return MatchFfi(
+public object FfiConverterTypePageMatch: FfiConverterRustBuffer<PageMatch> {
+    override fun read(buf: ByteBuffer): PageMatch {
+        return PageMatch(
             FfiConverterString.read(buf),
             FfiConverterInt.read(buf),
         )
     }
 
-    override fun allocationSize(value: MatchFfi) = (
+    override fun allocationSize(value: PageMatch) = (
             FfiConverterString.allocationSize(value.`snippet`) +
             FfiConverterInt.allocationSize(value.`pageNumber`)
     )
 
-    override fun write(value: MatchFfi, buf: ByteBuffer) {
+    override fun write(value: PageMatch, buf: ByteBuffer) {
             FfiConverterString.write(value.`snippet`, buf)
             FfiConverterInt.write(value.`pageNumber`, buf)
     }
@@ -2904,12 +2906,12 @@ public object FfiConverterTypeMatchFfi: FfiConverterRustBuffer<MatchFfi> {
 
 
 
-data class MultiMatchResultFfi (
+data class MultiMatchResult (
     var `rank`: kotlin.Double, 
     var `id`: kotlin.String, 
     var `title`: kotlin.String, 
     var `firstSnippet`: kotlin.String, 
-    var `additionalMatches`: kotlin.collections.List<MatchFfi>
+    var `additionalMatches`: kotlin.collections.List<PageMatch>
 ) {
     
     companion object
@@ -2918,37 +2920,37 @@ data class MultiMatchResultFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeMultiMatchResultFfi: FfiConverterRustBuffer<MultiMatchResultFfi> {
-    override fun read(buf: ByteBuffer): MultiMatchResultFfi {
-        return MultiMatchResultFfi(
+public object FfiConverterTypeMultiMatchResult: FfiConverterRustBuffer<MultiMatchResult> {
+    override fun read(buf: ByteBuffer): MultiMatchResult {
+        return MultiMatchResult(
             FfiConverterDouble.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
-            FfiConverterSequenceTypeMatchFfi.read(buf),
+            FfiConverterSequenceTypePageMatch.read(buf),
         )
     }
 
-    override fun allocationSize(value: MultiMatchResultFfi) = (
+    override fun allocationSize(value: MultiMatchResult) = (
             FfiConverterDouble.allocationSize(value.`rank`) +
             FfiConverterString.allocationSize(value.`id`) +
             FfiConverterString.allocationSize(value.`title`) +
             FfiConverterString.allocationSize(value.`firstSnippet`) +
-            FfiConverterSequenceTypeMatchFfi.allocationSize(value.`additionalMatches`)
+            FfiConverterSequenceTypePageMatch.allocationSize(value.`additionalMatches`)
     )
 
-    override fun write(value: MultiMatchResultFfi, buf: ByteBuffer) {
+    override fun write(value: MultiMatchResult, buf: ByteBuffer) {
             FfiConverterDouble.write(value.`rank`, buf)
             FfiConverterString.write(value.`id`, buf)
             FfiConverterString.write(value.`title`, buf)
             FfiConverterString.write(value.`firstSnippet`, buf)
-            FfiConverterSequenceTypeMatchFfi.write(value.`additionalMatches`, buf)
+            FfiConverterSequenceTypePageMatch.write(value.`additionalMatches`, buf)
     }
 }
 
 
 
-data class TagFfi (
+data class TagRow (
     var `id`: kotlin.String, 
     var `name`: kotlin.String, 
     var `color`: kotlin.Long
@@ -2960,22 +2962,22 @@ data class TagFfi (
 /**
  * @suppress
  */
-public object FfiConverterTypeTagFfi: FfiConverterRustBuffer<TagFfi> {
-    override fun read(buf: ByteBuffer): TagFfi {
-        return TagFfi(
+public object FfiConverterTypeTagRow: FfiConverterRustBuffer<TagRow> {
+    override fun read(buf: ByteBuffer): TagRow {
+        return TagRow(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterLong.read(buf),
         )
     }
 
-    override fun allocationSize(value: TagFfi) = (
+    override fun allocationSize(value: TagRow) = (
             FfiConverterString.allocationSize(value.`id`) +
             FfiConverterString.allocationSize(value.`name`) +
             FfiConverterLong.allocationSize(value.`color`)
     )
 
-    override fun write(value: TagFfi, buf: ByteBuffer) {
+    override fun write(value: TagRow, buf: ByteBuffer) {
             FfiConverterString.write(value.`id`, buf)
             FfiConverterString.write(value.`name`, buf)
             FfiConverterLong.write(value.`color`, buf)
@@ -2986,50 +2988,12 @@ public object FfiConverterTypeTagFfi: FfiConverterRustBuffer<TagFfi> {
 
 
 
-sealed class FfiException: kotlin.Exception() {
+sealed class VaultException: kotlin.Exception() {
     
     class Crypto(
         
         val v1: kotlin.String
-        ) : FfiException() {
-        override val message
-            get() = "v1=${ v1 }"
-    }
-    
-    class Database(
-        
-        val v1: kotlin.String
-        ) : FfiException() {
-        override val message
-            get() = "v1=${ v1 }"
-    }
-    
-    class Io(
-        
-        val v1: kotlin.String
-        ) : FfiException() {
-        override val message
-            get() = "v1=${ v1 }"
-    }
-    
-    class AuthenticationFailed(
-        ) : FfiException() {
-        override val message
-            get() = ""
-    }
-    
-    class InvalidData(
-        
-        val v1: kotlin.String
-        ) : FfiException() {
-        override val message
-            get() = "v1=${ v1 }"
-    }
-    
-    class Kdf(
-        
-        val v1: kotlin.String
-        ) : FfiException() {
+        ) : VaultException() {
         override val message
             get() = "v1=${ v1 }"
     }
@@ -3037,22 +3001,68 @@ sealed class FfiException: kotlin.Exception() {
     class Format(
         
         val v1: kotlin.String
-        ) : FfiException() {
+        ) : VaultException() {
         override val message
             get() = "v1=${ v1 }"
     }
     
-    class NotFound(
+    class Kdf(
         
         val v1: kotlin.String
-        ) : FfiException() {
+        ) : VaultException() {
+        override val message
+            get() = "v1=${ v1 }"
+    }
+    
+    class Database(
+        
+        val v1: kotlin.String
+        ) : VaultException() {
+        override val message
+            get() = "v1=${ v1 }"
+    }
+    
+    class Io(
+        
+        val v1: kotlin.String
+        ) : VaultException() {
+        override val message
+            get() = "v1=${ v1 }"
+    }
+    
+    class InvalidData(
+        
+        val v1: kotlin.String
+        ) : VaultException() {
+        override val message
+            get() = "v1=${ v1 }"
+    }
+    
+    class AuthenticationFailed(
+        ) : VaultException() {
+        override val message
+            get() = ""
+    }
+    
+    class MissingKey(
+        
+        val v1: kotlin.String
+        ) : VaultException() {
+        override val message
+            get() = "v1=${ v1 }"
+    }
+    
+    class Compression(
+        
+        val v1: kotlin.String
+        ) : VaultException() {
         override val message
             get() = "v1=${ v1 }"
     }
     
 
-    companion object ErrorHandler : UniffiRustCallStatusErrorHandler<FfiException> {
-        override fun lift(error_buf: RustBuffer.ByValue): FfiException = FfiConverterTypeFfiError.lift(error_buf)
+    companion object ErrorHandler : UniffiRustCallStatusErrorHandler<VaultException> {
+        override fun lift(error_buf: RustBuffer.ByValue): VaultException = FfiConverterTypeVaultException.lift(error_buf)
     }
 
     
@@ -3061,119 +3071,123 @@ sealed class FfiException: kotlin.Exception() {
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiError : FfiConverterRustBuffer<FfiException> {
-    override fun read(buf: ByteBuffer): FfiException {
+public object FfiConverterTypeVaultException : FfiConverterRustBuffer<VaultException> {
+    override fun read(buf: ByteBuffer): VaultException {
         
 
         return when(buf.getInt()) {
-            1 -> FfiException.Crypto(
+            1 -> VaultException.Crypto(
                 FfiConverterString.read(buf),
                 )
-            2 -> FfiException.Database(
+            2 -> VaultException.Format(
                 FfiConverterString.read(buf),
                 )
-            3 -> FfiException.Io(
+            3 -> VaultException.Kdf(
                 FfiConverterString.read(buf),
                 )
-            4 -> FfiException.AuthenticationFailed()
-            5 -> FfiException.InvalidData(
+            4 -> VaultException.Database(
                 FfiConverterString.read(buf),
                 )
-            6 -> FfiException.Kdf(
+            5 -> VaultException.Io(
                 FfiConverterString.read(buf),
                 )
-            7 -> FfiException.Format(
+            6 -> VaultException.InvalidData(
                 FfiConverterString.read(buf),
                 )
-            8 -> FfiException.NotFound(
+            7 -> VaultException.AuthenticationFailed()
+            8 -> VaultException.MissingKey(
+                FfiConverterString.read(buf),
+                )
+            9 -> VaultException.Compression(
                 FfiConverterString.read(buf),
                 )
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
     }
 
-    override fun allocationSize(value: FfiException): ULong {
+    override fun allocationSize(value: VaultException): ULong {
         return when(value) {
-            is FfiException.Crypto -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
+            is VaultException.Crypto -> (
                 4UL
                 + FfiConverterString.allocationSize(value.v1)
             )
-            is FfiException.Database -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
+            is VaultException.Format -> (
                 4UL
                 + FfiConverterString.allocationSize(value.v1)
             )
-            is FfiException.Io -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
+            is VaultException.Kdf -> (
                 4UL
                 + FfiConverterString.allocationSize(value.v1)
             )
-            is FfiException.AuthenticationFailed -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-            )
-            is FfiException.InvalidData -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
+            is VaultException.Database -> (
                 4UL
                 + FfiConverterString.allocationSize(value.v1)
             )
-            is FfiException.Kdf -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
+            is VaultException.Io -> (
                 4UL
                 + FfiConverterString.allocationSize(value.v1)
             )
-            is FfiException.Format -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
+            is VaultException.InvalidData -> (
                 4UL
                 + FfiConverterString.allocationSize(value.v1)
             )
-            is FfiException.NotFound -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
+            is VaultException.AuthenticationFailed -> (
+                4UL
+            )
+            is VaultException.MissingKey -> (
+                4UL
+                + FfiConverterString.allocationSize(value.v1)
+            )
+            is VaultException.Compression -> (
                 4UL
                 + FfiConverterString.allocationSize(value.v1)
             )
         }
     }
 
-    override fun write(value: FfiException, buf: ByteBuffer) {
+    override fun write(value: VaultException, buf: ByteBuffer) {
         when(value) {
-            is FfiException.Crypto -> {
+            is VaultException.Crypto -> {
                 buf.putInt(1)
                 FfiConverterString.write(value.v1, buf)
                 Unit
             }
-            is FfiException.Database -> {
+            is VaultException.Format -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.v1, buf)
                 Unit
             }
-            is FfiException.Io -> {
+            is VaultException.Kdf -> {
                 buf.putInt(3)
                 FfiConverterString.write(value.v1, buf)
                 Unit
             }
-            is FfiException.AuthenticationFailed -> {
+            is VaultException.Database -> {
                 buf.putInt(4)
+                FfiConverterString.write(value.v1, buf)
                 Unit
             }
-            is FfiException.InvalidData -> {
+            is VaultException.Io -> {
                 buf.putInt(5)
                 FfiConverterString.write(value.v1, buf)
                 Unit
             }
-            is FfiException.Kdf -> {
+            is VaultException.InvalidData -> {
                 buf.putInt(6)
                 FfiConverterString.write(value.v1, buf)
                 Unit
             }
-            is FfiException.Format -> {
+            is VaultException.AuthenticationFailed -> {
                 buf.putInt(7)
+                Unit
+            }
+            is VaultException.MissingKey -> {
+                buf.putInt(8)
                 FfiConverterString.write(value.v1, buf)
                 Unit
             }
-            is FfiException.NotFound -> {
-                buf.putInt(8)
+            is VaultException.Compression -> {
+                buf.putInt(9)
                 FfiConverterString.write(value.v1, buf)
                 Unit
             }
@@ -3252,28 +3266,28 @@ public object FfiConverterOptionalByteArray: FfiConverterRustBuffer<kotlin.ByteA
 /**
  * @suppress
  */
-public object FfiConverterOptionalTypeCollectionFfi: FfiConverterRustBuffer<CollectionFfi?> {
-    override fun read(buf: ByteBuffer): CollectionFfi? {
+public object FfiConverterOptionalTypeCollectionRow: FfiConverterRustBuffer<CollectionRow?> {
+    override fun read(buf: ByteBuffer): CollectionRow? {
         if (buf.get().toInt() == 0) {
             return null
         }
-        return FfiConverterTypeCollectionFfi.read(buf)
+        return FfiConverterTypeCollectionRow.read(buf)
     }
 
-    override fun allocationSize(value: CollectionFfi?): ULong {
+    override fun allocationSize(value: CollectionRow?): ULong {
         if (value == null) {
             return 1UL
         } else {
-            return 1UL + FfiConverterTypeCollectionFfi.allocationSize(value)
+            return 1UL + FfiConverterTypeCollectionRow.allocationSize(value)
         }
     }
 
-    override fun write(value: CollectionFfi?, buf: ByteBuffer) {
+    override fun write(value: CollectionRow?, buf: ByteBuffer) {
         if (value == null) {
             buf.put(0)
         } else {
             buf.put(1)
-            FfiConverterTypeCollectionFfi.write(value, buf)
+            FfiConverterTypeCollectionRow.write(value, buf)
         }
     }
 }
@@ -3284,28 +3298,28 @@ public object FfiConverterOptionalTypeCollectionFfi: FfiConverterRustBuffer<Coll
 /**
  * @suppress
  */
-public object FfiConverterOptionalTypeDocumentFfi: FfiConverterRustBuffer<DocumentFfi?> {
-    override fun read(buf: ByteBuffer): DocumentFfi? {
+public object FfiConverterOptionalTypeDocumentRow: FfiConverterRustBuffer<DocumentRow?> {
+    override fun read(buf: ByteBuffer): DocumentRow? {
         if (buf.get().toInt() == 0) {
             return null
         }
-        return FfiConverterTypeDocumentFfi.read(buf)
+        return FfiConverterTypeDocumentRow.read(buf)
     }
 
-    override fun allocationSize(value: DocumentFfi?): ULong {
+    override fun allocationSize(value: DocumentRow?): ULong {
         if (value == null) {
             return 1UL
         } else {
-            return 1UL + FfiConverterTypeDocumentFfi.allocationSize(value)
+            return 1UL + FfiConverterTypeDocumentRow.allocationSize(value)
         }
     }
 
-    override fun write(value: DocumentFfi?, buf: ByteBuffer) {
+    override fun write(value: DocumentRow?, buf: ByteBuffer) {
         if (value == null) {
             buf.put(0)
         } else {
             buf.put(1)
-            FfiConverterTypeDocumentFfi.write(value, buf)
+            FfiConverterTypeDocumentRow.write(value, buf)
         }
     }
 }
@@ -3316,24 +3330,24 @@ public object FfiConverterOptionalTypeDocumentFfi: FfiConverterRustBuffer<Docume
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeCollectionFfi: FfiConverterRustBuffer<List<CollectionFfi>> {
-    override fun read(buf: ByteBuffer): List<CollectionFfi> {
+public object FfiConverterSequenceTypeCollectionRow: FfiConverterRustBuffer<List<CollectionRow>> {
+    override fun read(buf: ByteBuffer): List<CollectionRow> {
         val len = buf.getInt()
-        return List<CollectionFfi>(len) {
-            FfiConverterTypeCollectionFfi.read(buf)
+        return List<CollectionRow>(len) {
+            FfiConverterTypeCollectionRow.read(buf)
         }
     }
 
-    override fun allocationSize(value: List<CollectionFfi>): ULong {
+    override fun allocationSize(value: List<CollectionRow>): ULong {
         val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeCollectionFfi.allocationSize(it) }.sum()
+        val sizeForItems = value.map { FfiConverterTypeCollectionRow.allocationSize(it) }.sum()
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<CollectionFfi>, buf: ByteBuffer) {
+    override fun write(value: List<CollectionRow>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
-            FfiConverterTypeCollectionFfi.write(it, buf)
+            FfiConverterTypeCollectionRow.write(it, buf)
         }
     }
 }
@@ -3344,24 +3358,24 @@ public object FfiConverterSequenceTypeCollectionFfi: FfiConverterRustBuffer<List
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeDocumentFfi: FfiConverterRustBuffer<List<DocumentFfi>> {
-    override fun read(buf: ByteBuffer): List<DocumentFfi> {
+public object FfiConverterSequenceTypeDocumentRow: FfiConverterRustBuffer<List<DocumentRow>> {
+    override fun read(buf: ByteBuffer): List<DocumentRow> {
         val len = buf.getInt()
-        return List<DocumentFfi>(len) {
-            FfiConverterTypeDocumentFfi.read(buf)
+        return List<DocumentRow>(len) {
+            FfiConverterTypeDocumentRow.read(buf)
         }
     }
 
-    override fun allocationSize(value: List<DocumentFfi>): ULong {
+    override fun allocationSize(value: List<DocumentRow>): ULong {
         val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeDocumentFfi.allocationSize(it) }.sum()
+        val sizeForItems = value.map { FfiConverterTypeDocumentRow.allocationSize(it) }.sum()
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<DocumentFfi>, buf: ByteBuffer) {
+    override fun write(value: List<DocumentRow>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
-            FfiConverterTypeDocumentFfi.write(it, buf)
+            FfiConverterTypeDocumentRow.write(it, buf)
         }
     }
 }
@@ -3372,24 +3386,24 @@ public object FfiConverterSequenceTypeDocumentFfi: FfiConverterRustBuffer<List<D
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeKeyValueFfi: FfiConverterRustBuffer<List<KeyValueFfi>> {
-    override fun read(buf: ByteBuffer): List<KeyValueFfi> {
+public object FfiConverterSequenceTypeKeyValue: FfiConverterRustBuffer<List<KeyValue>> {
+    override fun read(buf: ByteBuffer): List<KeyValue> {
         val len = buf.getInt()
-        return List<KeyValueFfi>(len) {
-            FfiConverterTypeKeyValueFfi.read(buf)
+        return List<KeyValue>(len) {
+            FfiConverterTypeKeyValue.read(buf)
         }
     }
 
-    override fun allocationSize(value: List<KeyValueFfi>): ULong {
+    override fun allocationSize(value: List<KeyValue>): ULong {
         val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeKeyValueFfi.allocationSize(it) }.sum()
+        val sizeForItems = value.map { FfiConverterTypeKeyValue.allocationSize(it) }.sum()
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<KeyValueFfi>, buf: ByteBuffer) {
+    override fun write(value: List<KeyValue>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
-            FfiConverterTypeKeyValueFfi.write(it, buf)
+            FfiConverterTypeKeyValue.write(it, buf)
         }
     }
 }
@@ -3400,24 +3414,24 @@ public object FfiConverterSequenceTypeKeyValueFfi: FfiConverterRustBuffer<List<K
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeSearchResultFfi: FfiConverterRustBuffer<List<SearchResultFfi>> {
-    override fun read(buf: ByteBuffer): List<SearchResultFfi> {
+public object FfiConverterSequenceTypeFtsResult: FfiConverterRustBuffer<List<FtsResult>> {
+    override fun read(buf: ByteBuffer): List<FtsResult> {
         val len = buf.getInt()
-        return List<SearchResultFfi>(len) {
-            FfiConverterTypeSearchResultFfi.read(buf)
+        return List<FtsResult>(len) {
+            FfiConverterTypeFtsResult.read(buf)
         }
     }
 
-    override fun allocationSize(value: List<SearchResultFfi>): ULong {
+    override fun allocationSize(value: List<FtsResult>): ULong {
         val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeSearchResultFfi.allocationSize(it) }.sum()
+        val sizeForItems = value.map { FfiConverterTypeFtsResult.allocationSize(it) }.sum()
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<SearchResultFfi>, buf: ByteBuffer) {
+    override fun write(value: List<FtsResult>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
-            FfiConverterTypeSearchResultFfi.write(it, buf)
+            FfiConverterTypeFtsResult.write(it, buf)
         }
     }
 }
@@ -3428,72 +3442,72 @@ public object FfiConverterSequenceTypeSearchResultFfi: FfiConverterRustBuffer<Li
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeSnippetResultFfi: FfiConverterRustBuffer<List<SnippetResultFfi>> {
-    override fun read(buf: ByteBuffer): List<SnippetResultFfi> {
+public object FfiConverterSequenceTypeFtsSnippetResult: FfiConverterRustBuffer<List<FtsSnippetResult>> {
+    override fun read(buf: ByteBuffer): List<FtsSnippetResult> {
         val len = buf.getInt()
-        return List<SnippetResultFfi>(len) {
-            FfiConverterTypeSnippetResultFfi.read(buf)
+        return List<FtsSnippetResult>(len) {
+            FfiConverterTypeFtsSnippetResult.read(buf)
         }
     }
 
-    override fun allocationSize(value: List<SnippetResultFfi>): ULong {
+    override fun allocationSize(value: List<FtsSnippetResult>): ULong {
         val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeSnippetResultFfi.allocationSize(it) }.sum()
+        val sizeForItems = value.map { FfiConverterTypeFtsSnippetResult.allocationSize(it) }.sum()
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<SnippetResultFfi>, buf: ByteBuffer) {
+    override fun write(value: List<FtsSnippetResult>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
-            FfiConverterTypeSnippetResultFfi.write(it, buf)
+            FfiConverterTypeFtsSnippetResult.write(it, buf)
         }
     }
 }
 
 
 
-public object FfiConverterSequenceTypeMatchFfi: FfiConverterRustBuffer<List<MatchFfi>> {
-    override fun read(buf: ByteBuffer): List<MatchFfi> {
+public object FfiConverterSequenceTypePageMatch: FfiConverterRustBuffer<List<PageMatch>> {
+    override fun read(buf: ByteBuffer): List<PageMatch> {
         val len = buf.getInt()
-        return List<MatchFfi>(len) {
-            FfiConverterTypeMatchFfi.read(buf)
+        return List<PageMatch>(len) {
+            FfiConverterTypePageMatch.read(buf)
         }
     }
 
-    override fun allocationSize(value: List<MatchFfi>): ULong {
+    override fun allocationSize(value: List<PageMatch>): ULong {
         val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeMatchFfi.allocationSize(it) }.sum()
+        val sizeForItems = value.map { FfiConverterTypePageMatch.allocationSize(it) }.sum()
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MatchFfi>, buf: ByteBuffer) {
+    override fun write(value: List<PageMatch>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
-            FfiConverterTypeMatchFfi.write(it, buf)
+            FfiConverterTypePageMatch.write(it, buf)
         }
     }
 }
 
 
 
-public object FfiConverterSequenceTypeMultiMatchResultFfi: FfiConverterRustBuffer<List<MultiMatchResultFfi>> {
-    override fun read(buf: ByteBuffer): List<MultiMatchResultFfi> {
+public object FfiConverterSequenceTypeMultiMatchResult: FfiConverterRustBuffer<List<MultiMatchResult>> {
+    override fun read(buf: ByteBuffer): List<MultiMatchResult> {
         val len = buf.getInt()
-        return List<MultiMatchResultFfi>(len) {
-            FfiConverterTypeMultiMatchResultFfi.read(buf)
+        return List<MultiMatchResult>(len) {
+            FfiConverterTypeMultiMatchResult.read(buf)
         }
     }
 
-    override fun allocationSize(value: List<MultiMatchResultFfi>): ULong {
+    override fun allocationSize(value: List<MultiMatchResult>): ULong {
         val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeMultiMatchResultFfi.allocationSize(it) }.sum()
+        val sizeForItems = value.map { FfiConverterTypeMultiMatchResult.allocationSize(it) }.sum()
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MultiMatchResultFfi>, buf: ByteBuffer) {
+    override fun write(value: List<MultiMatchResult>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
-            FfiConverterTypeMultiMatchResultFfi.write(it, buf)
+            FfiConverterTypeMultiMatchResult.write(it, buf)
         }
     }
 }
@@ -3503,39 +3517,39 @@ public object FfiConverterSequenceTypeMultiMatchResultFfi: FfiConverterRustBuffe
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeTagFfi: FfiConverterRustBuffer<List<TagFfi>> {
-    override fun read(buf: ByteBuffer): List<TagFfi> {
+public object FfiConverterSequenceTypeTagRow: FfiConverterRustBuffer<List<TagRow>> {
+    override fun read(buf: ByteBuffer): List<TagRow> {
         val len = buf.getInt()
-        return List<TagFfi>(len) {
-            FfiConverterTypeTagFfi.read(buf)
+        return List<TagRow>(len) {
+            FfiConverterTypeTagRow.read(buf)
         }
     }
 
-    override fun allocationSize(value: List<TagFfi>): ULong {
+    override fun allocationSize(value: List<TagRow>): ULong {
         val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeTagFfi.allocationSize(it) }.sum()
+        val sizeForItems = value.map { FfiConverterTypeTagRow.allocationSize(it) }.sum()
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<TagFfi>, buf: ByteBuffer) {
+    override fun write(value: List<TagRow>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
-            FfiConverterTypeTagFfi.write(it, buf)
+            FfiConverterTypeTagRow.write(it, buf)
         }
     }
 }
-    @Throws(FfiException::class) fun `branchBFreshInstall`(`contents`: ImportedContentsFfi, `password`: kotlin.String, `dbData`: kotlin.ByteArray, `encryptionDir`: kotlin.String, `databaseDir`: kotlin.String, `filesDir`: kotlin.String)
+    @Throws(VaultException::class) fun `branchBFreshInstall`(`contents`: ImportedContents, `password`: kotlin.String, `dbData`: kotlin.ByteArray, `encryptionDir`: kotlin.String, `databaseDir`: kotlin.String, `filesDir`: kotlin.String)
         = 
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_branch_b_fresh_install(
-        FfiConverterTypeImportedContentsFfi.lower(`contents`),FfiConverterString.lower(`password`),FfiConverterByteArray.lower(`dbData`),FfiConverterString.lower(`encryptionDir`),FfiConverterString.lower(`databaseDir`),FfiConverterString.lower(`filesDir`),_status)
+        FfiConverterTypeImportedContents.lower(`contents`),FfiConverterString.lower(`password`),FfiConverterByteArray.lower(`dbData`),FfiConverterString.lower(`encryptionDir`),FfiConverterString.lower(`databaseDir`),FfiConverterString.lower(`filesDir`),_status)
 }
     
     
 
-    @Throws(FfiException::class) fun `createVaultLayout`(`dir`: kotlin.String, `password`: kotlin.String): kotlin.ByteArray {
+    @Throws(VaultException::class) fun `createVaultLayout`(`dir`: kotlin.String, `password`: kotlin.String): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_create_vault_layout(
         FfiConverterString.lower(`dir`),FfiConverterString.lower(`password`),_status)
 }
@@ -3543,19 +3557,19 @@ public object FfiConverterSequenceTypeTagFfi: FfiConverterRustBuffer<List<TagFfi
     }
     
 
-    @Throws(FfiException::class) fun `decryptBytes`(`data`: EncryptedDataFfi, `key`: kotlin.ByteArray): kotlin.ByteArray {
+    @Throws(VaultException::class) fun `decryptBytes`(`data`: EncryptedData, `key`: kotlin.ByteArray): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_decrypt_bytes(
-        FfiConverterTypeEncryptedDataFfi.lower(`data`),FfiConverterByteArray.lower(`key`),_status)
+        FfiConverterTypeEncryptedData.lower(`data`),FfiConverterByteArray.lower(`key`),_status)
 }
     )
     }
     
 
-    @Throws(FfiException::class) fun `deriveBackupMasterKey`(`wrappedKey`: kotlin.ByteArray, `password`: kotlin.String, `salt`: kotlin.ByteArray, `memoryCost`: kotlin.UInt, `iterations`: kotlin.UInt, `parallelism`: kotlin.UInt): kotlin.ByteArray {
+    @Throws(VaultException::class) fun `deriveBackupMasterKey`(`wrappedKey`: kotlin.ByteArray, `password`: kotlin.String, `salt`: kotlin.ByteArray, `memoryCost`: kotlin.UInt, `iterations`: kotlin.UInt, `parallelism`: kotlin.UInt): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_derive_backup_master_key(
         FfiConverterByteArray.lower(`wrappedKey`),FfiConverterString.lower(`password`),FfiConverterByteArray.lower(`salt`),FfiConverterUInt.lower(`memoryCost`),FfiConverterUInt.lower(`iterations`),FfiConverterUInt.lower(`parallelism`),_status)
 }
@@ -3563,9 +3577,9 @@ public object FfiConverterSequenceTypeTagFfi: FfiConverterRustBuffer<List<TagFfi
     }
     
 
-    @Throws(FfiException::class) fun `deriveKey`(`password`: kotlin.String, `salt`: kotlin.ByteArray, `memoryCost`: kotlin.UInt, `iterations`: kotlin.UInt, `parallelism`: kotlin.UInt): kotlin.ByteArray {
+    @Throws(VaultException::class) fun `deriveKey`(`password`: kotlin.String, `salt`: kotlin.ByteArray, `memoryCost`: kotlin.UInt, `iterations`: kotlin.UInt, `parallelism`: kotlin.UInt): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_derive_key(
         FfiConverterString.lower(`password`),FfiConverterByteArray.lower(`salt`),FfiConverterUInt.lower(`memoryCost`),FfiConverterUInt.lower(`iterations`),FfiConverterUInt.lower(`parallelism`),_status)
 }
@@ -3573,9 +3587,9 @@ public object FfiConverterSequenceTypeTagFfi: FfiConverterRustBuffer<List<TagFfi
     }
     
 
-    @Throws(FfiException::class) fun `encryptBytes`(`data`: kotlin.ByteArray, `key`: kotlin.ByteArray): EncryptedDataFfi {
-            return FfiConverterTypeEncryptedDataFfi.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    @Throws(VaultException::class) fun `encryptBytes`(`data`: kotlin.ByteArray, `key`: kotlin.ByteArray): EncryptedData {
+            return FfiConverterTypeEncryptedData.lift(
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_encrypt_bytes(
         FfiConverterByteArray.lower(`data`),FfiConverterByteArray.lower(`key`),_status)
 }
@@ -3583,11 +3597,11 @@ public object FfiConverterSequenceTypeTagFfi: FfiConverterRustBuffer<List<TagFfi
     }
     
 
-    @Throws(FfiException::class) fun `exportVault`(`files`: List<KeyValueFfi>, `dbFile`: kotlin.ByteArray?, `vaultPassword`: kotlin.String, `keys`: List<KeyValueFfi>, `kdfParams`: Argon2ParamsFfi): kotlin.ByteArray {
+    @Throws(VaultException::class) fun `exportVault`(`files`: List<KeyValue>, `dbFile`: kotlin.ByteArray?, `vaultPassword`: kotlin.String, `keys`: List<KeyValue>, `kdfParams`: Argon2Params): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_export_vault(
-        FfiConverterSequenceTypeKeyValueFfi.lower(`files`),FfiConverterOptionalByteArray.lower(`dbFile`),FfiConverterString.lower(`vaultPassword`),FfiConverterSequenceTypeKeyValueFfi.lower(`keys`),FfiConverterTypeArgon2ParamsFfi.lower(`kdfParams`),_status)
+        FfiConverterSequenceTypeKeyValue.lower(`files`),FfiConverterOptionalByteArray.lower(`dbFile`),FfiConverterString.lower(`vaultPassword`),FfiConverterSequenceTypeKeyValue.lower(`keys`),FfiConverterTypeArgon2Params.lower(`kdfParams`),_status)
 }
     )
     }
@@ -3620,9 +3634,9 @@ public object FfiConverterSequenceTypeTagFfi: FfiConverterRustBuffer<List<TagFfi
     }
     
 
-    @Throws(FfiException::class) fun `importVault`(`vaultData`: kotlin.ByteArray, `vaultPassword`: kotlin.String): ImportedContentsFfi {
-            return FfiConverterTypeImportedContentsFfi.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    @Throws(VaultException::class) fun `importVault`(`vaultData`: kotlin.ByteArray, `vaultPassword`: kotlin.String): ImportedContents {
+            return FfiConverterTypeImportedContents.lift(
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_import_vault(
         FfiConverterByteArray.lower(`vaultData`),FfiConverterString.lower(`vaultPassword`),_status)
 }
@@ -3630,18 +3644,18 @@ public object FfiConverterSequenceTypeTagFfi: FfiConverterRustBuffer<List<TagFfi
     }
     
 
-    @Throws(FfiException::class) fun `restoreToLayout`(`contents`: ImportedContentsFfi, `dbData`: kotlin.ByteArray, `encryptionDir`: kotlin.String, `databaseDir`: kotlin.String, `filesDir`: kotlin.String)
+    @Throws(VaultException::class) fun `restoreToLayout`(`contents`: ImportedContents, `dbData`: kotlin.ByteArray, `encryptionDir`: kotlin.String, `databaseDir`: kotlin.String, `filesDir`: kotlin.String)
         = 
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_restore_to_layout(
-        FfiConverterTypeImportedContentsFfi.lower(`contents`),FfiConverterByteArray.lower(`dbData`),FfiConverterString.lower(`encryptionDir`),FfiConverterString.lower(`databaseDir`),FfiConverterString.lower(`filesDir`),_status)
+        FfiConverterTypeImportedContents.lower(`contents`),FfiConverterByteArray.lower(`dbData`),FfiConverterString.lower(`encryptionDir`),FfiConverterString.lower(`databaseDir`),FfiConverterString.lower(`filesDir`),_status)
 }
     
     
 
-    @Throws(FfiException::class) fun `unwrapKey`(`wrapped`: kotlin.ByteArray, `kek`: kotlin.ByteArray): kotlin.ByteArray {
+    @Throws(VaultException::class) fun `unwrapKey`(`wrapped`: kotlin.ByteArray, `kek`: kotlin.ByteArray): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_unwrap_key(
         FfiConverterByteArray.lower(`wrapped`),FfiConverterByteArray.lower(`kek`),_status)
 }
@@ -3658,9 +3672,9 @@ public object FfiConverterSequenceTypeTagFfi: FfiConverterRustBuffer<List<TagFfi
     }
     
 
-    @Throws(FfiException::class) fun `wrapKey`(`kek`: kotlin.ByteArray, `plaintext`: kotlin.ByteArray): kotlin.ByteArray {
+    @Throws(VaultException::class) fun `wrapKey`(`kek`: kotlin.ByteArray, `plaintext`: kotlin.ByteArray): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
+    uniffiRustCallWithError(VaultException) { _status ->
     UniffiLib.INSTANCE.uniffi_vault_native_fn_func_wrap_key(
         FfiConverterByteArray.lower(`kek`),FfiConverterByteArray.lower(`plaintext`),_status)
 }

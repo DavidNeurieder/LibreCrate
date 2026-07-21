@@ -1,6 +1,7 @@
 use crate::crypto::aes_gcm;
 use crate::error::{Error, Result};
 use crate::format::import::ImportedContents;
+use crate::types::KeyValue;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::Path;
@@ -58,7 +59,7 @@ pub fn branch_a_merge(
     backup_path: &str,
     backup_master_key: &[u8],
     current_conn: &Connection,
-    files: &[(String, Vec<u8>)],
+    files: &[KeyValue],
     backup_key: Option<&[u8]>,
     local_key: Option<&[u8]>,
     files_dir: &Path,
@@ -213,13 +214,13 @@ pub fn branch_a_merge(
 fn reencrypt_files(
     conn: &Connection,
     docs: &[crate::db::queries::DocumentRow],
-    files: &[(String, Vec<u8>)],
+    files: &[KeyValue],
     backup_key: &[u8],
     local_key: &[u8],
     files_dir: &Path,
 ) {
     let file_map: HashMap<&str, &[u8]> =
-        files.iter().map(|(k, v)| (k.as_str(), v.as_slice())).collect();
+        files.iter().map(|kv| (kv.key.as_str(), kv.value.as_slice())).collect();
 
     for doc in docs {
         let iv = match &doc.encryption_iv {

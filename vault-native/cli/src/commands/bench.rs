@@ -1,5 +1,6 @@
 use clap::Args;
 use std::time::Instant;
+use vault_native::types::KeyValue;
 
 #[derive(Args)]
 pub struct BenchArgs {
@@ -83,11 +84,12 @@ pub fn run(args: BenchArgs) -> anyhow::Result<()> {
             let start = Instant::now();
             for i in 0..count {
                 let out = format!("{}-{}", output.display(), i);
+                let empty: &[KeyValue] = &[];
                 let exported = vault_native::format::export::export(
-                    &[],
+                    empty,
                     None,
                     "bench-password",
-                    &[],
+                    empty,
                     &kdf_params,
                 )?;
                 std::fs::write(&out, &exported.data)?;

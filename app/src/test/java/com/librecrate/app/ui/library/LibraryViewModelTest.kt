@@ -24,8 +24,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import uniffi.vault_native.MatchFfi
-import uniffi.vault_native.MultiMatchResultFfi
+import uniffi.vault_native.PageMatch
+import uniffi.vault_native.MultiMatchResult
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -75,7 +75,7 @@ class LibraryViewModelTest {
             )
         )
         coEvery { mockVault.searchDocumentsWithAllMatches("fox") } returns listOf(
-            MultiMatchResultFfi(rank = 1.0, id = "1", title = "Doc One", firstSnippet = "The quick <b>fox</b> jumps", additionalMatches = emptyList()),
+            MultiMatchResult(rank = 1.0, id = "1", title = "Doc One", firstSnippet = "The quick <b>fox</b> jumps", additionalMatches = emptyList()),
         )
 
         viewModel.search("fox")
@@ -96,7 +96,7 @@ class LibraryViewModelTest {
             )
         )
         coEvery { mockVault.searchDocumentsWithAllMatches("text") } returns listOf(
-            MultiMatchResultFfi(rank = 1.0, id = "1", title = "Doc", firstSnippet = "some <b>text</b>", additionalMatches = emptyList()),
+            MultiMatchResult(rank = 1.0, id = "1", title = "Doc", firstSnippet = "some <b>text</b>", additionalMatches = emptyList()),
         )
 
         viewModel.search("text")
@@ -124,7 +124,7 @@ class LibraryViewModelTest {
             )
         )
         coEvery { mockVault.searchDocumentsWithAllMatches("rabbit") } returns listOf(
-            MultiMatchResultFfi(rank = 1.0, id = "2", title = "Rabbit Facts", firstSnippet = "the quick <b>rabbit</b>", additionalMatches = emptyList()),
+            MultiMatchResult(rank = 1.0, id = "2", title = "Rabbit Facts", firstSnippet = "the quick <b>rabbit</b>", additionalMatches = emptyList()),
         )
 
         viewModel.search("rabbit")
@@ -144,12 +144,12 @@ class LibraryViewModelTest {
             )
         )
         coEvery { mockVault.searchDocumentsWithAllMatches("fox") } returns listOf(
-            MultiMatchResultFfi(
+            MultiMatchResult(
                 rank = 1.0, id = "1", title = "Multi Match Doc",
                 firstSnippet = "The quick <b>fox</b> jumps",
                 additionalMatches = listOf(
-                    MatchFfi(snippet = "Another <b>fox</b> sighting on page 2", pageNumber = 2),
-                    MatchFfi(snippet = "Third <b>fox</b> reference on page 3", pageNumber = 3),
+                    PageMatch(snippet = "Another <b>fox</b> sighting on page 2", pageNumber = 2),
+                    PageMatch(snippet = "Third <b>fox</b> reference on page 3", pageNumber = 3),
                 ),
             ),
         )

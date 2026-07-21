@@ -33,12 +33,12 @@ class BackupManager(
             val encryptionDir = vaultRepository.encryptionDir
 
             onProgress(BackupProgress("Reading key files", 0.0f))
-            val keyEntries = mutableListOf<KeyValueFfi>()
+            val keyEntries = mutableListOf<KeyValue>()
             val wrappedKeyFile = File(encryptionDir, "wrapped_master_key")
-            if (wrappedKeyFile.exists()) keyEntries.add(KeyValueFfi("wrapped_master_key", wrappedKeyFile.readBytes()))
+            if (wrappedKeyFile.exists()) keyEntries.add(KeyValue("wrapped_master_key", wrappedKeyFile.readBytes()))
             onProgress(BackupProgress("Reading key files", 0.05f))
             val saltFile = File(encryptionDir, "salt")
-            if (saltFile.exists()) keyEntries.add(KeyValueFfi("salt", saltFile.readBytes()))
+            if (saltFile.exists()) keyEntries.add(KeyValue("salt", saltFile.readBytes()))
             onProgress(BackupProgress("Reading key files", 0.1f))
 
             val dbFile = context.getDatabasePath("librecrate.db")
@@ -47,16 +47,16 @@ class BackupManager(
 
             val allFiles = if (filesDir.exists()) filesDir.walkTopDown().filter { it.isFile }.toList() else emptyList()
             val total = allFiles.size.coerceAtLeast(1)
-            val files = mutableListOf<KeyValueFfi>()
+            val files = mutableListOf<KeyValue>()
             allFiles.forEachIndexed { i, file ->
-                files.add(KeyValueFfi(file.relativeTo(filesDir).path, file.readBytes()))
+                files.add(KeyValue(file.relativeTo(filesDir).path, file.readBytes()))
                 onProgress(BackupProgress("Reading files", 0.15f + 0.45f * ((i + 1).toFloat() / total), detail = "$i of $total"))
             }
 
             onProgress(BackupProgress("Encrypting backup", 0.6f))
             val vaultBytes = exportVault(
                 files, dbData, vaultPassword, keyEntries,
-                Argon2ParamsFfi(MEMORY_COST, ITERATIONS, PARALLELISM, HASH_LENGTH),
+                Argon2Params(MEMORY_COST, ITERATIONS, PARALLELISM, HASH_LENGTH),
             )
             onProgress(BackupProgress("Encrypting backup", 0.8f))
 

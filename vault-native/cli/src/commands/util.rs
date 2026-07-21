@@ -1,4 +1,5 @@
 use std::path::Path;
+use vault_native::types::KeyValue;
 
 /// Recursively walk a directory, returning (absolute_path, relative_path) pairs.
 pub fn walk_files(dir: &Path) -> anyhow::Result<Vec<(std::path::PathBuf, std::path::PathBuf)>> {
@@ -28,8 +29,8 @@ fn walk_dir_recursive(
     Ok(())
 }
 
-/// Read all files in a directory into (name, data) pairs.
-pub fn read_dir_files(dir: &Path) -> anyhow::Result<Vec<(String, Vec<u8>)>> {
+/// Read all files in a directory into KeyValue pairs.
+pub fn read_dir_files(dir: &Path) -> anyhow::Result<Vec<KeyValue>> {
     let mut entries = Vec::new();
     if dir.exists() {
         for entry in std::fs::read_dir(dir)? {
@@ -38,7 +39,7 @@ pub fn read_dir_files(dir: &Path) -> anyhow::Result<Vec<(String, Vec<u8>)>> {
             if path.is_file() {
                 let name = path.file_name().unwrap().to_string_lossy().to_string();
                 let data = std::fs::read(&path)?;
-                entries.push((name, data));
+                entries.push(KeyValue { key: name, value: data });
             }
         }
     }
@@ -53,18 +54,18 @@ pub fn write_contents(
     std::fs::create_dir_all(dir.join("encryption"))?;
     std::fs::create_dir_all(dir.join("databases"))?;
     std::fs::create_dir_all(dir.join("files"))?;
-    for (name, key_data) in &contents.keys {
-        std::fs::write(dir.join("encryption").join(name), key_data)?;
+    for kv in &contents.keys {
+        std::fs::write(dir.join("encryption").join(&kv.key), &kv.value)?;
     }
     if let Some(db) = &contents.db_file {
         std::fs::write(dir.join("databases").join("librecrate.db"), db)?;
     }
-    for (name, file_data) in &contents.files {
-        let path = dir.join("files").join(name);
+    for kv in &contents.files {
+        let path = dir.join("files").join(&kv.key);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(path, file_data)?;
+        std::fs::write(path, &kv.value)?;
     }
     Ok(())
 }

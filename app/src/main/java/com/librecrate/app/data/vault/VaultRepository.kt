@@ -266,19 +266,19 @@ class VaultRepository(private val context: Context) {
     // Search
     // -----------------------------------------------------------------------
 
-    suspend fun searchDocuments(query: String): List<SearchResultFfi> = withContext(Dispatchers.IO) {
+    suspend fun searchDocuments(query: String): List<FtsResult> = withContext(Dispatchers.IO) {
         handle?.searchDocuments(query) ?: emptyList()
     }
 
-    suspend fun searchDocumentsWithSnippet(query: String): List<SnippetResultFfi> = withContext(Dispatchers.IO) {
+    suspend fun searchDocumentsWithSnippet(query: String): List<FtsSnippetResult> = withContext(Dispatchers.IO) {
         handle?.searchDocumentsWithSnippet(query) ?: emptyList()
     }
 
-    suspend fun searchDocumentsWithAllMatches(query: String): List<MultiMatchResultFfi> = withContext(Dispatchers.IO) {
+    suspend fun searchDocumentsWithAllMatches(query: String): List<MultiMatchResult> = withContext(Dispatchers.IO) {
         handle?.searchDocumentsWithAllMatches(query) ?: emptyList()
     }
 
-    suspend fun searchInDocument(documentId: String, query: String): List<SnippetResultFfi> = withContext(Dispatchers.IO) {
+    suspend fun searchInDocument(documentId: String, query: String): List<FtsSnippetResult> = withContext(Dispatchers.IO) {
         handle?.searchInDocument(documentId, query) ?: emptyList()
     }
 
@@ -364,11 +364,11 @@ class VaultRepository(private val context: Context) {
     // -----------------------------------------------------------------------
 
     suspend fun exportVaultStatic(
-        files: List<KeyValueFfi>,
+        files: List<KeyValue>,
         dbFile: ByteArray?,
         vaultPassword: String,
-        keys: List<KeyValueFfi>,
-        kdfParams: Argon2ParamsFfi,
+        keys: List<KeyValue>,
+        kdfParams: Argon2Params,
     ): ByteArray? = withContext(Dispatchers.IO) {
         try {
             exportVault(files, dbFile, vaultPassword, keys, kdfParams)
@@ -377,7 +377,7 @@ class VaultRepository(private val context: Context) {
         }
     }
 
-    suspend fun importVaultStatic(vaultData: ByteArray, vaultPassword: String): ImportedContentsFfi? = withContext(Dispatchers.IO) {
+    suspend fun importVaultStatic(vaultData: ByteArray, vaultPassword: String): ImportedContents? = withContext(Dispatchers.IO) {
         try {
             importVault(vaultData, vaultPassword)
         } catch (e: Exception) {
@@ -386,7 +386,7 @@ class VaultRepository(private val context: Context) {
     }
 
     suspend fun restoreToLayoutStatic(
-        contents: ImportedContentsFfi,
+        contents: ImportedContents,
         dbData: ByteArray,
         encryptionDir: String,
         databaseDir: String,
@@ -403,11 +403,11 @@ class VaultRepository(private val context: Context) {
     suspend fun mergeBranchA(
         backupDbPath: String,
         backupMasterKey: ByteArray,
-        files: List<KeyValueFfi>,
+        files: List<KeyValue>,
         backupKey: ByteArray?,
         localKey: ByteArray?,
         filesDir: String,
-    ): MergeStatsFfi? = withContext(Dispatchers.IO) {
+    ): MergeStats? = withContext(Dispatchers.IO) {
         try {
             handle?.mergeBranchA(backupDbPath, backupMasterKey, files, backupKey, localKey, filesDir)
         } catch (e: Exception) {
@@ -442,7 +442,7 @@ class VaultRepository(private val context: Context) {
 // Mapping extensions between FFI types and UI models
 // ---------------------------------------------------------------------------
 
-fun DocumentFfi.toUiModel() = Document(
+fun DocumentRow.toUiModel() = Document(
     id = id,
     title = title,
     fileName = fileName,
@@ -468,7 +468,7 @@ fun DocumentFfi.toUiModel() = Document(
     contentHash = contentHash,
 )
 
-fun Document.toFfi() = DocumentFfi(
+fun Document.toFfi() = DocumentRow(
     id = id,
     title = title,
     fileName = fileName,
@@ -494,7 +494,7 @@ fun Document.toFfi() = DocumentFfi(
     contentHash = contentHash,
 )
 
-fun CollectionFfi.toUiModel() = Collection(
+fun CollectionRow.toUiModel() = Collection(
     id = id,
     name = name,
     icon = icon,
@@ -502,7 +502,7 @@ fun CollectionFfi.toUiModel() = Collection(
     parentId = parentId,
 )
 
-fun Collection.toFfi() = CollectionFfi(
+fun Collection.toFfi() = CollectionRow(
     id = id,
     name = name,
     icon = icon,
@@ -510,13 +510,13 @@ fun Collection.toFfi() = CollectionFfi(
     parentId = parentId,
 )
 
-fun TagFfi.toUiModel() = Tag(
+fun TagRow.toUiModel() = Tag(
     id = id,
     name = name,
     color = color,
 )
 
-fun Tag.toFfi() = TagFfi(
+fun Tag.toFfi() = TagRow(
     id = id,
     name = name,
     color = color,

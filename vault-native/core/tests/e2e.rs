@@ -6,6 +6,7 @@ use vault_native::db::fts;
 use vault_native::db::queries::{self, DocumentRow};
 use vault_native::format::export;
 use vault_native::format::import;
+use vault_native::types::KeyValue;
 
 fn make_master_key() -> Vec<u8> {
     (0..32).collect::<Vec<u8>>()
@@ -142,12 +143,12 @@ fn test_vault_roundtrip_with_db() {
 
     // Export vault
     let exported = export::export(
-        &[("hello.txt".into(), encrypted_file)],
+        &[KeyValue { key: "hello.txt".into(), value: encrypted_file }],
         Some(&db_data),
         password,
         &[
-            ("wrapped_master_key".into(), wrapped_mk.clone()),
-            ("salt".into(), salt.to_vec()),
+            KeyValue { key: "wrapped_master_key".into(), value: wrapped_mk.clone() },
+            KeyValue { key: "salt".into(), value: salt.to_vec() },
         ],
         &kdf_params,
     )

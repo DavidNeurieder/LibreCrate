@@ -65,12 +65,12 @@ pub fn run(args: MergeArgs) -> anyhow::Result<()> {
 
     // Copy B's file blobs into A's files dir
     // (branch_a_merge skips file copy when keys are None for unencrypted model)
-    for (name, data) in &contents_b.files {
-        let target = tmp_a.path().join("files").join(name);
+    for kv in &contents_b.files {
+        let target = tmp_a.path().join("files").join(&kv.key);
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(&target, data)?;
+        std::fs::write(&target, &kv.value)?;
     }
 
     // Re-export A as merged vault

@@ -7,16 +7,17 @@ use crate::format::package;
 use std::io::Write;
 use zip::ZipWriter;
 use zip::write::FileOptions;
+use crate::types::KeyValue;
 
 pub struct ExportedVault {
     pub data: Vec<u8>,
 }
 
 pub fn export(
-    files: &[(String, Vec<u8>)],
+    files: &[KeyValue],
     db_file: Option<&[u8]>,
     vault_password: &str,
-    keys: &[(String, Vec<u8>)],
+    keys: &[KeyValue],
     kdf_params: &Argon2Params,
 ) -> Result<ExportedVault> {
     let salt = argon2::generate_salt();
@@ -28,16 +29,16 @@ pub fn export(
     // Build ZIP entries
     let mut zip_entries: Vec<(String, Vec<u8>)> = Vec::new();
 
-    for (name, data) in keys {
-        zip_entries.push((format!("keys/{name}"), data.clone()));
+    for kv in keys {
+        zip_entries.push((format!("keys/{}", kv.key), kv.value.clone()));
     }
 
     if let Some(db) = db_file {
         zip_entries.push(("db/librecrate.db".into(), db.to_vec()));
     }
 
-    for (name, data) in files {
-        zip_entries.push((format!("files/{name}"), data.clone()));
+    for kv in files {
+        zip_entries.push((format!("files/{}", kv.key), kv.value.clone()));
     }
 
     // Create plain ZIP blob
@@ -135,12 +136,12 @@ mod tests {
         let file_data = b"hello-world".to_vec();
 
         let exported = export(
-            &[("test.txt".into(), file_data.clone())],
+            &[KeyValue { key: "test.txt".into(), value: file_data.clone() }],
             Some(&db_data),
             password,
             &[
-                ("wrapped_master_key".into(), wrapped_master_key.clone()),
-                ("salt".into(), salted.to_vec()),
+                KeyValue { key: "wrapped_master_key".into(), value: wrapped_master_key.clone() },
+                KeyValue { key: "salt".into(), value: salted.to_vec() },
             ],
             &kdf_params,
         )

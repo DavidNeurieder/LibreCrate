@@ -301,15 +301,11 @@ impl DbHandle {
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        let file_pairs: Vec<(String, Vec<u8>)> = files
-            .into_iter()
-            .map(|kv| (kv.key, kv.value))
-            .collect();
         crate::merge::branch_a_merge(
             &backup_db_path,
             &backup_master_key,
             &conn,
-            &file_pairs,
+            &files,
             backup_key.as_deref(),
             local_key.as_deref(),
             std::path::Path::new(&files_dir),
@@ -718,16 +714,11 @@ pub fn export_vault(
     keys: Vec<crate::types::KeyValue>,
     kdf_params: crate::crypto::argon2::Argon2Params,
 ) -> Result<Vec<u8>, crate::error::Error> {
-    let file_pairs: Vec<(String, Vec<u8>)> =
-        files.into_iter().map(|kv| (kv.key, kv.value)).collect();
-    let key_pairs: Vec<(String, Vec<u8>)> =
-        keys.into_iter().map(|kv| (kv.key, kv.value)).collect();
-
     let exported = crate::format::export::export(
-        &file_pairs,
+        &files,
         db_file.as_deref(),
         &vault_password,
-        &key_pairs,
+        &keys,
         &kdf_params,
     )?;
 
