@@ -1,9 +1,7 @@
 package com.librecrate.app.ui.viewer
-
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,10 +31,10 @@ import org.json.JSONObject
 import java.io.File
 import java.util.zip.ZipFile
 
+
 @Composable
 fun PkPassViewer(file: File) {
     val passData = remember(file) { parsePkPass(file) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -52,11 +50,9 @@ fun PkPassViewer(file: File) {
             )
             return
         }
-
         val bgColor = passData.backgroundColor?.let { parseColorString(it) }
         val fgColor = passData.foregroundColor?.let { parseColorString(it) }
         val labelColor = passData.labelColor?.let { parseColorString(it) }
-
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
@@ -79,7 +75,6 @@ fun PkPassViewer(file: File) {
                         contentScale = ContentScale.Fit,
                     )
                 }
-
                 passData.organizationName?.let { org ->
                     Text(
                         text = org,
@@ -88,9 +83,7 @@ fun PkPassViewer(file: File) {
                         color = fgColor ?: MaterialTheme.colorScheme.onSurface,
                     )
                 }
-
                 Spacer(Modifier.height(12.dp))
-
                 passData.description?.let { desc ->
                     Text(
                         text = desc,
@@ -98,9 +91,7 @@ fun PkPassViewer(file: File) {
                         color = labelColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-
                 Spacer(Modifier.height(16.dp))
-
                 passData.thumbnailBitmap?.let { thumb ->
                     Image(
                         bitmap = thumb.asImageBitmap(),
@@ -111,7 +102,6 @@ fun PkPassViewer(file: File) {
                         contentScale = ContentScale.Fit,
                     )
                 }
-
                 passData.stripBitmap?.let { strip ->
                     Image(
                         bitmap = strip.asImageBitmap(),
@@ -124,7 +114,6 @@ fun PkPassViewer(file: File) {
                     )
                     Spacer(Modifier.height(12.dp))
                 }
-
                 renderFields(passData.headerFields, fgColor, labelColor)
                 Spacer(Modifier.height(8.dp))
                 renderFields(passData.primaryFields, fgColor, labelColor)
@@ -134,9 +123,7 @@ fun PkPassViewer(file: File) {
                 renderFields(passData.auxiliaryFields, fgColor, labelColor)
             }
         }
-
         Spacer(Modifier.height(24.dp))
-
         passData.relevantDate?.let { date ->
             Text(
                 text = "Relevant date: $date",
@@ -145,7 +132,6 @@ fun PkPassViewer(file: File) {
             )
             Spacer(Modifier.height(4.dp))
         }
-
         passData.expirationDate?.let { date ->
             Text(
                 text = "Expires: $date",
@@ -154,7 +140,6 @@ fun PkPassViewer(file: File) {
             )
             Spacer(Modifier.height(4.dp))
         }
-
         if (passData.barcodes.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
             passData.barcodes.forEachIndexed { index, barcode ->
@@ -174,7 +159,6 @@ fun PkPassViewer(file: File) {
                 }
             }
         }
-
         if (passData.backFields.isNotEmpty()) {
             Spacer(Modifier.height(24.dp))
             Card(
@@ -205,7 +189,6 @@ fun PkPassViewer(file: File) {
         }
     }
 }
-
 @Composable
 private fun renderFields(
     fields: List<PassField>,
@@ -230,13 +213,11 @@ private fun renderFields(
         }
     }
 }
-
 private data class PassBarcode(
     val format: String,
     val message: String,
     val altText: String?,
 )
-
 private data class PassData(
     val description: String?,
     val organizationName: String?,
@@ -256,30 +237,25 @@ private data class PassData(
     val thumbnailBitmap: Bitmap?,
     val stripBitmap: Bitmap?,
 )
-
 private data class PassField(
     val key: String,
     val label: String?,
     val value: String,
 )
-
 private fun parsePkPass(file: File): PassData? {
     try {
         ZipFile(file).use { zip ->
             val passEntry = zip.getEntry("pass.json") ?: return null
             val jsonText = zip.getInputStream(passEntry).readBytes().decodeToString()
             val json = JSONObject(jsonText)
-
             val logoBitmap = loadImage(zip, "logo.png")
                 ?: loadImage(zip, "icon.png")
             val stripBitmap = loadImage(zip, "strip.png")
             val thumbnailBitmap = loadImage(zip, "thumbnail.png")
-
             val barcode = json.optJSONObject("barcode")
                 ?: json.optJSONObject("barCode")
             val barcodesArray = json.optJSONArray("barcodes")
             val barcodes = mutableListOf<PassBarcode>()
-
             if (barcode != null) {
                 val fmt = barcode.optString("format").takeIf { it.isNotEmpty() }
                 val msg = barcode.optString("message").takeIf { it.isNotEmpty() }
@@ -293,7 +269,6 @@ private fun parsePkPass(file: File): PassData? {
                     )
                 }
             }
-
             if (barcodesArray != null) {
                 for (i in 0 until barcodesArray.length()) {
                     val obj = barcodesArray.getJSONObject(i)
@@ -310,7 +285,6 @@ private fun parsePkPass(file: File): PassData? {
                     }
                 }
             }
-
             return PassData(
                 description = json.optString("description").takeIf { it.isNotEmpty() },
                 organizationName = json.optString("organizationName").takeIf { it.isNotEmpty() },
@@ -336,7 +310,6 @@ private fun parsePkPass(file: File): PassData? {
         return null
     }
 }
-
 private fun parseFields(jsonArray: org.json.JSONArray?): List<PassField> {
     if (jsonArray == null) return emptyList()
     val fields = mutableListOf<PassField>()
@@ -352,14 +325,12 @@ private fun parseFields(jsonArray: org.json.JSONArray?): List<PassField> {
     }
     return fields
 }
-
 private fun loadImage(zip: ZipFile, name: String): Bitmap? {
     val entry = zip.getEntry(name) ?: return null
     return zip.getInputStream(entry).use { stream ->
         BitmapFactory.decodeStream(stream)
     }
 }
-
 private fun parseColorString(colorStr: String): Color? {
     val trimmed = colorStr.trim()
     return try {

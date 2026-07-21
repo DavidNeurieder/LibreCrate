@@ -1,5 +1,4 @@
 package com.librecrate.app.ui.viewer
-
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,11 +54,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.librecrate.app.data.model.DocumentType
 import com.librecrate.app.ui.common.EmptyState
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,7 +74,6 @@ fun ViewerScreen(
     val decryptedFile by viewModel.decryptedFile.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
-
     var showInfoDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -83,7 +81,6 @@ fun ViewerScreen(
     var showPdfSettingsDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val pdfPreferences = remember { mutableStateOf(PdfPreferencesStore.load(context)) }
-
     if (showInfoDialog && document != null) {
         val doc = document!!
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
@@ -117,7 +114,6 @@ fun ViewerScreen(
             },
         )
     }
-
     if (showDeleteDialog && document != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -139,7 +135,6 @@ fun ViewerScreen(
             },
         )
     }
-
     if (showRenameDialog && document != null) {
         AlertDialog(
             onDismissRequest = {
@@ -182,17 +177,14 @@ fun ViewerScreen(
             },
         )
     }
-
     LaunchedEffect(documentId) {
         viewModel.loadDocument(documentId, isNewNote)
     }
-
     LaunchedEffect(error) {
         if (error == "Document not found") {
             onDocumentNotFound()
         }
     }
-
     if (showPdfSettingsDialog) {
         val currentPrefs = pdfPreferences.value
         AlertDialog(
@@ -265,7 +257,6 @@ fun ViewerScreen(
             },
         )
     }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -412,7 +403,6 @@ fun ViewerScreen(
         }
     }
 }
-
 @Composable
 private fun InfoRow(label: String, value: String) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -428,7 +418,6 @@ private fun InfoRow(label: String, value: String) {
         )
     }
 }
-
 private fun formatFileSize(bytes: Long): String {
     return when {
         bytes < 1024 -> "$bytes B"

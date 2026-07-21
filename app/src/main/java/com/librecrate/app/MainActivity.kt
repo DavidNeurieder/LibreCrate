@@ -1,12 +1,9 @@
 package com.librecrate.app
-
-import android.app.Activity
 import android.content.Intent
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Bundle
-import android.view.WindowInsetsController
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,6 +26,7 @@ import com.librecrate.app.data.AppPreferencesStore
 import com.librecrate.app.ui.navigation.LibreCrateNavGraph
 import com.librecrate.app.ui.navigation.Routes
 
+
 class MainActivity : ComponentActivity() {
     private val pendingShareUris = mutableStateOf<List<Uri>>(emptyList())
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
@@ -36,7 +34,6 @@ class MainActivity : ComponentActivity() {
             updateScreenCaptureFlag()
         }
     }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -44,11 +41,8 @@ class MainActivity : ComponentActivity() {
         updateScreenCaptureFlag()
         getSharedPreferences("app_preferences", MODE_PRIVATE)
             .registerOnSharedPreferenceChangeListener(prefsListener)
-
         handleShareIntent(intent)
-
         val app = application as LibreCrateApplication
-
         setContent {
             val colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
             MaterialTheme(colorScheme = colorScheme) {
@@ -59,7 +53,6 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     var isReady by remember { mutableStateOf(false) }
                     var startDestination by remember { mutableStateOf(Routes.LIBRARY) }
-
                     LaunchedEffect(Unit) {
                         if (app.encryptionManager.isFirstLaunch()) {
                             startDestination = Routes.PASSWORD_SETUP
@@ -72,7 +65,6 @@ class MainActivity : ComponentActivity() {
                         }
                         isReady = true
                     }
-
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (isReady) {
                             LibreCrateNavGraph(
@@ -88,13 +80,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
     override fun onDestroy() {
         super.onDestroy()
         getSharedPreferences("app_preferences", MODE_PRIVATE)
             .unregisterOnSharedPreferenceChangeListener(prefsListener)
     }
-
     private fun updateScreenCaptureFlag() {
         if (AppPreferencesStore.isScreenshotsEnabled(this)) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -102,12 +92,10 @@ class MainActivity : ComponentActivity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleShareIntent(intent)
     }
-
     private fun handleShareIntent(intent: Intent) {
         when (intent.action) {
             Intent.ACTION_SEND -> {
@@ -138,5 +126,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-

@@ -1,9 +1,7 @@
 package com.librecrate.app.ui.viewer
-
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -38,8 +36,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -113,15 +109,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+
 private const val TAG = "EpubReaderActivity"
-
 class EpubReaderActivity : FragmentActivity() {
-
     companion object {
         private const val EXTRA_FILE_PATH = "file_path"
         private const val EXTRA_DOCUMENT_ID = "document_id"
         private const val EXTRA_TARGET_SECTION = "target_section"
-
         fun start(context: Context, decryptedFilePath: String, documentId: String, targetSection: Int? = null) {
             val intent = Intent(context, EpubReaderActivity::class.java).apply {
                 putExtra(EXTRA_FILE_PATH, decryptedFilePath)
@@ -131,28 +125,23 @@ class EpubReaderActivity : FragmentActivity() {
             context.startActivity(intent)
         }
     }
-
     @JvmField
     internal var containerId: Int = View.generateViewId()
     private var documentId: String? = null
     private var targetSection: Int? = null
     private var epubFile: File? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         documentId = intent?.getStringExtra(EXTRA_DOCUMENT_ID)
         documentId?.let { SessionStore.saveLastDocumentId(this, it) }
         targetSection = intent?.getIntExtra(EXTRA_TARGET_SECTION, -1)?.takeIf { it >= 0 }
-
         val filePath = intent?.getStringExtra(EXTRA_FILE_PATH) ?: run { finish(); return }
         val file = File(filePath)
         if (!file.exists()) { finish(); return }
         epubFile = file
-
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         updateScreenCaptureFlag()
         containerId = View.generateViewId()
-
         setContent {
             val colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
             MaterialTheme(colorScheme = colorScheme) {
@@ -170,9 +159,7 @@ class EpubReaderActivity : FragmentActivity() {
             }
         }
     }
-
     override fun onResume() { super.onResume(); updateScreenCaptureFlag() }
-
     private fun updateScreenCaptureFlag() {
         if (AppPreferencesStore.isScreenshotsEnabled(this)) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -180,7 +167,6 @@ class EpubReaderActivity : FragmentActivity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
-
     override fun onPause() {
         super.onPause()
         val docId = documentId ?: return
@@ -194,7 +180,6 @@ class EpubReaderActivity : FragmentActivity() {
             app.vaultRepository.setCurrentPage(docId, percent)
         }
     }
-
     private fun toggleFavorite() {
         val docId = documentId ?: return
         lifecycleScope.launch(Dispatchers.IO) {
@@ -204,7 +189,6 @@ class EpubReaderActivity : FragmentActivity() {
         }
     }
 }
-
 @OptIn(ExperimentalReadiumApi::class)
 @Composable
 private fun EpubReaderHost(
@@ -221,7 +205,6 @@ private fun EpubReaderHost(
     var document by remember { mutableStateOf<Document?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var isReady by remember { mutableStateOf(false) }
-
     LaunchedEffect(Unit) {
         try {
             val app = context.application as LibreCrateApplication
@@ -229,7 +212,6 @@ private fun EpubReaderHost(
                 documentId?.let { app.vaultRepository.getDocument(it) }
             }
             document = doc
-
             val fileToOpen = epubFile ?: throw RuntimeException("No EPUB file available")
             val pub = withContext(Dispatchers.IO) {
                 val httpClient = DefaultHttpClient()
@@ -246,7 +228,6 @@ private fun EpubReaderHost(
                 }
             }
             publication = pub
-
             val initialLocator = withContext(Dispatchers.IO) {
                 documentId?.let { id ->
                     val docEntry = app.vaultRepository.getDocument(id)
@@ -255,7 +236,6 @@ private fun EpubReaderHost(
                     }
                 }
             }
-
             val readerPrefs = ReaderPreferencesStore.load(context)
             val initialPreferences = EpubPreferences(
                 fontSize = readerPrefs.fontSize.toDouble(),
@@ -268,7 +248,6 @@ private fun EpubReaderHost(
                 pageMargins = readerPrefs.pageMargins.toDouble(),
                 publisherStyles = false,
             )
-
             val navigatorFactory = EpubNavigatorFactory(pub)
             activity.supportFragmentManager.fragmentFactory =
                 navigatorFactory.createFragmentFactory(initialLocator = initialLocator, initialPreferences = initialPreferences)
@@ -278,7 +257,6 @@ private fun EpubReaderHost(
             error = e.message
         }
     }
-
     when {
         error != null -> {
             LaunchedEffect(error) {
@@ -290,7 +268,6 @@ private fun EpubReaderHost(
         else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalReadiumApi::class)
 @Composable
 private fun EpubReaderScreen(
@@ -308,20 +285,16 @@ private fun EpubReaderScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showTocSheet by remember { mutableStateOf(false) }
     var isFavorite by remember { mutableStateOf(document?.isFavorite ?: false) }
-
     val activity = LocalContext.current as? FragmentActivity
     val scope = rememberCoroutineScope()
-
     fun navigateForward() { (activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment)?.goForward(true) }
     fun navigateBackward() { (activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment)?.goBackward(true) }
-
     LaunchedEffect(targetSection, publication) {
         if (targetSection == null || publication == null) return@LaunchedEffect
         if (targetSection >= publication.readingOrder.size) return@LaunchedEffect
         val frag = activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment ?: return@LaunchedEffect
         frag.go(publication.readingOrder[targetSection], true)
     }
-
     if (showInfoDialog && document != null) {
         val doc = document
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
@@ -342,12 +315,10 @@ private fun EpubReaderScreen(
             confirmButton = { TextButton(onClick = { showInfoDialog = false }) { Text("Close") } },
         )
     }
-
     if (showSettingsDialog) {
         val act = activity
         if (act != null) ReaderSettingsDialog(activity = act, containerId = containerId, onDismiss = { showSettingsDialog = false })
     }
-
     if (showRenameDialog && document != null) {
         AlertDialog(
             onDismissRequest = { showRenameDialog = false; renameText = "" }, title = { Text("Rename document") },
@@ -369,7 +340,6 @@ private fun EpubReaderScreen(
             dismissButton = { TextButton(onClick = { showRenameDialog = false; renameText = "" }) { Text("Cancel") } },
         )
     }
-
     if (showDeleteDialog && document != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false }, title = { Text("Delete document") }, text = { Text("This action cannot be undone.") },
@@ -386,12 +356,10 @@ private fun EpubReaderScreen(
             dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") } },
         )
     }
-
     if (showTocSheet && publication != null) {
         val fragment = activity?.supportFragmentManager?.findFragmentById(containerId) as? EpubNavigatorFragment
         if (fragment != null) ChapterTocSheet(publication = publication, navigatorFragment = fragment, onDismiss = { showTocSheet = false })
     }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -445,7 +413,6 @@ private fun EpubReaderScreen(
         }
     }
 }
-
 @Composable
 private fun InfoRow(label: String, value: String) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -453,7 +420,6 @@ private fun InfoRow(label: String, value: String) {
         Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clearAndSetSemantics { })
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChapterTocSheet(publication: Publication, navigatorFragment: EpubNavigatorFragment, onDismiss: () -> Unit) {
@@ -477,7 +443,6 @@ private fun ChapterTocSheet(publication: Publication, navigatorFragment: EpubNav
         }
     }
 }
-
 @Composable
 private fun TocItem(link: Link, depth: Int, isActive: Boolean, onClick: () -> Unit) {
     val title = (link.title ?: "").ifBlank { link.href.toString() }
@@ -489,22 +454,18 @@ private fun TocItem(link: Link, depth: Int, isActive: Boolean, onClick: () -> Un
         Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal, color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
     }
 }
-
 internal fun flattenToc(links: List<Link>, depth: Int = 0): List<Pair<Link, Int>> {
     val result = mutableListOf<Pair<Link, Int>>()
     for (link in links) { result.add(link to depth); if (link.children.isNotEmpty()) result.addAll(flattenToc(link.children, depth + 1)) }
     return result
 }
-
 internal fun findActiveTocIndex(currentLocator: Locator?, tocLinks: List<Pair<Link, Int>>): Int {
     val locator = currentLocator ?: return -1; val locatorHref = locator.href.toString()
     var bestIndex = -1; var bestLength = 0
     for (i in tocLinks.indices) { val linkHref = tocLinks[i].first.href.toString(); if (locatorHref.startsWith(linkHref) && linkHref.length > bestLength) { bestIndex = i; bestLength = linkHref.length } }
     return bestIndex
 }
-
 private fun formatFileSize(bytes: Long): String = when { bytes < 1024 -> "$bytes B"; bytes < 1024 * 1024 -> "${bytes / 1024} KB"; else -> "%.1f MB".format(bytes.toDouble() / (1024 * 1024)) }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReaderSettingsDialog(activity: FragmentActivity, containerId: Int, onDismiss: () -> Unit) {
@@ -543,7 +504,6 @@ private fun ReaderSettingsDialog(activity: FragmentActivity, containerId: Int, o
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FontFamilyDropdown(selected: FontFamilyName, onSelected: (FontFamilyName) -> Unit) {

@@ -24,6 +24,10 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    lint {
+        disable += listOf("ChromeOsAbiSupport", "UseTomlInstead")
+    }
 }
 
 dependencies {

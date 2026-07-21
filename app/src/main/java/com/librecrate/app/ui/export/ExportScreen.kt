@@ -1,5 +1,4 @@
 package com.librecrate.app.ui.export
-
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -50,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.librecrate.app.data.model.Document
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExportScreen(
@@ -62,23 +61,19 @@ fun ExportScreen(
     val exportProgress by viewModel.exportProgress.collectAsState()
     val message by viewModel.message.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-
     val snackbarHostState = remember { SnackbarHostState() }
     var isSearchActive by remember { mutableStateOf(false) }
-
     LaunchedEffect(message) {
         message?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
         }
     }
-
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri: Uri? ->
         uri?.let { viewModel.onExportDocumentsConfirmed(it) }
     }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -166,7 +161,6 @@ fun ExportScreen(
                         }
                     }
                 }
-
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                 ) {
@@ -179,7 +173,6 @@ fun ExportScreen(
                         )
                     }
                 }
-
                 if (isExporting) {
                     Card(
                         modifier = Modifier
@@ -209,7 +202,6 @@ fun ExportScreen(
                         }
                     }
                 }
-
                 Button(
                     onClick = {
                         val dateStr = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
@@ -226,7 +218,6 @@ fun ExportScreen(
         }
     }
 }
-
 @Composable
 private fun DocumentExportItem(
     doc: Document,
@@ -241,7 +232,6 @@ private fun DocumentExportItem(
             else -> "%.1f MB".format(doc.fileSize.toDouble() / (1024 * 1024))
         }
     }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()

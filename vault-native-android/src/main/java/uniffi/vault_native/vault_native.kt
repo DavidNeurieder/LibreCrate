@@ -1749,6 +1749,7 @@ private fun UniffiCleaner.Companion.create(): UniffiCleaner =
         UniffiJnaCleaner()
     }
 
+@Suppress("NewApi")
 private class JavaLangRefCleaner : UniffiCleaner {
     val cleaner = java.lang.ref.Cleaner.create()
 
@@ -1756,6 +1757,7 @@ private class JavaLangRefCleaner : UniffiCleaner {
         JavaLangRefCleanable(cleaner.register(value, cleanUpTask))
 }
 
+@Suppress("NewApi")
 private class JavaLangRefCleanable(
     val cleanable: java.lang.ref.Cleaner.Cleanable
 ) : UniffiCleaner.Cleanable {

@@ -1,28 +1,21 @@
 package com.librecrate.app.data.encryption
-
 import com.librecrate.app.util.ErrorLogger
 import uniffi.vault_native.*
-import java.io.File
-import java.security.SecureRandom
+
 
 class RustKeyManager(
     private val keyStore: KeyStore,
     private val crypto: KeyStoreCryptographer,
 ) : KeyManager {
-
     private var sessionMasterKey: ByteArray? = null
-
     override fun isPasswordSet(): Boolean = keyStore.exists(SALT_FILE) && keyStore.exists(WRAPPED_KEY_FILE)
-
     override fun isFirstLaunch(): Boolean = !isPasswordSet()
-
     override fun initializeDeviceKeyMode() {
         keyStore.delete(DEVICE_WRAPPED_KEY_FILE)
         val masterKey = sessionMasterKey ?: return
         val (iv, encrypted) = crypto.encrypt(masterKey)
         keyStore.write(DEVICE_WRAPPED_KEY_FILE, iv + encrypted)
     }
-
     override fun initializeWithPassword(password: String): Boolean {
         return try {
             val salt = keyStore.read(SALT_FILE) ?: generateSalt()
@@ -37,14 +30,11 @@ class RustKeyManager(
             ErrorLogger.logException(null, TAG, "initializeWithPassword failed", e); false
         }
     }
-
     override fun getMasterKeyForSession(): ByteArray? = sessionMasterKey
-
     override fun setPassword(password: String): Boolean {
         return if (isFirstLaunch()) initializeWithPassword(password)
         else changePassword("", password)
     }
-
     override fun verifyPassword(password: String): Boolean {
         return try {
             val salt = keyStore.read(SALT_FILE) ?: return false
@@ -60,19 +50,16 @@ class RustKeyManager(
             sessionMasterKey = null; false
         }
     }
-
     override fun changePassword(oldPassword: String, newPassword: String): Boolean {
         return try {
             val salt = keyStore.read(SALT_FILE) ?: generateSalt().also { keyStore.write(SALT_FILE, it) }
             val wrappedKey = keyStore.read(WRAPPED_KEY_FILE)
-
             val masterKey = if (wrappedKey != null && oldPassword.isNotEmpty()) {
                 val oldDerivedKey = deriveKey(oldPassword, keyStore.read(SALT_FILE)!!, MEMORY_COST, ITERATIONS, PARALLELISM)
                 unwrapKey(wrappedKey, oldDerivedKey)
             } else {
                 generateMasterKey()
             }
-
             val newDerivedKey = deriveKey(newPassword, salt, MEMORY_COST, ITERATIONS, PARALLELISM)
             val newWrappedKey = wrapKey(newDerivedKey, masterKey)
             keyStore.write(WRAPPED_KEY_FILE, newWrappedKey)
@@ -82,14 +69,11 @@ class RustKeyManager(
             ErrorLogger.logException(null, TAG, "changePassword failed", e); false
         }
     }
-
     override fun disablePassword(): Boolean {
         keyStore.delete(SALT_FILE); keyStore.delete(WRAPPED_KEY_FILE); keyStore.delete(DEVICE_WRAPPED_KEY_FILE)
         sessionMasterKey = null; return true
     }
-
     override fun lock() { sessionMasterKey = null }
-
     fun resolveDeviceKeyForBackup(): ByteArray? {
         val data = keyStore.read(DEVICE_WRAPPED_KEY_FILE) ?: return null
         return try {
@@ -98,7 +82,6 @@ class RustKeyManager(
             crypto.decrypt(iv, ciphertext)
         } catch (e: Exception) { ErrorLogger.logWarning(null, TAG, "resolveDeviceKeyForBackup failed", e); null }
     }
-
     fun setupDeviceKeyForDailyUnlock(): Boolean {
         val masterKey = sessionMasterKey ?: return false
         return try {
@@ -106,7 +89,6 @@ class RustKeyManager(
             keyStore.write(DEVICE_WRAPPED_KEY_FILE, iv + encrypted); true
         } catch (e: Exception) { ErrorLogger.logException(null, TAG, "setupDeviceKeyForDailyUnlock failed", e); false }
     }
-
     companion object {
         private const val TAG = "RustKeyManager"
         private const val SALT_FILE = "salt"

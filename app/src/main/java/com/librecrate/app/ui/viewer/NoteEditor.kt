@@ -1,5 +1,4 @@
 package com.librecrate.app.ui.viewer
-
 import android.view.View
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -10,10 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.FormatBold
@@ -55,6 +52,7 @@ import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
 import java.io.File
 
+
 @Composable
 fun NoteEditor(
     document: Document,
@@ -66,14 +64,12 @@ fun NoteEditor(
     val vault = app.vaultRepository
     val parser = remember { Parser.builder().build() }
     val htmlRenderer = remember { HtmlRenderer.builder().build() }
-
     var text by remember(document.id) { mutableStateOf("") }
     var wordCount by remember { mutableIntStateOf(0) }
     var charCount by remember { mutableIntStateOf(0) }
     var saveJob by remember { mutableStateOf<Job?>(null) }
     var loaded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-
     LaunchedEffect(document.id, filePath) {
         val content = withContext(Dispatchers.IO) {
             try {
@@ -87,7 +83,6 @@ fun NoteEditor(
         loaded = true
         updateCounts(content) { w, c -> wordCount = w; charCount = c }
     }
-
     LaunchedEffect(text) {
         if (!loaded) return@LaunchedEffect
         saveJob?.cancel()
@@ -96,7 +91,6 @@ fun NoteEditor(
             saveNoteInternal(app, vault, document, text)
         }
     }
-
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -109,9 +103,7 @@ fun NoteEditor(
             Spacer(Modifier.weight(1f))
             Text("$wordCount words | $charCount chars", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-
         Divider()
-
         OutlinedTextField(
             value = text,
             onValueChange = { newText ->
@@ -122,9 +114,7 @@ fun NoteEditor(
             textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
         )
-
         Divider()
-
         Box(modifier = Modifier.fillMaxWidth().weight(0.5f).padding(8.dp)) {
             val html = remember(text, parser, htmlRenderer) {
                 try { val node: Node = parser.parse(text); htmlRenderer.render(node) } catch (e: Exception) { ErrorLogger.logWarning(context, "NoteEditor", "Preview render failed", e); "<p>Preview error</p>" }
@@ -150,9 +140,7 @@ fun NoteEditor(
                 modifier = Modifier.fillMaxSize(),
             )
         }
-
         Divider()
-
         Row(modifier = Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.Center) {
             Button(
                 onClick = {
@@ -164,12 +152,10 @@ fun NoteEditor(
         }
     }
 }
-
 @Composable
 private fun FormatToolbarButton(icon: androidx.compose.ui.graphics.vector.ImageVector, contentDescription: String, onClick: () -> Unit) {
     IconButton(onClick = onClick) { Icon(imageVector = icon, contentDescription = contentDescription, modifier = Modifier.size(20.dp)) }
 }
-
 private suspend fun saveNoteInternal(
     app: LibreCrateApplication,
     vault: com.librecrate.app.data.vault.VaultRepository,
@@ -188,7 +174,6 @@ private suspend fun saveNoteInternal(
         )
     }
 }
-
 private fun updateCounts(content: String, onResult: (Int, Int) -> Unit) {
     val words = content.trim().split(Regex("\\s+")).filter { it.isNotBlank() }.size
     onResult(words, content.length)

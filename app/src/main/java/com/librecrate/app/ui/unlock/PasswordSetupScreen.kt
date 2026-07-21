@@ -1,5 +1,4 @@
 package com.librecrate.app.ui.unlock
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -14,16 +13,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VpnKey
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,17 +41,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+
 @Composable
 fun PasswordSetupScreen(
     onComplete: () -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as LibreCrateApplication
     val scope = rememberCoroutineScope()
-
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -73,27 +68,20 @@ fun PasswordSetupScreen(
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )
-
             Spacer(modifier = Modifier.height(24.dp))
-
             Text(
                 text = "Protect Your Documents",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
             )
-
             Spacer(modifier = Modifier.height(8.dp))
-
             Text(
                 text = "Set a password to encrypt your vault. You will need this password for backups.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
             Spacer(modifier = Modifier.height(32.dp))
-
             var passwordVisible by remember { mutableStateOf(false) }
-
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it; error = null },
@@ -112,11 +100,8 @@ fun PasswordSetupScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
             )
-
             Spacer(modifier = Modifier.height(12.dp))
-
             var confirmPasswordVisible by remember { mutableStateOf(false) }
-
             OutlinedTextField(
                 value = confirmPassword,
                 onValueChange = { confirmPassword = it; error = null },
@@ -145,9 +130,7 @@ fun PasswordSetupScreen(
                 ),
                 modifier = Modifier.fillMaxWidth(),
             )
-
             Spacer(modifier = Modifier.height(24.dp))
-
             Button(
                 onClick = {
                     doSetPassword(
@@ -160,11 +143,9 @@ fun PasswordSetupScreen(
             ) {
                 Text("Set Password & Continue")
             }
-
         }
     }
 }
-
 private fun doSetPassword(
     password: String,
     confirmPassword: String,

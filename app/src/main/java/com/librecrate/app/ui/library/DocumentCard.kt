@@ -1,8 +1,6 @@
 package com.librecrate.app.ui.library
-
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,9 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
@@ -46,6 +41,7 @@ import com.librecrate.app.data.model.DocumentType
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -83,9 +79,7 @@ fun DocumentCard(
                     modifier = Modifier.size(64.dp),
                 )
             }
-
             Spacer(modifier = Modifier.width(12.dp))
-
             Column(modifier = Modifier.weight(1f).clearAndSetSemantics { }) {
                 Text(
                     text = document.title,
@@ -94,9 +88,7 @@ fun DocumentCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-
                 Spacer(modifier = Modifier.height(2.dp))
-
                 Text(
                     text = buildString {
                         val docType = DocumentType.fromMimeType(document.mimeType)
@@ -119,9 +111,7 @@ fun DocumentCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-
                 Spacer(modifier = Modifier.height(2.dp))
-
                 if (document.lastOpenedAt > 0) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -139,7 +129,6 @@ fun DocumentCard(
                     )
                 }
             }
-
             IconButton(onClick = onFavoriteClick) {
                 Icon(
                     imageVector = if (document.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
@@ -150,7 +139,6 @@ fun DocumentCard(
         }
     }
 }
-
 @Composable
 fun DocumentTypeIcon(type: DocumentType, modifier: Modifier = Modifier) {
     val icon: ImageVector = when (type) {
@@ -169,12 +157,10 @@ fun DocumentTypeIcon(type: DocumentType, modifier: Modifier = Modifier) {
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
-
 @Composable
 fun RelativeTimestamp(timestamp: Long) {
     val now = System.currentTimeMillis()
     val diff = now - timestamp
-
     val text = when {
         diff < 60_000 -> "Just now"
         diff < 3_600_000 -> "${diff / 60_000} minutes ago"
@@ -186,14 +172,12 @@ fun RelativeTimestamp(timestamp: Long) {
             sdf.format(Date(timestamp))
         }
     }
-
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
-
 fun formatFileSize(bytes: Long): String = when {
     bytes < 1024 -> "$bytes B"
     bytes < 1024 * 1024 -> "${bytes / 1024} KB"

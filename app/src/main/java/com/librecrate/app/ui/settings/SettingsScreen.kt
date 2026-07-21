@@ -1,5 +1,4 @@
 package com.librecrate.app.ui.settings
-
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -14,8 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -25,8 +22,6 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -68,6 +63,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -84,19 +80,15 @@ fun SettingsScreen(
     val showExportPasswordDialog by viewModel.showExportPasswordDialog.collectAsState()
     val showImportPasswordDialog by viewModel.showImportPasswordDialog.collectAsState()
     val backupProgress by viewModel.backupProgress.collectAsState()
-
     val isBackupInProgress = backupProgress != null
-
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var screenshotsEnabled by remember { mutableStateOf(AppPreferencesStore.isScreenshotsEnabled(context)) }
-
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream"),
     ) { uri ->
         uri?.let { viewModel.onExportConfirmed(it) }
     }
-
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -105,18 +97,15 @@ fun SettingsScreen(
             viewModel.showImportPasswordDialog.value = true
         }
     }
-
     LaunchedEffect(message) {
         message?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
         }
     }
-
     // Export password dialog
     if (showExportPasswordDialog) {
         var exportPasswordVisible by remember { mutableStateOf(false) }
-
         AlertDialog(
             onDismissRequest = { viewModel.cancelExport() },
             title = { Text("Encrypt Backup") },
@@ -162,11 +151,9 @@ fun SettingsScreen(
             },
         )
     }
-
     // Import password dialog
     if (showImportPasswordDialog) {
         var importPasswordVisible by remember { mutableStateOf(false) }
-
         AlertDialog(
             onDismissRequest = { viewModel.cancelImport() },
             title = { Text("Decrypt Backup") },
@@ -209,7 +196,6 @@ fun SettingsScreen(
             },
         )
     }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -237,7 +223,6 @@ fun SettingsScreen(
                 .padding(16.dp),
         ) {
             SectionHeader("Security")
-
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -251,19 +236,14 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                         )
-
                         Spacer(modifier = Modifier.height(4.dp))
-
                         Text(
                             text = "Encrypt your vault with a password",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-
                         Spacer(modifier = Modifier.height(12.dp))
-
                         var newPasswordVisible by remember { mutableStateOf(false) }
-
                         OutlinedTextField(
                             value = newPassword,
                             onValueChange = { viewModel.newPassword.value = it },
@@ -281,11 +261,8 @@ fun SettingsScreen(
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             modifier = Modifier.fillMaxWidth(),
                         )
-
                         Spacer(modifier = Modifier.height(8.dp))
-
                         var confirmPasswordVisible by remember { mutableStateOf(false) }
-
                         OutlinedTextField(
                             value = confirmPassword,
                             onValueChange = { viewModel.confirmPassword.value = it },
@@ -303,9 +280,7 @@ fun SettingsScreen(
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             modifier = Modifier.fillMaxWidth(),
                         )
-
                         Spacer(modifier = Modifier.height(12.dp))
-
                         Button(
                             onClick = { viewModel.setPassword() },
                             modifier = Modifier.fillMaxWidth(),
@@ -318,11 +293,8 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                         )
-
                         Spacer(modifier = Modifier.height(12.dp))
-
                         var currentPasswordVisible by remember { mutableStateOf(false) }
-
                         OutlinedTextField(
                             value = currentPassword,
                             onValueChange = { viewModel.currentPassword.value = it },
@@ -340,11 +312,8 @@ fun SettingsScreen(
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             modifier = Modifier.fillMaxWidth(),
                         )
-
                         Spacer(modifier = Modifier.height(8.dp))
-
                         var changeNewPasswordVisible by remember { mutableStateOf(false) }
-
                         OutlinedTextField(
                             value = newPassword,
                             onValueChange = { viewModel.newPassword.value = it },
@@ -362,11 +331,8 @@ fun SettingsScreen(
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             modifier = Modifier.fillMaxWidth(),
                         )
-
                         Spacer(modifier = Modifier.height(8.dp))
-
                         var changeConfirmPasswordVisible by remember { mutableStateOf(false) }
-
                         OutlinedTextField(
                             value = confirmPassword,
                             onValueChange = { viewModel.confirmPassword.value = it },
@@ -384,24 +350,18 @@ fun SettingsScreen(
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             modifier = Modifier.fillMaxWidth(),
                         )
-
                         Spacer(modifier = Modifier.height(12.dp))
-
                         Button(
                             onClick = { viewModel.changePassword() },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("Change Password")
                         }
-
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(24.dp))
-
             SectionHeader("Backup")
-
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -418,9 +378,7 @@ fun SettingsScreen(
                     ) {
                         Text("Export Backup")
                     }
-
                     Spacer(modifier = Modifier.height(8.dp))
-
                     OutlinedButton(
                         onClick = {
                             if (!isBackupInProgress) {
@@ -433,7 +391,6 @@ fun SettingsScreen(
                     }
                 }
             }
-
             if (isBackupInProgress) {
                 backupProgress?.let { progress ->
                     Spacer(modifier = Modifier.height(24.dp))
@@ -466,11 +423,8 @@ fun SettingsScreen(
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(24.dp))
-
             SectionHeader("Export Documents")
-
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -492,11 +446,8 @@ fun SettingsScreen(
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(24.dp))
-
             SectionHeader("Privacy")
-
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -523,14 +474,11 @@ fun SettingsScreen(
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(24.dp))
-
             AboutSection(context)
         }
     }
 }
-
 @Composable
 private fun SectionHeader(title: String) {
     Text(
@@ -541,7 +489,6 @@ private fun SectionHeader(title: String) {
         modifier = Modifier.padding(bottom = 8.dp),
     )
 }
-
 @Composable
 private fun AboutSection(context: Context) {
     val versionName = remember {
@@ -552,7 +499,6 @@ private fun AboutSection(context: Context) {
             "?"
         }
     }
-
     Text(
         text = "About",
         style = MaterialTheme.typography.titleMedium,
