@@ -36,33 +36,40 @@ class PdfDocumentReader(filePath: String) : DocumentReader {
         return ReaderLocation(pageIndex = 0)
     }
 
+    fun renderPageBitmap(pageIndex: Int, scale: Float = 150f / 72f): Bitmap {
+        val page = document.loadPage(pageIndex)
+        try {
+            val matrix = Matrix(scale, 0f, 0f, scale, 0f, 0f)
+            val pixmap = page.toPixmap(matrix, ColorSpace.DeviceRGB, true)
+            try {
+                val bitmap = Bitmap.createBitmap(
+                    pixmap.width, pixmap.height,
+                    Bitmap.Config.ARGB_8888,
+                )
+                bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(pixmap.samples))
+                compositeOverWhite(bitmap)
+                return bitmap
+            } finally {
+                pixmap.destroy()
+            }
+        } finally {
+            page.destroy()
+        }
+    }
+
     override suspend fun renderPage(pageIndex: Int, config: RenderConfig): RenderedPage {
         return withContext(Dispatchers.IO) {
-            val page = document.loadPage(pageIndex)
+            val bitmap = renderPageBitmap(pageIndex)
             try {
-                val scale = 150f / 72f
-                val matrix = Matrix(scale, 0f, 0f, scale, 0f, 0f)
-                val pixmap = page.toPixmap(matrix, ColorSpace.DeviceRGB, true)
-                try {
-                    val bitmap = Bitmap.createBitmap(
-                        pixmap.width, pixmap.height,
-                        Bitmap.Config.ARGB_8888,
-                    )
-                    bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(pixmap.samples))
-                    compositeOverWhite(bitmap)
-
-                    val buffer = ByteBuffer.allocate(bitmap.byteCount)
-                    bitmap.copyPixelsToBuffer(buffer)
-                    RenderedPage(
-                        width = bitmap.width,
-                        height = bitmap.height,
-                        pixelData = buffer.array(),
-                    )
-                } finally {
-                    pixmap.destroy()
-                }
+                val buffer = ByteBuffer.allocate(bitmap.byteCount)
+                bitmap.copyPixelsToBuffer(buffer)
+                RenderedPage(
+                    width = bitmap.width,
+                    height = bitmap.height,
+                    pixelData = buffer.array(),
+                )
             } finally {
-                page.destroy()
+                bitmap.recycle()
             }
         }
     }
@@ -93,26 +100,30 @@ class PdfDocumentReader(filePath: String) : DocumentReader {
     }
 
     private fun compositeOverWhite(bitmap: Bitmap) {
-        val pixels = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        val w = bitmap.width
+        val h = bitmap.height
+        val rowPixels = IntArray(w)
         var changed = false
-        for (i in pixels.indices) {
-            val p = pixels[i]
-            val a = p ushr 24
-            if (a != 0xFF) {
-                val r = (p shr 16) and 0xFF
-                val g = (p shr 8) and 0xFF
-                val b = p and 0xFF
-                val af = a / 255f
-                val nr = (r * af + 255f * (1f - af)).toInt().coerceIn(0, 255)
-                val ng = (g * af + 255f * (1f - af)).toInt().coerceIn(0, 255)
-                val nb = (b * af + 255f * (1f - af)).toInt().coerceIn(0, 255)
-                pixels[i] = (0xFF shl 24) or (nr shl 16) or (ng shl 8) or nb
-                changed = true
+        for (y in 0 until h) {
+            bitmap.getPixels(rowPixels, 0, w, 0, y, w, 1)
+            for (x in 0 until w) {
+                val p = rowPixels[x]
+                val a = p ushr 24
+                if (a != 0xFF) {
+                    val r = (p shr 16) and 0xFF
+                    val g = (p shr 8) and 0xFF
+                    val b = p and 0xFF
+                    val af = a / 255f
+                    val nr = (r * af + 255f * (1f - af)).toInt().coerceIn(0, 255)
+                    val ng = (g * af + 255f * (1f - af)).toInt().coerceIn(0, 255)
+                    val nb = (b * af + 255f * (1f - af)).toInt().coerceIn(0, 255)
+                    rowPixels[x] = (0xFF shl 24) or (nr shl 16) or (ng shl 8) or nb
+                    changed = true
+                }
             }
-        }
-        if (changed) {
-            bitmap.setPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+            if (changed) {
+                bitmap.setPixels(rowPixels, 0, w, 0, y, w, 1)
+            }
         }
     }
 }

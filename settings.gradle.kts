@@ -18,6 +18,5 @@ dependencyResolutionManagement {
 rootProject.name = "LibreCrate"
 include(":app")
 include(":vault-reader")
-include(":reader-pdf")
 include(":reader-epub")
 include(":vault-native-android")

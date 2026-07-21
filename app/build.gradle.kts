@@ -99,7 +99,6 @@ dependencies {
     implementation(libs.documentfile)
     implementation(project(":vault-native-android"))
     implementation(project(":vault-reader"))
-    implementation(project(":reader-pdf"))
     implementation(project(":reader-epub"))
     implementation(libs.commonmark)
     implementation(libs.zxing.core)
