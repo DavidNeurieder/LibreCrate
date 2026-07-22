@@ -266,7 +266,7 @@ pub(crate) mod tests {
         let docs = tv.vault.list_documents().unwrap();
         assert_eq!(docs.len(), 1);
         assert_eq!(docs[0].title, "hello.txt");
-        assert_eq!(docs[0].file_name, "hello.txt");
+        assert_eq!(docs[0].file_name, format!("{id}.txt"));
         assert!(docs[0].file_size > 0);
         assert_eq!(docs[0].mime_type, "text/plain");
     }
