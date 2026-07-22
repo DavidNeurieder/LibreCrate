@@ -24,9 +24,9 @@ open = "5"
 rfd = "0.15"
 mime_guess2 = "2"
 uuid = { version = "1", features = ["v4"] }
+tempfile = "3"
 anyhow = "1"
 
 [dev-dependencies]
-tempfile = "3"
 iced_test = "0.14"
 

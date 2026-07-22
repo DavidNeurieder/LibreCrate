@@ -134,12 +134,12 @@ pub fn branch_a_merge(
                     "SELECT id, title, file_name, mime_type, file_path, file_size, page_count,
                      author, description, thumbnail_path, imported_at, last_opened_at,
                      modified_at, is_favorite, is_conflict, conflict_with, collection_id,
-                     encryption_iv, current_page, reading_position, barcode_format, barcode_value
+                     encryption_iv, current_page, reading_position, barcode_format, barcode_value,
+                     content_hash
                      FROM documents WHERE id = ?",
                     rusqlite::params![doc.id],
                     |row| crate::db::queries::document_from_row(row),
                 );
-
             match existing_row {
                 Err(_) => {
                     // No existing document — add backup doc
