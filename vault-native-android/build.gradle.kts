@@ -47,6 +47,17 @@ dependencies {
 // Rust native library build — runs automatically on every Gradle build
 // ---------------------------------------------------------------------------
 
+/** Ensure ~/.cargo/bin is on PATH so `cargo` is found even if Gradle daemon
+ *  doesn't inherit the shell's PATH (e.g. on F-Droid CI). */
+fun Exec.ensureCargoOnPath() {
+    doFirst {
+        val cargoDir = file("${System.getProperty("user.home")}/.cargo/bin")
+        if (cargoDir.exists()) {
+            environment("PATH", "${cargoDir.absolutePath}:${System.getenv("PATH") ?: ""}")
+        }
+    }
+}
+
 val vaultProjectDir = rootProject.projectDir.resolve("vault-native")
 val vaultTargetDir = vaultProjectDir.resolve("target")
 
@@ -92,6 +103,7 @@ val buildHostRustLib by tasks.registering(Exec::class) {
     commandLine("cargo", "build", "-p", "vault-native", "--target", hostTarget, "--release")
     inputs.files(rustSource)
     outputs.file(hostLibFile)
+    ensureCargoOnPath()
 }
 
 // --- Generate Kotlin bindings from the host .so ---
@@ -106,6 +118,7 @@ val generateKotlinBindings by tasks.registering(Exec::class) {
     )
     inputs.file(hostLibFile)
     outputs.dir(generatedBindingsDir)
+    ensureCargoOnPath()
 }
 
 // --- Build Rust library for Android ---
@@ -116,6 +129,7 @@ val buildAndroidRustLib by tasks.registering(Exec::class) {
     commandLine("cargo", "build", "-p", "vault-native", "--target", androidTarget, "--release")
     inputs.files(rustSource)
     outputs.file(androidLibFile)
+    ensureCargoOnPath()
 
     doFirst {
         val ndkDir = sequenceOf(
