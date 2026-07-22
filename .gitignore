@@ -47,4 +47,5 @@ vault-native/target/
 # docs
 /old_docs
 /Download
+/releases
 /.opencode
