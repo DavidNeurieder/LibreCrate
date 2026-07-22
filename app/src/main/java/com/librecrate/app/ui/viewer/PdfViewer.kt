@@ -47,7 +47,7 @@ import com.librecrate.app.util.ErrorLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private const val MAX_CACHED_PAGES = 20
+private const val MAX_CACHED_PAGES = 10
 private const val DEFAULT_PAGE_ASPECT = 3f / 4f
 private const val DOUBLE_TAP_THRESHOLD_MS = 300L
 
@@ -83,6 +83,8 @@ fun PdfViewer(
     val renderedPages = remember { mutableStateMapOf<Int, Bitmap>() }
     var pageAspectRatio by remember { mutableFloatStateOf(DEFAULT_PAGE_ASPECT) }
 
+    val screenWidthPx = context.resources.displayMetrics.widthPixels
+
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var lastTapDownTime by remember { mutableStateOf(0L) }
@@ -110,7 +112,7 @@ fun PdfViewer(
             if (i !in renderedPages) {
                 withContext(Dispatchers.IO) {
                     try {
-                        val bitmap = reader.renderPageBitmap(i)
+                        val bitmap = reader.renderPageBitmap(i, targetWidthPx = screenWidthPx)
                         renderedPages[i] = bitmap
                         if (i == start) {
                             pageAspectRatio = bitmap.width.toFloat() / bitmap.height.toFloat()

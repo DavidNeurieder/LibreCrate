@@ -36,9 +36,11 @@ class PdfDocumentReader(filePath: String) : DocumentReader {
         return ReaderLocation(pageIndex = 0)
     }
 
-    fun renderPageBitmap(pageIndex: Int, scale: Float = 150f / 72f): Bitmap {
+    fun renderPageBitmap(pageIndex: Int, targetWidthPx: Int? = null): Bitmap {
         val page = document.loadPage(pageIndex)
         try {
+            val pageWidthPoints = (page.bounds.x1 - page.bounds.x0).toDouble()
+            val scale = if (targetWidthPx != null) targetWidthPx.toFloat() / pageWidthPoints.toFloat() else (150f / 72f)
             val matrix = Matrix(scale, 0f, 0f, scale, 0f, 0f)
             val pixmap = page.toPixmap(matrix, ColorSpace.DeviceRGB, true)
             try {
