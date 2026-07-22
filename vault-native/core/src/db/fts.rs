@@ -12,7 +12,7 @@ pub struct FtsResult {
     pub title: String,
 }
 
-#[derive(Debug, uniffi::Record)]
+#[derive(Debug, Clone, uniffi::Record)]
 pub struct FtsSnippetResult {
     pub rank: f64,
     pub id: String,
