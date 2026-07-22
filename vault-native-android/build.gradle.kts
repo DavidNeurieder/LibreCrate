@@ -84,7 +84,7 @@ val hostTarget: String by lazy {
 
 val isMac = System.getProperty("os.name").lowercase().contains("mac")
 
-val hostLibDir = vaultTargetDir.resolve("$hostTarget/release")
+val hostLibDir = vaultTargetDir.resolve("$hostTarget/debug")
 val hostLibFile = hostLibDir.resolve(if (isMac) "libvault_native.dylib" else "libvault_native.so")
 
 val androidTarget = "aarch64-linux-android"
@@ -100,7 +100,7 @@ val generatedBindingsDir = layout.buildDirectory.dir("generated/java").get().asF
 val buildHostRustLib by tasks.registering(Exec::class) {
     description = "Build Rust library for host platform"
     workingDir = vaultProjectDir
-    commandLine("cargo", "build", "-p", "vault-native", "--target", hostTarget, "--release")
+    commandLine("cargo", "build", "-p", "vault-native", "--target", hostTarget)
     inputs.files(rustSource)
     outputs.file(hostLibFile)
     ensureCargoOnPath()
