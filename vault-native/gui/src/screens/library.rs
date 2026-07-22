@@ -19,7 +19,8 @@ pub enum Message {
     NavigateToSettings,
     NavigateToExport,
     NavigateToCollections,
-    Lock,
+    Import,
+    Imported(Result<String, String>),
     DocumentsLoaded(Result<Vec<DocumentRow>, String>),
     SearchResultsLoaded(Vec<FtsSnippetResult>),
 }
@@ -84,7 +85,10 @@ impl State {
                         Ok(results) => {
                             crate::app::Message::Library(Message::SearchResultsLoaded(results))
                         }
-                        Err(_) => crate::app::Message::Navigate(Navigation::Unlock),
+                        Err(e) => {
+                            tracing::error!("Search failed: {e}");
+                            crate::app::Message::Library(Message::SearchChanged(String::new()))
+                        }
                     },
                 )
             }
@@ -117,15 +121,14 @@ impl State {
                 Task::none()
             }
             Message::NavigateToSettings => {
-                Task::done(crate::app::Message::Navigate(Navigation::Settings))
+                Task::done(crate::app::Message::Navigate(Navigation::Settings(self.vault.clone())))
             }
             Message::NavigateToExport => {
-                Task::done(crate::app::Message::Navigate(Navigation::Export))
+                Task::done(crate::app::Message::Navigate(Navigation::Export(self.vault.clone())))
             }
             Message::NavigateToCollections => {
-                Task::done(crate::app::Message::Navigate(Navigation::Collections))
+                Task::done(crate::app::Message::Navigate(Navigation::Collections(self.vault.clone())))
             }
-            Message::Lock => Task::done(crate::app::Message::Navigate(Navigation::Lock)),
             Message::DocumentsLoaded(Ok(docs)) => {
                 self.documents = docs;
                 self.loading = false;
@@ -140,6 +143,37 @@ impl State {
                 self.search_results = Some(results);
                 Task::none()
             }
+            Message::Import => {
+                let vault = self.vault.clone();
+                Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || -> Result<String, String> {
+                            let file = rfd::FileDialog::new()
+                                .set_title("Import Document")
+                                .add_filter("Documents", &["pdf", "epub", "cbz", "cbr", "djvu"])
+                                .add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp"])
+                                .add_filter("All Files", &["*"])
+                                .pick_file();
+                            match file {
+                                Some(path) => vault.import_file(&path).map_err(|e| e.to_string()),
+                                None => Err("No file selected".into()),
+                            }
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                    },
+                    |result| crate::app::Message::Library(Message::Imported(result)),
+                )
+            }
+            Message::Imported(Ok(_)) => {
+                self.loading = true;
+                self.error = None;
+                self.reload()
+            }
+            Message::Imported(Err(e)) => {
+                self.error = Some(e);
+                Task::none()
+            }
         }
     }
 
@@ -151,8 +185,8 @@ impl State {
                 .on_submit(Message::Search)
                 .width(Length::Fill),
             button("⚙").on_press(Message::NavigateToSettings),
+            button("Import").on_press(Message::Import),
             button("⬇").on_press(Message::NavigateToExport),
-            button("Lock").on_press(Message::Lock),
         ]
         .spacing(10)
         .padding(10);
@@ -207,12 +241,7 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn make_test_vault() -> Arc<Vault> {
-        let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::create(dir.path(), "testpass").unwrap();
-        Arc::new(vault)
-    }
+    use crate::vault::tests::make_test_vault;
 
     #[test]
     fn test_search_changed() {
@@ -259,7 +288,6 @@ mod tests {
         let (mut state, _task) = State::new(vault);
         let _ = state.update(Message::NavigateToSettings);
         let _ = state.update(Message::NavigateToExport);
-        let _ = state.update(Message::Lock);
     }
 
     #[test]
@@ -293,5 +321,82 @@ mod tests {
         state.loading = false;
         state.search_query = "test query".into();
         let _view = state.view();
+    }
+
+    #[test]
+    fn test_ui_library_loading_shows_text() {
+        let vault = make_test_vault();
+        let (state, _task) = State::new(vault);
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Loading documents...").is_ok());
+    }
+
+    #[test]
+    fn test_ui_library_empty_shows_hint() {
+        let vault = make_test_vault();
+        let (mut state, _task) = State::new(vault);
+        state.loading = false;
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("No documents. Press Ctrl+I to import files.").is_ok());
+    }
+
+    #[test]
+    fn test_ui_library_error_shown() {
+        let vault = make_test_vault();
+        let (mut state, _task) = State::new(vault);
+        state.loading = false;
+        state.error = Some("Database error".into());
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Database error").is_ok());
+    }
+
+    #[test]
+    fn test_ui_library_settings_button() {
+        let vault = make_test_vault();
+        let (mut state, _task) = State::new(vault);
+        state.loading = false;
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("⚙").unwrap();
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(!msgs.is_empty());
+        assert!(msgs.iter().any(|m| matches!(m, Message::NavigateToSettings)));
+    }
+
+    #[test]
+    fn test_imported_ok_triggers_reload() {
+        let vault = make_test_vault();
+        let (mut state, _task) = State::new(vault);
+        state.loading = false;
+        let _ = state.update(Message::Imported(Ok("new-id".into())));
+        assert!(state.loading);
+    }
+
+    #[test]
+    fn test_imported_error_sets_error() {
+        let vault = make_test_vault();
+        let (mut state, _task) = State::new(vault);
+        state.loading = false;
+        let _ = state.update(Message::Imported(Err("import failed".into())));
+        assert_eq!(state.error, Some("import failed".into()));
+        assert!(!state.loading);
+    }
+
+    #[test]
+    fn test_ui_library_import_button_present() {
+        let vault = make_test_vault();
+        let (state, _task) = State::new(vault);
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Import").is_ok());
+    }
+
+    #[test]
+    fn test_ui_library_export_button() {
+        let vault = make_test_vault();
+        let (mut state, _task) = State::new(vault);
+        state.loading = false;
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("⬇").unwrap();
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.iter().any(|m| matches!(m, Message::NavigateToExport)));
     }
 }

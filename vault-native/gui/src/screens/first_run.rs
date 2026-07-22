@@ -287,6 +287,99 @@ mod tests {
     }
 
     #[test]
+    fn test_ui_get_started_advances_to_choose_dir() {
+        let mut state = State::new();
+        let mut ui = iced_test::simulator(state.view());
+        let result = ui.click("Get Started");
+        assert!(result.is_ok(), "Should find and click 'Get Started' button");
+        for msg in ui.into_messages() {
+            let _ = state.update(msg);
+        }
+        assert_eq!(state.step, Step::ChooseDir);
+    }
+
+    #[test]
+    fn test_ui_find_welcome_text() {
+        let state = State::new();
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Welcome to LibreCrate").is_ok());
+        assert!(ui.find("Get Started").is_ok());
+    }
+
+    #[test]
+    fn test_ui_full_wizard_flow() {
+        let mut state = State::new();
+
+        // Step 1: Welcome → click Get Started → ChooseDir
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Welcome to LibreCrate").is_ok());
+        ui.click("Get Started").unwrap();
+        for msg in ui.into_messages() {
+            let _ = state.update(msg);
+        }
+        assert_eq!(state.step, Step::ChooseDir);
+
+        // Step 2: ChooseDir → click Next → SetPassword
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Choose Vault Location").is_ok());
+        ui.click("Next").unwrap();
+        for msg in ui.into_messages() {
+            let _ = state.update(msg);
+        }
+        assert_eq!(state.step, Step::SetPassword);
+
+        // Step 3: SetPassword — type passwords, verify Back button exists
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Set Master Password").is_ok());
+        assert!(ui.find("Back").is_ok());
+        assert!(ui.find("Create Vault").is_ok());
+    }
+
+    #[test]
+    fn test_ui_error_shown_when_passwords_mismatch() {
+        let mut state = State::new();
+        state.step = Step::SetPassword;
+        state.password = "abc".into();
+        state.confirm = "def".into();
+
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Create Vault").unwrap();
+        for msg in ui.into_messages() {
+            let _ = state.update(msg);
+        }
+        assert_eq!(state.error, Some("Passwords do not match".into()));
+
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Passwords do not match").is_ok());
+    }
+
+    #[test]
+    fn test_ui_back_button_on_set_password() {
+        let mut state = State::new();
+        state.step = Step::SetPassword;
+
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Back").unwrap();
+        for msg in ui.into_messages() {
+            let _ = state.update(msg);
+        }
+        assert_eq!(state.step, Step::ChooseDir);
+    }
+
+    #[test]
+    fn test_ui_back_button_on_choose_dir() {
+        let mut state = State::new();
+        state.step = Step::ChooseDir;
+
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Back").unwrap();
+        for msg in ui.into_messages() {
+            let _ = state.update(msg);
+        }
+        assert_eq!(state.step, Step::Welcome);
+    }
+
+    #[test]
     fn test_view_choose_dir_step() {
         let mut state = State::new();
         state.step = Step::ChooseDir;

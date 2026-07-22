@@ -8,7 +8,7 @@ use super::Navigation;
 use crate::config::Config;
 use crate::vault::Vault;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     PasswordChanged(String),
     Submit,
@@ -183,5 +183,33 @@ mod tests {
         let mut state = State::new();
         state.error = Some("Invalid password".into());
         let _view = state.view();
+    }
+
+    #[test]
+    fn test_ui_no_vault_found() {
+        let mut state = State::new();
+        state.vault_exists = false;
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("LibreCrate").is_ok());
+        assert!(ui.find("No vault found. Create one to get started.").is_ok());
+        assert!(ui.find("Create New Vault").is_ok());
+    }
+
+    #[test]
+    fn test_ui_create_new_vault_produces_message() {
+        let mut state = State::new();
+        state.vault_exists = false;
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Create New Vault").unwrap();
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::CreateNewVault));
+    }
+
+    #[test]
+    fn test_ui_error_displayed() {
+        let mut state = State::new();
+        state.error = Some("Invalid password".into());
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Invalid password").is_ok());
     }
 }

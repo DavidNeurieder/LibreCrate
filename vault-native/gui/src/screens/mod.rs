@@ -13,11 +13,9 @@ use vault_native::db::queries::DocumentRow;
 #[derive(Debug, Clone)]
 pub enum Navigation {
     FirstRun,
-    Unlock,
     Library(Arc<Vault>),
-    Settings,
-    Export,
-    Collections,
-    Lock,
+    Settings(Arc<Vault>),
+    Export(Arc<Vault>),
+    Collections(Arc<Vault>),
     OpenDocument(DocumentRow),
 }

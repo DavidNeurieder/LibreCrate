@@ -2,10 +2,12 @@ use iced::{
     widget::{button, column, container, text, text_input},
     Element, Task,
 };
+use std::sync::Arc;
 
 use super::Navigation;
+use crate::vault::Vault;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     CurrentPasswordChanged(String),
     NewPasswordChanged(String),
@@ -16,6 +18,7 @@ pub enum Message {
 }
 
 pub struct State {
+    pub vault: Arc<Vault>,
     pub current_password: String,
     pub new_password: String,
     pub confirm: String,
@@ -24,8 +27,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub fn new(vault: Arc<Vault>) -> Self {
         Self {
+            vault,
             current_password: String::new(),
             new_password: String::new(),
             confirm: String::new(),
@@ -64,7 +68,7 @@ impl State {
                 }
                 Task::none()
             }
-            Message::Back => Task::done(crate::app::Message::Navigate(Navigation::Unlock)),
+            Message::Back => Task::done(crate::app::Message::Navigate(Navigation::Library(self.vault.clone()))),
             Message::PasswordChanged(_) => Task::none(),
         }
     }
@@ -104,10 +108,12 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vault::tests::make_test_vault;
 
     #[test]
     fn test_initial_state() {
-        let state = State::new();
+        let vault = make_test_vault();
+        let state = State::new(vault);
         assert!(state.current_password.is_empty());
         assert!(state.new_password.is_empty());
         assert!(state.confirm.is_empty());
@@ -117,28 +123,32 @@ mod tests {
 
     #[test]
     fn test_current_password_changed() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         let _ = state.update(Message::CurrentPasswordChanged("old".into()));
         assert_eq!(state.current_password, "old");
     }
 
     #[test]
     fn test_new_password_changed() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         let _ = state.update(Message::NewPasswordChanged("new".into()));
         assert_eq!(state.new_password, "new");
     }
 
     #[test]
     fn test_confirm_changed() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         let _ = state.update(Message::ConfirmChanged("new".into()));
         assert_eq!(state.confirm, "new");
     }
 
     #[test]
     fn test_change_password_empty_fields() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         let _ = state.update(Message::ChangePassword);
         assert_eq!(state.error, Some("All fields are required".into()));
         assert!(state.success.is_none());
@@ -146,7 +156,8 @@ mod tests {
 
     #[test]
     fn test_change_password_mismatch() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.current_password = "old".into();
         state.new_password = "new1".into();
         state.confirm = "new2".into();
@@ -157,7 +168,8 @@ mod tests {
 
     #[test]
     fn test_change_password_success() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.current_password = "old".into();
         state.new_password = "new".into();
         state.confirm = "new".into();
@@ -171,30 +183,73 @@ mod tests {
 
     #[test]
     fn test_view_default() {
-        let state = State::new();
+        let vault = make_test_vault();
+        let state = State::new(vault);
         let _view = state.view();
     }
 
     #[test]
     fn test_view_with_error() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.error = Some("Passwords do not match".into());
         let _view = state.view();
     }
 
     #[test]
     fn test_view_with_success() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.success = Some("Password changed".into());
         let _view = state.view();
     }
 
     #[test]
     fn test_view_filled_fields() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.current_password = "old".into();
         state.new_password = "new".into();
         state.confirm = "new".into();
         let _view = state.view();
+    }
+
+    #[test]
+    fn test_ui_settings_renders() {
+        let vault = make_test_vault();
+        let state = State::new(vault);
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Settings").is_ok());
+        assert!(ui.find("Change Master Password").is_ok());
+        assert!(ui.find("Change Password").is_ok());
+        assert!(ui.find("Back").is_ok());
+    }
+
+    #[test]
+    fn test_ui_success_displayed() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.success = Some("Password changed".into());
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Password changed").is_ok());
+    }
+
+    #[test]
+    fn test_ui_error_displayed() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.error = Some("Passwords do not match".into());
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Passwords do not match").is_ok());
+    }
+
+    #[test]
+    fn test_ui_back_produces_message() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Back").unwrap();
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::Back));
     }
 }

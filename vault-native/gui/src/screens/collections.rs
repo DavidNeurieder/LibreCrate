@@ -2,10 +2,12 @@ use iced::{
     widget::{button, column, container, row, text, text_input},
     Element, Task,
 };
+use std::sync::Arc;
 
 use super::Navigation;
+use crate::vault::Vault;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     NewCollectionNameChanged(String),
     NewTagNameChanged(String),
@@ -18,6 +20,7 @@ pub enum Message {
 }
 
 pub struct State {
+    pub vault: Arc<Vault>,
     pub collections: Vec<(i64, String)>,
     pub tags: Vec<(i64, String, String)>,
     pub new_collection_name: String,
@@ -27,8 +30,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub fn new(vault: Arc<Vault>) -> Self {
         Self {
+            vault,
             collections: Vec::new(),
             tags: Vec::new(),
             new_collection_name: String::new(),
@@ -78,7 +82,7 @@ impl State {
                 self.tags.retain(|(i, _, _)| *i != id);
                 Task::none()
             }
-            Message::Back => Task::done(crate::app::Message::Navigate(Navigation::Unlock)),
+            Message::Back => Task::done(crate::app::Message::Navigate(Navigation::Library(self.vault.clone()))),
         }
     }
 
@@ -137,10 +141,12 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vault::tests::make_test_vault;
 
     #[test]
     fn test_initial_state() {
-        let state = State::new();
+        let vault = make_test_vault();
+        let state = State::new(vault);
         assert!(state.collections.is_empty());
         assert!(state.tags.is_empty());
         assert!(state.new_collection_name.is_empty());
@@ -149,14 +155,16 @@ mod tests {
 
     #[test]
     fn test_new_collection_name_changed() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         let _ = state.update(Message::NewCollectionNameChanged("Books".into()));
         assert_eq!(state.new_collection_name, "Books");
     }
 
     #[test]
     fn test_add_collection() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.new_collection_name = "  Recipes  ".into();
         let _ = state.update(Message::AddCollection);
         assert_eq!(state.collections.len(), 1);
@@ -166,14 +174,16 @@ mod tests {
 
     #[test]
     fn test_add_empty_collection_does_nothing() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         let _ = state.update(Message::AddCollection);
         assert!(state.collections.is_empty());
     }
 
     #[test]
     fn test_delete_collection() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.collections.push((1, "Books".into()));
         state.collections.push((2, "Papers".into()));
         let _ = state.update(Message::DeleteCollection(1));
@@ -183,21 +193,24 @@ mod tests {
 
     #[test]
     fn test_new_tag_name_changed() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         let _ = state.update(Message::NewTagNameChanged("urgent".into()));
         assert_eq!(state.new_tag_name, "urgent");
     }
 
     #[test]
     fn test_new_tag_color_changed() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         let _ = state.update(Message::NewTagColorChanged("#ff0000".into()));
         assert_eq!(state.new_tag_color, "#ff0000");
     }
 
     #[test]
     fn test_add_tag() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.new_tag_name = "  urgent  ".into();
         state.new_tag_color = "#ff0000".into();
         let _ = state.update(Message::AddTag);
@@ -209,7 +222,8 @@ mod tests {
 
     #[test]
     fn test_delete_tag() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.tags.push((1, "urgent".into(), "#f00".into()));
         state.tags.push((2, "later".into(), "#00f".into()));
         let _ = state.update(Message::DeleteTag(1));
@@ -219,13 +233,15 @@ mod tests {
 
     #[test]
     fn test_view_default() {
-        let state = State::new();
+        let vault = make_test_vault();
+        let state = State::new(vault);
         let _view = state.view();
     }
 
     #[test]
     fn test_view_with_collections_and_tags() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.collections.push((1, "Books".into()));
         state.collections.push((2, "Papers".into()));
         state.tags.push((1, "urgent".into(), "#f00".into()));
@@ -234,8 +250,53 @@ mod tests {
 
     #[test]
     fn test_view_with_error() {
-        let mut state = State::new();
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
         state.error = Some("Database error".into());
         let _view = state.view();
+    }
+
+    #[test]
+    fn test_ui_collections_renders() {
+        let vault = make_test_vault();
+        let state = State::new(vault);
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Collections & Tags").is_ok());
+        assert!(ui.find("Add Collection").is_ok());
+        assert!(ui.find("Add Tag").is_ok());
+        assert!(ui.find("Back").is_ok());
+    }
+
+    #[test]
+    fn test_ui_collections_and_tags_listed() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.collections.push((1, "Books".into()));
+        state.collections.push((2, "Papers".into()));
+        state.tags.push((1, "urgent".into(), "#f00".into()));
+
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Books").is_ok());
+        assert!(ui.find("Papers").is_ok());
+        assert!(ui.find("urgent").is_ok());
+    }
+
+    #[test]
+    fn test_ui_error_displayed() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.error = Some("Database error".into());
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Database error").is_ok());
+    }
+
+    #[test]
+    fn test_ui_back_produces_message() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Back").unwrap();
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::Back));
     }
 }

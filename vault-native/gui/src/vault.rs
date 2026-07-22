@@ -28,6 +28,12 @@ impl std::fmt::Debug for Vault {
     }
 }
 
+impl PartialEq for Vault {
+    fn eq(&self, other: &Self) -> bool {
+        self.base_dir == other.base_dir
+    }
+}
+
 impl Vault {
     pub fn open(dir: &Path, password: &str) -> Result<Self> {
         let encryption_dir = dir.join("encryption");
@@ -137,15 +143,64 @@ impl Vault {
     pub fn list_tags(&self) -> Result<Vec<TagRow>> {
         Ok(self.db.list_tags()?)
     }
+
+    pub fn import_file(&self, path: &Path) -> Result<String> {
+        let file_data = std::fs::read(path)?;
+        let file_name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let title = file_name.clone();
+        let mime = mime_guess2::from_path(&path)
+            .first_or_octet_stream()
+            .to_string();
+        let id = uuid::Uuid::new_v4().to_string();
+
+        let id = self.db.import_document(
+            self.base_dir.to_string_lossy().to_string(),
+            id,
+            title,
+            file_data,
+            mime,
+            String::new(),
+            String::new(),
+            None,
+        )?;
+        Ok(id)
+    }
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use std::sync::Arc;
+
+    /// Hold both Vault and its TempDir so the directory isn't dropped early.
+    struct TestVault {
+        _dir: tempfile::TempDir,
+        vault: Vault,
+    }
+
+    impl TestVault {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().unwrap();
+            let vault = Vault::create(dir.path(), "testpass").unwrap();
+            Self { _dir: dir, vault }
+        }
+    }
+
+    pub fn make_test_vault() -> Arc<Vault> {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = Vault::create(dir.path(), "testpass").unwrap();
+        Arc::new(vault)
+    }
 
     fn create_test_vault() -> Vault {
-        let dir = tempfile::tempdir().unwrap();
-        Vault::create(dir.path(), "testpass").unwrap()
+        TestVault::new().vault
+    }
+
+    fn create_test_vault_with_dir() -> TestVault {
+        TestVault::new()
     }
 
     #[test]
@@ -197,5 +252,130 @@ mod tests {
         let vault = create_test_vault();
         let tags = vault.list_tags().unwrap();
         assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn test_import_txt_file() {
+        let tv = create_test_vault_with_dir();
+        let file_path = tv._dir.path().join("hello.txt");
+        std::fs::write(&file_path, b"Hello, world!").unwrap();
+
+        let id = tv.vault.import_file(&file_path).unwrap();
+        assert!(!id.is_empty());
+
+        let docs = tv.vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].title, "hello.txt");
+        assert_eq!(docs[0].file_name, "hello.txt");
+        assert!(docs[0].file_size > 0);
+        assert_eq!(docs[0].mime_type, "text/plain");
+    }
+
+    // Test using Vault::create directly, then import_document
+    #[test]
+    fn test_vault_create_direct_insert() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = Vault::create(dir.path(), "testpass").unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        let file_data = b"hello world".to_vec();
+
+        vault.db.add_document_full(
+            DocumentRow {
+                id: id.clone(),
+                title: "test.txt".into(),
+                file_name: "test.txt".into(),
+                mime_type: "text/plain".into(),
+                file_path: format!("files/{id}"),
+                file_size: 10,
+                ..Default::default()
+            },
+            Some("content".to_string()),
+        ).unwrap();
+
+        let docs = vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 1);
+    }
+
+    // Direct test using DbHandle API
+    #[test]
+    fn test_direct_db_insert() {
+        use vault_native::db::queries::DocumentRow;
+        let mk = vault_native::ffi::generate_master_key();
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+
+        let db = vault_native::ffi::DbHandle::create_encrypted(
+            db_path.to_str().unwrap().to_string(),
+            mk,
+        ).unwrap();
+
+        let id = uuid::Uuid::new_v4().to_string();
+        db.add_document_full(
+            DocumentRow {
+                id: id.clone(),
+                title: "hello.txt".into(),
+                file_name: "hello.txt".into(),
+                mime_type: "text/plain".into(),
+                file_path: "files/test".into(),
+                file_size: 13,
+                ..Default::default()
+            },
+            Some("hello".to_string()),
+        ).unwrap();
+
+        let docs = db.list_documents().unwrap();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].title, "hello.txt");
+    }
+
+    #[test]
+    fn test_import_pdf_file_guesses_mime() {
+        let tv = create_test_vault_with_dir();
+        let file_path = tv._dir.path().join("doc.pdf");
+        let min_pdf = &b"%PDF-1.4 fake content for testing"[..];
+        std::fs::write(&file_path, min_pdf).unwrap();
+
+        let id = tv.vault.import_file(&file_path).unwrap();
+        assert!(!id.is_empty());
+
+        let docs = tv.vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].title, "doc.pdf");
+        assert_eq!(docs[0].mime_type, "application/pdf");
+    }
+
+    #[test]
+    fn test_import_image_file_guesses_mime() {
+        let tv = create_test_vault_with_dir();
+        let file_path = tv._dir.path().join("photo.png");
+        std::fs::write(&file_path, b"not a real png").unwrap();
+
+        let id = tv.vault.import_file(&file_path).unwrap();
+        assert!(!id.is_empty());
+
+        let docs = tv.vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].mime_type, "image/png");
+    }
+
+    #[test]
+    fn test_import_multiple_files() {
+        let tv = create_test_vault_with_dir();
+
+        for i in 0..3 {
+            let path = tv._dir.path().join(format!("doc_{i}.txt"));
+            std::fs::write(&path, format!("content {i}")).unwrap();
+            tv.vault.import_file(&path).unwrap();
+        }
+
+        let docs = tv.vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 3);
+    }
+
+    #[test]
+    fn test_import_nonexistent_file_fails() {
+        let vault = create_test_vault();
+        let result = vault.import_file(Path::new("/nonexistent/file.pdf"));
+        assert!(result.is_err());
     }
 }

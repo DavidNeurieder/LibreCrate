@@ -5,7 +5,7 @@ use crate::config::Config;
 use crate::keychain::SecureStore;
 use crate::opener::{DocumentOpener, SystemOpener};
 use crate::screens::{self, Navigation};
-use crate::vault::Vault;
+use crate::vault;
 
 pub enum Screen {
     FirstRun(screens::first_run::State),
@@ -124,34 +124,24 @@ fn handle_navigation(app: &mut App, nav: Navigation) -> Task<Message> {
             app.screen = Screen::FirstRun(state);
             Task::none()
         }
-        Navigation::Unlock => {
-            let state = screens::unlock::State::new();
-            app.screen = Screen::Unlock(state);
-            Task::none()
-        }
         Navigation::Library(vault) => {
             let (state, task) = screens::library::State::new(Arc::clone(&vault));
             app.screen = Screen::Library(state);
             task
         }
-        Navigation::Settings => {
-            let state = screens::settings::State::new();
+        Navigation::Settings(vault) => {
+            let state = screens::settings::State::new(vault);
             app.screen = Screen::Settings(state);
             Task::none()
         }
-        Navigation::Export => {
-            let state = screens::export::State::new();
+        Navigation::Export(vault) => {
+            let state = screens::export::State::new(vault);
             app.screen = Screen::Export(state);
             Task::none()
         }
-        Navigation::Collections => {
-            let state = screens::collections::State::new();
+        Navigation::Collections(vault) => {
+            let state = screens::collections::State::new(vault);
             app.screen = Screen::Collections(state);
-            Task::none()
-        }
-        Navigation::Lock => {
-            let state = screens::unlock::State::new();
-            app.screen = Screen::Unlock(state);
             Task::none()
         }
         Navigation::OpenDocument(doc) => {
