@@ -8,6 +8,7 @@
 .externalNativeBuild
 .cxx
 .cargo
+*.so
 
 # Module build outputs
 app/build/

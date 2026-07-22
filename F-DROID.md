@@ -104,6 +104,10 @@ Kotlin/JNA. The UniFFI Kotlin bindings are **pre-generated and committed**
 (`vault-native-android/src/main/java/uniffi/vault_native/vault_native.kt`), so
 F-Droid only needs to compile the Rust `.so` files.
 
+The `.so` files are **not committed to git**. Local development requires running
+`scripts/build_native.sh` before `./gradlew assembleDebug`. F-Droid builds them
+from source in the recipe below.
+
 ### Recipe additions
 
 ```yaml
@@ -128,15 +132,13 @@ Builds:
       - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - source $HOME/.cargo/env && rustup target add aarch64-linux-android
       - |
-        sed -i \
-          "s|/home/mr/Android/Sdk/ndk/28.2.13676358|$ANDROID_NDK|g" \
-          vault-native/.cargo/config.toml
-      - |
         export TOOLCHAIN="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64"
         export CC_aarch64_linux_android="$TOOLCHAIN/bin/aarch64-linux-android26-clang"
         export CC_x86_64_linux_android="$TOOLCHAIN/bin/x86_64-linux-android26-clang"
         export AR_aarch64_linux_android="$TOOLCHAIN/bin/llvm-ar"
         export AR_x86_64_linux_android="$TOOLCHAIN/bin/llvm-ar"
+        export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/bin/aarch64-linux-android26-clang"
+        export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$TOOLCHAIN/bin/x86_64-linux-android26-clang"
         cargo build --manifest-path vault-native/Cargo.toml \
           --target aarch64-linux-android --release &&
         cp vault-native/target/aarch64-linux-android/release/libvault_native.so \
@@ -164,7 +166,7 @@ prebuild:
   # Rust build before Gradle
   - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
   - source $HOME/.cargo/env && rustup target add aarch64-linux-android
-  - # ... sed patch, CC exports, cargo build, cp as above ...
+  - # ... CC/CARGO_TARGET exports, cargo build, cp as above ...
 ```
 
 In this approach the Gradle step is just `gradle: - yes` and the Rust `.so`
@@ -177,9 +179,9 @@ files are already in `jniLibs/` before Gradle resolves.
 | Rust edition | 2021 |
 | UniFFI version | 0.28 (library mode, no `.udl` file) |
 | Targets | `aarch64-linux-android`, `x86_64-linux-android` |
-| NDK path patching | `sed` replaces hardcoded `$HOME/.../ndk/28.2.13676358` in `.cargo/config.toml` with `$ANDROID_NDK` |
+| NDK toolchain | Set via `CARGO_TARGET_*_LINKER`, `CC_*`, `AR_*` env vars pointing to `$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/` |
 | C Compiler | `aarch64-linux-android26-clang` / `x86_64-linux-android26-clang` |
-| Linker | Same as CC (set via `CARGO_TARGET_*_LINKER` env vars) |
+| Linker | `aarch64-linux-android26-clang` / `x86_64-linux-android26-clang` (via `CARGO_TARGET_*_LINKER`) |
 | JNA | `net.java.dev.jna:jna:5.14.0@aar` (from Maven Central, no issue) |
 | Min API | 26 |
 
