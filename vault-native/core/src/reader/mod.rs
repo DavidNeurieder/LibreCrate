@@ -73,6 +73,12 @@ pub trait DocumentReader: Send {
         Err(ReaderError::NotSupported("render_page".into()))
     }
 
+    /// Render first page as a PNG thumbnail.
+    /// Returns `Err(NotSupported)` by default — override for formats that support rendering.
+    fn render_thumbnail(&self) -> Result<Vec<u8>, ReaderError> {
+        Err(ReaderError::NotSupported("render_thumbnail".into()))
+    }
+
     fn metadata(&self) -> Result<ReaderMeta, ReaderError> {
         Ok(ReaderMeta {
             title: None,

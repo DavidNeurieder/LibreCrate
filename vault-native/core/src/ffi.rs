@@ -814,4 +814,52 @@ impl Document {
         let page = self.inner.lock().unwrap().render_page(page_index, scale)?;
         Ok(page.data)
     }
+
+    pub fn render_page_width(&self, page_index: u32, scale: f32) -> Result<u32, crate::error::Error> {
+        let page = self.inner.lock().unwrap().render_page(page_index, scale)?;
+        Ok(page.width)
+    }
+
+    pub fn render_page_height(&self, page_index: u32, scale: f32) -> Result<u32, crate::error::Error> {
+        let page = self.inner.lock().unwrap().render_page(page_index, scale)?;
+        Ok(page.height)
+    }
+
+    pub fn render_thumbnail(&self) -> Result<Vec<u8>, crate::error::Error> {
+        Ok(self.inner.lock().unwrap().render_thumbnail()?)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ProcessedDocument — result of processing a document on import
+// ---------------------------------------------------------------------------
+
+#[derive(uniffi::Record)]
+pub struct ProcessedDocument {
+    pub title: String,
+    pub author: String,
+    pub page_count: u32,
+    pub text_content: Option<String>,
+    pub thumbnail_data: Option<Vec<u8>>,
+}
+
+/// Open a document, extract text metadata and generate a thumbnail.
+/// Returns a [`ProcessedDocument`] with all extraction results.
+#[uniffi::export]
+pub fn process_document(
+    path: String,
+    mime_type: String,
+    title: String,
+) -> Result<ProcessedDocument, crate::error::Error> {
+    let reader = crate::reader::open(std::path::Path::new(&path), &mime_type)?;
+    let meta = reader.metadata()?;
+    let text_content = reader.extract_all_text().ok().filter(|s| !s.is_empty());
+    let thumbnail_data = reader.render_thumbnail().ok();
+    Ok(ProcessedDocument {
+        title: meta.title.unwrap_or(title),
+        author: meta.author.unwrap_or_default(),
+        page_count: meta.page_count,
+        text_content,
+        thumbnail_data,
+    })
 }

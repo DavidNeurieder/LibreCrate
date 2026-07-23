@@ -1,4 +1,4 @@
-use super::{DocumentReader, ReaderError, ReaderMeta};
+use super::{DocumentReader, ReaderError, ReaderMeta, RenderedPage};
 use std::path::Path;
 
 pub struct PdfReader {
@@ -35,6 +35,25 @@ impl DocumentReader for PdfReader {
         self.inner
             .extract_all_text()
             .map_err(|e| ReaderError::ExtractFailed(e.to_string()))
+    }
+
+    fn render_page(&self, page_index: u32, scale: f32) -> Result<RenderedPage, ReaderError> {
+        let dpi = (150.0 * scale) as u32;
+        let options = pdf_oxide::rendering::RenderOptions::with_dpi(dpi).as_raw();
+        let img = pdf_oxide::rendering::render_page(&self.inner, page_index as usize, &options)
+            .map_err(|e| ReaderError::RenderFailed(e.to_string()))?;
+        Ok(RenderedPage {
+            data: img.data,
+            width: img.width,
+            height: img.height,
+        })
+    }
+
+    fn render_thumbnail(&self) -> Result<Vec<u8>, ReaderError> {
+        let options = pdf_oxide::rendering::RenderOptions::with_dpi(72);
+        let img = pdf_oxide::rendering::render_page(&self.inner, 0, &options)
+            .map_err(|e| ReaderError::RenderFailed(e.to_string()))?;
+        Ok(img.data)
     }
 
     fn metadata(&self) -> Result<ReaderMeta, ReaderError> {
