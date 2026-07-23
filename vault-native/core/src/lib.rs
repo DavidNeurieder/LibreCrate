@@ -5,8 +5,7 @@ pub mod ffi;
 pub mod format;
 pub mod kdf;
 pub mod merge;
-#[cfg(feature = "pdf")]
-pub mod pdf;
+pub mod reader;
 pub mod types;
 
 uniffi::setup_scaffolding!();

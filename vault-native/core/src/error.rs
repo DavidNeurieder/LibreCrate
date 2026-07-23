@@ -26,6 +26,9 @@ pub enum Error {
 
     #[error("Compression error: {0}")]
     Compression(String),
+
+    #[error("Reader error: {0}")]
+    Reader(String),
 }
 
 impl From<rusqlite::Error> for Error {
@@ -37,6 +40,12 @@ impl From<rusqlite::Error> for Error {
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Error::Io(e.to_string())
+    }
+}
+
+impl From<crate::reader::ReaderError> for Error {
+    fn from(e: crate::reader::ReaderError) -> Self {
+        Error::Reader(e.to_string())
     }
 }
 

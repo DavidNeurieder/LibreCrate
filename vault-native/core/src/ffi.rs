@@ -778,3 +778,40 @@ pub fn branch_b_fresh_install(
         std::path::Path::new(&files_dir),
     )
 }
+
+// ---------------------------------------------------------------------------
+// Document — format-agnostic reader
+// ---------------------------------------------------------------------------
+
+#[derive(uniffi::Object)]
+pub struct Document {
+    inner: std::sync::Mutex<Box<dyn crate::reader::DocumentReader>>,
+}
+
+#[uniffi::export]
+impl Document {
+    #[uniffi::constructor]
+    pub fn open(path: String, mime_type: String) -> Result<Self, crate::error::Error> {
+        let reader = crate::reader::open(std::path::Path::new(&path), &mime_type)?;
+        Ok(Self {
+            inner: std::sync::Mutex::new(reader),
+        })
+    }
+
+    pub fn page_count(&self) -> Result<u32, crate::error::Error> {
+        Ok(self.inner.lock().unwrap().page_count()?)
+    }
+
+    pub fn extract_text(&self, page_index: u32) -> Result<String, crate::error::Error> {
+        Ok(self.inner.lock().unwrap().extract_text(page_index)?)
+    }
+
+    pub fn extract_all_text(&self) -> Result<String, crate::error::Error> {
+        Ok(self.inner.lock().unwrap().extract_all_text()?)
+    }
+
+    pub fn render_page(&self, page_index: u32, scale: f32) -> Result<Vec<u8>, crate::error::Error> {
+        let page = self.inner.lock().unwrap().render_page(page_index, scale)?;
+        Ok(page.data)
+    }
+}
