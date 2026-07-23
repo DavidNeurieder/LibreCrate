@@ -330,6 +330,12 @@ pub(crate) mod tests {
         Arc::new(vault)
     }
 
+    pub fn make_test_vault_with_dir() -> (Arc<Vault>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = Vault::create(dir.path(), "testpass").unwrap();
+        (Arc::new(vault), dir)
+    }
+
     fn create_test_vault() -> Vault {
         TestVault::new().vault
     }
