@@ -11,40 +11,34 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Create a vault from a folder of plain documents
-    Create(commands::create::CreateArgs),
-    /// Export a vault to a directory of plaintext files
-    Export(commands::export::ExportArgs),
-    /// Merge two vault files into one
-    Merge(commands::merge::MergeArgs),
-    /// Export a vault directory as an encrypted backup file
-    BackupExport(commands::backup_export::BackupExportArgs),
-    /// Inspect a vault file manifest
-    Inspect(commands::inspect::InspectArgs),
-    /// Vault file operations (init)
-    Vault(commands::vault::VaultArgs),
-    /// Cryptographic operations
-    Crypto(commands::crypto::CryptoArgs),
-    /// Document management operations
-    Document(commands::document::DocumentArgs),
-    /// Full-text search operations
+    /// Create a new vault directory
+    Init(commands::init::InitArgs),
+    /// Import documents into a vault
+    Import(commands::import::ImportArgs),
+    /// List documents in a vault
+    List(commands::list::ListArgs),
+    /// Open a document with the system viewer
+    Open(commands::open::OpenArgs),
+    /// Delete a document from a vault
+    Delete(commands::delete::DeleteArgs),
+    /// Full-text search across documents
     Search(commands::search::SearchArgs),
-    /// Performance benchmarks
-    Bench(commands::bench::BenchArgs),
+    /// Export an encrypted backup of a vault
+    Backup(commands::backup::BackupArgs),
+    /// Restore from a backup (merges into existing vault)
+    Restore(commands::restore::RestoreArgs),
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Create(args) => commands::create::run(args),
-        Commands::Export(args) => commands::export::run(args),
-        Commands::Merge(args) => commands::merge::run(args),
-        Commands::BackupExport(args) => commands::backup_export::run(args),
-        Commands::Inspect(args) => commands::inspect::run(args),
-        Commands::Vault(args) => commands::vault::run(args),
-        Commands::Crypto(args) => commands::crypto::run(args),
-        Commands::Document(args) => commands::document::run(args),
+        Commands::Init(args) => commands::init::run(args),
+        Commands::Import(args) => commands::import::run(args),
+        Commands::List(args) => commands::list::run(args),
+        Commands::Open(args) => commands::open::run(args),
+        Commands::Delete(args) => commands::delete::run(args),
         Commands::Search(args) => commands::search::run(args),
-        Commands::Bench(args) => commands::bench::run(args),
+        Commands::Backup(args) => commands::backup::run(args),
+        Commands::Restore(args) => commands::restore::run(args),
     }
 }

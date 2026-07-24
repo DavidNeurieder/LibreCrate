@@ -5,8 +5,7 @@ fn librecrate_bin() -> std::path::PathBuf {
     Path::new(env!("CARGO_BIN_EXE_librecrate")).to_path_buf()
 }
 
-/// Create a temp dir with sample files for testing.
-fn create_sample_dir(_name: &str, files: &[(&str, &str)]) -> tempfile::TempDir {
+fn create_sample_dir(files: &[(&str, &str)]) -> tempfile::TempDir {
     let dir = tempfile::TempDir::new().unwrap();
     for (rel, content) in files {
         let path = dir.path().join(rel);
@@ -18,201 +17,205 @@ fn create_sample_dir(_name: &str, files: &[(&str, &str)]) -> tempfile::TempDir {
     dir
 }
 
-#[test]
-fn test_create_and_inspect() {
-    let src = create_sample_dir(
-        "src",
-        &[("doc1.txt", "hello world"), ("doc2.txt", "second file")],
-    );
-    let vault_path = src.path().join("out.vault");
-
+fn run_cmd(args: &[&str]) -> (bool, String, String) {
     let output = Command::new(librecrate_bin())
-        .args([
-            "create",
-            src.path().to_str().unwrap(),
-            "-p",
-            "test-pw",
-            "-o",
-            vault_path.to_str().unwrap(),
-        ])
+        .args(args)
         .output()
         .unwrap();
-    assert!(
+    (
         output.status.success(),
-        "create failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(vault_path.exists());
-
-    // Inspect the vault
-    let inh = Command::new(librecrate_bin())
-        .args(["inspect", vault_path.to_str().unwrap()])
-        .output()
-        .unwrap();
-    assert!(inh.status.success());
-    let stdout = String::from_utf8_lossy(&inh.stdout);
-    assert!(stdout.contains("Documents:     2"));
+        String::from_utf8_lossy(&output.stdout).to_string(),
+        String::from_utf8_lossy(&output.stderr).to_string(),
+    )
 }
 
 #[test]
-fn test_create_export_roundtrip() {
-    let content_a = "content of A";
-    let content_b = "content of B";
-    let src = create_sample_dir(
-        "src",
-        &[("a.txt", content_a), ("sub/b.txt", content_b)],
-    );
-    let vault_path = src.path().join("out.vault");
-    let export_dir = src.path().join("exported");
-
-    // Create
-    let create_out = Command::new(librecrate_bin())
-        .args([
-            "create",
-            src.path().to_str().unwrap(),
-            "-p",
-            "pw",
-            "-o",
-            vault_path.to_str().unwrap(),
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        create_out.status.success(),
-        "create: {}",
-        String::from_utf8_lossy(&create_out.stderr)
-    );
-
-    // Export
-    let export_out = Command::new(librecrate_bin())
-        .args([
-            "export",
-            vault_path.to_str().unwrap(),
-            "-p",
-            "pw",
-            "-o",
-            export_dir.to_str().unwrap(),
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        export_out.status.success(),
-        "export: {}",
-        String::from_utf8_lossy(&export_out.stderr)
-    );
-
-    // Verify structure
-    assert!(export_dir.join("encryption").join("salt").exists());
-    assert!(export_dir.join("encryption").join("wrapped_master_key").exists());
-    assert!(export_dir.join("databases").join("librecrate.db").exists());
-
-    // Count files in files/
-    let files: Vec<_> = std::fs::read_dir(export_dir.join("files"))
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .collect();
-    assert_eq!(files.len(), 2, "expected 2 file blobs");
+fn test_init_empty_vault() {
+    let vault = tempfile::tempdir().unwrap();
+    let (ok, stdout, _) = run_cmd(&[
+        "init", vault.path().to_str().unwrap(), "-p", "test",
+    ]);
+    assert!(ok, "init failed");
+    assert!(vault.path().join("encryption").join("wrapped_master_key").exists());
+    assert!(vault.path().join("databases").join("librecrate.db").exists());
+    assert!(stdout.contains("Vault created"));
 }
 
 #[test]
-fn test_merge_two_vaults() {
-    let src_a = create_sample_dir("a", &[("a.txt", "from A")]);
-    let src_b = create_sample_dir("b", &[("b.txt", "from B")]);
-    let vault_a = src_a.path().join("a.vault");
-    let vault_b = src_b.path().join("b.vault");
-    let merged = src_a.path().join("merged.vault");
-    let export_dir = src_a.path().join("merged-export");
+fn test_init_with_source() {
+    let src = create_sample_dir(&[("a.txt", "hello"), ("b.txt", "world")]);
+    let vault = tempfile::tempdir().unwrap();
+    let (ok, stdout, _) = run_cmd(&[
+        "init", vault.path().to_str().unwrap(), "-p", "test",
+        "--from", src.path().to_str().unwrap(),
+    ]);
+    assert!(ok);
+    assert!(stdout.contains("2 documents"));
+}
 
-    // Create two vaults
-    for (src, out) in [(&src_a, &vault_a), (&src_b, &vault_b)] {
-        let out = Command::new(librecrate_bin())
-            .args([
-                "create",
-                src.path().to_str().unwrap(),
-                "-p",
-                "pw",
-                "-o",
-                out.to_str().unwrap(),
-            ])
-            .output()
-            .unwrap();
-        assert!(out.status.success());
-    }
+#[test]
+fn test_import_and_list() {
+    let vault = tempfile::tempdir().unwrap();
+    let file1 = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file1.path(), b"content1").unwrap();
+    let file2 = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file2.path(), b"content2").unwrap();
 
-    // Merge
-    let merge_out = Command::new(librecrate_bin())
-        .args([
-            "merge",
-            vault_a.to_str().unwrap(),
-            vault_b.to_str().unwrap(),
-            "-p",
-            "pw",
-            "-o",
-            merged.to_str().unwrap(),
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        merge_out.status.success(),
-        "merge: {}",
-        String::from_utf8_lossy(&merge_out.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&merge_out.stdout);
+    run_cmd(&["init", vault.path().to_str().unwrap(), "-p", "pw"]);
+
+    let (ok, stdout, _) = run_cmd(&[
+        "import", vault.path().to_str().unwrap(), "-p", "pw",
+        file1.path().to_str().unwrap(),
+        file2.path().to_str().unwrap(),
+    ]);
+    assert!(ok, "import failed");
+    assert!(stdout.contains("2 document(s)"));
+
+    let (ok, stdout, _) = run_cmd(&[
+        "list", vault.path().to_str().unwrap(), "-p", "pw",
+    ]);
+    assert!(ok);
+    assert!(stdout.contains("Documents (2):"));
+}
+
+#[test]
+fn test_delete_document() {
+    let vault = tempfile::tempdir().unwrap();
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), b"data").unwrap();
+
+    run_cmd(&["init", vault.path().to_str().unwrap(), "-p", "pw"]);
+    let (ok, _, _) = run_cmd(&[
+        "import", vault.path().to_str().unwrap(), "-p", "pw",
+        file.path().to_str().unwrap(),
+    ]);
+    assert!(ok);
+
+    // Get the document ID from list
+    let (_, stdout, _) = run_cmd(&[
+        "list", vault.path().to_str().unwrap(), "-p", "pw",
+    ]);
+    let id = stdout.lines().nth(1).unwrap().split_whitespace().next().unwrap();
+
+    let (ok, stdout, _) = run_cmd(&[
+        "delete", vault.path().to_str().unwrap(), "-p", "pw", id,
+    ]);
+    assert!(ok);
+    assert!(stdout.contains("Deleted"));
+
+    let (ok, stdout, _) = run_cmd(&[
+        "list", vault.path().to_str().unwrap(), "-p", "pw",
+    ]);
+    assert!(ok);
+    assert!(stdout.contains("No documents"));
+}
+
+#[test]
+fn test_search_finds_content() {
+    let vault = tempfile::tempdir().unwrap();
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), b"the quick brown fox").unwrap();
+
+    run_cmd(&["init", vault.path().to_str().unwrap(), "-p", "pw"]);
+    run_cmd(&[
+        "import", vault.path().to_str().unwrap(), "-p", "pw",
+        file.path().to_str().unwrap(),
+    ]);
+
+    let (ok, stdout, _) = run_cmd(&[
+        "search", vault.path().to_str().unwrap(), "-p", "pw", "fox",
+    ]);
+    assert!(ok);
+    assert!(stdout.contains("Results (1):"));
+}
+
+#[test]
+fn test_backup_and_restore() {
+    let vault_a = tempfile::tempdir().unwrap();
+    let vault_b = tempfile::tempdir().unwrap();
+    let backup_file = tempfile::NamedTempFile::new().unwrap();
+
+    let src = create_sample_dir(&[("doc.txt", "content")]);
+
+    // Init vault_a with a document
+    run_cmd(&[
+        "init", vault_a.path().to_str().unwrap(), "-p", "pw",
+        "--from", src.path().to_str().unwrap(),
+    ]);
+
+    // Init vault_b empty
+    run_cmd(&["init", vault_b.path().to_str().unwrap(), "-p", "pw"]);
+
+    // Backup vault_a
+    let (ok, stdout, _) = run_cmd(&[
+        "backup", vault_a.path().to_str().unwrap(), "-p", "pw",
+        "-o", backup_file.path().to_str().unwrap(),
+    ]);
+    assert!(ok);
+    assert!(stdout.contains("Backup exported"));
+
+    // Restore into vault_b
+    let (ok, stdout, _) = run_cmd(&[
+        "restore", vault_b.path().to_str().unwrap(), "-p", "pw",
+        backup_file.path().to_str().unwrap(),
+    ]);
+    assert!(ok);
     assert!(stdout.contains("docs added: 1"));
 
-    // Export merged and verify 2 files
-    let export_out = Command::new(librecrate_bin())
-        .args([
-            "export",
-            merged.to_str().unwrap(),
-            "-p",
-            "pw",
-            "-o",
-            export_dir.to_str().unwrap(),
-        ])
-        .output()
-        .unwrap();
-    assert!(export_out.status.success());
-
-    let files: Vec<_> = std::fs::read_dir(export_dir.join("files"))
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .collect();
-    assert_eq!(files.len(), 2, "merged vault should have 2 documents");
+    // Verify vault_b has the document
+    let (ok, stdout, _) = run_cmd(&[
+        "list", vault_b.path().to_str().unwrap(), "-p", "pw",
+    ]);
+    assert!(ok);
+    assert!(stdout.contains("Documents (1):"));
 }
 
 #[test]
-fn test_export_wrong_password() {
-    let src = create_sample_dir("src", &[("doc.txt", "content")]);
-    let vault_path = src.path().join("out.vault");
-    let export_dir = src.path().join("extracted");
+fn test_backup_wrong_password() {
+    let vault = tempfile::tempdir().unwrap();
+    let backup_file = tempfile::NamedTempFile::new().unwrap();
+    run_cmd(&["init", vault.path().to_str().unwrap(), "-p", "correct"]);
 
-    // Create
-    Command::new(librecrate_bin())
-        .args([
-            "create",
-            src.path().to_str().unwrap(),
-            "-p",
-            "correct",
-            "-o",
-            vault_path.to_str().unwrap(),
-        ])
-        .output()
-        .unwrap();
+    let (ok, _, stderr) = run_cmd(&[
+        "backup", vault.path().to_str().unwrap(), "-p", "wrong",
+        "-o", backup_file.path().to_str().unwrap(),
+    ]);
+    assert!(!ok);
+    assert!(stderr.contains("AuthenticationFailed") || stderr.contains("Wrong password"));
+}
 
-    // Export with wrong password should fail
-    let out = Command::new(librecrate_bin())
-        .args([
-            "export",
-            vault_path.to_str().unwrap(),
-            "-p",
-            "wrong",
-            "-o",
-            export_dir.to_str().unwrap(),
-        ])
-        .output()
-        .unwrap();
-    assert!(!out.status.success());
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("Wrong password") || stderr.contains("AuthenticationFailed"));
+#[test]
+fn test_open_document() {
+    let vault = tempfile::tempdir().unwrap();
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), b"test content").unwrap();
+
+    run_cmd(&["init", vault.path().to_str().unwrap(), "-p", "pw"]);
+    run_cmd(&[
+        "import", vault.path().to_str().unwrap(), "-p", "pw",
+        file.path().to_str().unwrap(),
+    ]);
+
+    // Get the document ID
+    let (_, stdout, _) = run_cmd(&[
+        "list", vault.path().to_str().unwrap(), "-p", "pw",
+    ]);
+    let id = stdout.lines().nth(1).unwrap().split_whitespace().next().unwrap();
+
+    let (ok, stdout, _) = run_cmd(&[
+        "open", vault.path().to_str().unwrap(), "-p", "pw", id,
+    ]);
+    assert!(ok);
+    assert!(stdout.contains("Opened"));
+}
+
+#[test]
+fn test_wrong_password_fails() {
+    let vault = tempfile::tempdir().unwrap();
+    run_cmd(&["init", vault.path().to_str().unwrap(), "-p", "correct"]);
+
+    let (ok, _, _) = run_cmd(&[
+        "list", vault.path().to_str().unwrap(), "-p", "wrong",
+    ]);
+    assert!(!ok);
 }

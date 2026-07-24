@@ -2652,8 +2652,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "hex",
  "mime_guess",
+ "open",
  "rusqlite",
  "tempfile",
  "toml 0.8.23",

@@ -12,9 +12,9 @@ path = "src/main.rs"
 vault-native = { path = "../core" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
-hex = "0.4"
 uuid = { version = "1", features = ["v4"] }
 mime_guess = "2"
 tempfile = "3"
-rusqlite = { version = "0.31", default-features = false, features = ["bundled-sqlcipher"] }
 toml = "0.8"
+open = "5"
+rusqlite = { version = "0.31", default-features = false, features = ["bundled-sqlcipher"] }

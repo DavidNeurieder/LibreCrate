@@ -1,7 +1,41 @@
 use std::path::Path;
-use vault_native::types::KeyValue;
+use vault_native::crypto::argon2::Argon2Params;
+use vault_native::kdf;
 
-/// Recursively walk a directory, returning (absolute_path, relative_path) pairs.
+/// Resolve the master key from a vault directory and password.
+pub fn resolve_master_key(vault_dir: &Path, password: &str) -> anyhow::Result<Vec<u8>> {
+    let enc = vault_dir.join("encryption");
+    let salt = std::fs::read(enc.join("salt"))?;
+    let wrapped = std::fs::read(enc.join("wrapped_master_key"))
+        .or_else(|_| std::fs::read(enc.join("master_key")))?;
+    let params = match std::fs::read_to_string(enc.join("params.toml")) {
+        Ok(s) => {
+            let p: toml::Value = toml::from_str(&s)?;
+            Argon2Params {
+                memory_cost: p.get("memory_cost").and_then(|v| v.as_integer()).unwrap_or(19456) as u32,
+                iterations: p.get("iterations").and_then(|v| v.as_integer()).unwrap_or(2) as u32,
+                parallelism: p.get("parallelism").and_then(|v| v.as_integer()).unwrap_or(2) as u32,
+                hash_length: p.get("hash_length").and_then(|v| v.as_integer()).unwrap_or(32) as i32,
+            }
+        }
+        Err(_) => Argon2Params::default(),
+    };
+    let mk = kdf::derive_backup_master_key(&wrapped, password, &salt, &params)?;
+    Ok(mk)
+}
+
+/// Open an encrypted vault database, returning the connection and master key.
+pub fn resolve_vault(vault_dir: &Path, password: &str) -> anyhow::Result<(rusqlite::Connection, Vec<u8>)> {
+    let mk = resolve_master_key(vault_dir, password)?;
+    let db_path = vault_dir.join("databases").join("librecrate.db");
+    let conn = vault_native::db::schema::open_encrypted(
+        db_path.to_str().ok_or_else(|| anyhow::anyhow!("invalid vault path"))?,
+        &mk,
+    )?;
+    Ok((conn, mk))
+}
+
+/// Recursively walk a directory, returning (absolute, relative) pairs.
 pub fn walk_files(dir: &Path) -> anyhow::Result<Vec<(std::path::PathBuf, std::path::PathBuf)>> {
     let mut files = Vec::new();
     if !dir.exists() {
@@ -25,47 +59,6 @@ fn walk_dir_recursive(
         } else if path.is_dir() {
             walk_dir_recursive(base, &path, files)?;
         }
-    }
-    Ok(())
-}
-
-/// Read all files in a directory into KeyValue pairs.
-pub fn read_dir_files(dir: &Path) -> anyhow::Result<Vec<KeyValue>> {
-    let mut entries = Vec::new();
-    if dir.exists() {
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_file() {
-                let name = path.file_name().unwrap().to_string_lossy().to_string();
-                let data = std::fs::read(&path)?;
-                entries.push(KeyValue { key: name, value: data });
-            }
-        }
-    }
-    Ok(entries)
-}
-
-/// Write imported contents to a vault directory structure.
-pub fn write_contents(
-    dir: &Path,
-    contents: &vault_native::format::import::ImportedContents,
-) -> anyhow::Result<()> {
-    std::fs::create_dir_all(dir.join("encryption"))?;
-    std::fs::create_dir_all(dir.join("databases"))?;
-    std::fs::create_dir_all(dir.join("files"))?;
-    for kv in &contents.keys {
-        std::fs::write(dir.join("encryption").join(&kv.key), &kv.value)?;
-    }
-    if let Some(db) = &contents.db_file {
-        std::fs::write(dir.join("databases").join("librecrate.db"), db)?;
-    }
-    for kv in &contents.files {
-        let path = dir.join("files").join(&kv.key);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(path, &kv.value)?;
     }
     Ok(())
 }
