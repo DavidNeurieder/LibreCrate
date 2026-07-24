@@ -29,6 +29,7 @@ pub enum Screen {
     Library(screens::library::State),
     Settings(screens::settings::State),
     Export(screens::export::State),
+    ExportDocs(screens::export_docs::State),
     Collections(screens::collections::State),
 }
 
@@ -39,6 +40,7 @@ pub enum Message {
     Library(screens::library::Message),
     Settings(screens::settings::Message),
     Export(screens::export::Message),
+    ExportDocs(screens::export_docs::Message),
     Collections(screens::collections::Message),
     Navigate(Navigation),
     FileDropped(PathBuf),
@@ -151,6 +153,13 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::ExportDocs(msg) => {
+            if let Screen::ExportDocs(ref mut state) = app.screen {
+                let task = state.update(msg);
+                return task;
+            }
+            Task::none()
+        }
         Message::Collections(msg) => {
             if let Screen::Collections(ref mut state) = app.screen {
                 let task = state.update(msg);
@@ -221,6 +230,11 @@ fn handle_navigation(app: &mut App, nav: Navigation) -> Task<Message> {
             app.screen = Screen::Export(state);
             Task::none()
         }
+        Navigation::ExportDocs(vault) => {
+            let (state, task) = screens::export_docs::State::new(vault);
+            app.screen = Screen::ExportDocs(state);
+            task
+        }
         Navigation::Collections(vault) => {
             let state = screens::collections::State::new(vault);
             app.screen = Screen::Collections(state);
@@ -242,6 +256,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
         Screen::Library(state) => state.view().map(Message::Library),
         Screen::Settings(state) => state.view().map(Message::Settings),
         Screen::Export(state) => state.view().map(Message::Export),
+        Screen::ExportDocs(state) => state.view().map(Message::ExportDocs),
         Screen::Collections(state) => state.view().map(Message::Collections),
     }
 }

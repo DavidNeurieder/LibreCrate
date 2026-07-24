@@ -117,6 +117,25 @@ impl DbHandle {
         )?)
     }
 
+    pub fn update_document_title(
+        &self,
+        id: String,
+        new_title: String,
+    ) -> Result<bool, crate::error::Error> {
+        let conn = self
+            .inner
+            .lock()
+            .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let existing = crate::db::queries::get_document(&conn, &id)?
+            .ok_or_else(|| crate::error::Error::Database(format!("Document {} not found", id)))?;
+        Ok(crate::db::queries::update_document(
+            &conn,
+            &id,
+            &new_title,
+            existing.is_favorite,
+        )?)
+    }
+
     pub fn add_document_full(
         &self,
         doc: crate::db::queries::DocumentRow,

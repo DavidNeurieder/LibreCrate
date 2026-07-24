@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, image, row, scrollable, text, text_input, Column, Row},
+    widget::{button, column, container, image, pick_list, row, scrollable, text, text_input, Column, Row},
     Element, Task, Length,
 };
 use std::collections::HashMap;
@@ -11,16 +11,107 @@ use crate::widgets::document_card;
 use vault_native::db::fts::FtsSnippetResult;
 use vault_native::db::queries::DocumentRow;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortOption {
+    RecentlyOpened,
+    NameAsc,
+    NameDesc,
+    NewestFirst,
+    OldestFirst,
+}
+
+impl SortOption {
+    const ALL: &'static [SortOption] = &[
+        SortOption::RecentlyOpened,
+        SortOption::NameAsc,
+        SortOption::NameDesc,
+        SortOption::NewestFirst,
+        SortOption::OldestFirst,
+    ];
+}
+
+impl std::fmt::Display for SortOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SortOption::RecentlyOpened => write!(f, "Recently Opened"),
+            SortOption::NameAsc => write!(f, "Name A-Z"),
+            SortOption::NameDesc => write!(f, "Name Z-A"),
+            SortOption::NewestFirst => write!(f, "Newest First"),
+            SortOption::OldestFirst => write!(f, "Oldest First"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeFilter {
+    All,
+    Pdf,
+    Epub,
+    Comic,
+    Image,
+    Note,
+    Pass,
+}
+
+impl TypeFilter {
+    const ALL: &'static [TypeFilter] = &[
+        TypeFilter::All,
+        TypeFilter::Pdf,
+        TypeFilter::Epub,
+        TypeFilter::Comic,
+        TypeFilter::Image,
+        TypeFilter::Note,
+        TypeFilter::Pass,
+    ];
+
+    fn matches_mime(self, mime: &str) -> bool {
+        match self {
+            TypeFilter::All => true,
+            TypeFilter::Pdf => mime.contains("pdf"),
+            TypeFilter::Epub => mime.contains("epub"),
+            TypeFilter::Comic => mime.contains("comicbook") || mime.contains("cbz"),
+            TypeFilter::Image => mime.starts_with("image/"),
+            TypeFilter::Note => mime.contains("markdown") || mime.contains("text/plain"),
+            TypeFilter::Pass => mime.contains("pkpass") || mime.contains("apple.pkpass"),
+        }
+    }
+}
+
+impl std::fmt::Display for TypeFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeFilter::All => write!(f, "All"),
+            TypeFilter::Pdf => write!(f, "PDFs"),
+            TypeFilter::Epub => write!(f, "Books"),
+            TypeFilter::Comic => write!(f, "Comics"),
+            TypeFilter::Image => write!(f, "Images"),
+            TypeFilter::Note => write!(f, "Notes"),
+            TypeFilter::Pass => write!(f, "Passes"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     SearchChanged(String),
     Search,
     ClearSearch,
+    SortChanged(SortOption),
+    FilterChanged(TypeFilter),
     ToggleFavorite(String),
+    RequestDelete(String),
+    ConfirmDelete(String),
+    CancelDelete,
     DeleteDocument(String),
     OpenDocument(String),
+    ShowDocumentInfo(String),
+    HideDocumentInfo,
+    RenameNameChanged(String),
+    RenameDocument(String, String),
+    ConfirmRename(String),
     NavigateToSettings,
     NavigateToExport,
+    NavigateToExportDocs,
     NavigateToCollections,
     Import,
     Imported(Result<String, String>),
@@ -39,6 +130,11 @@ pub struct State {
     pub loading: bool,
     pub error: Option<String>,
     pub thumbnails: HashMap<String, image::Handle>,
+    pub sort_option: SortOption,
+    pub type_filter: TypeFilter,
+    pub pending_delete_id: Option<String>,
+    pub info_doc_id: Option<String>,
+    pub rename_name: String,
 }
 
 impl State {
@@ -51,6 +147,11 @@ impl State {
             loading: true,
             error: None,
             thumbnails: HashMap::new(),
+            sort_option: SortOption::RecentlyOpened,
+            type_filter: TypeFilter::All,
+            pending_delete_id: None,
+            info_doc_id: None,
+            rename_name: String::new(),
         };
         let task = state.reload();
         (state, task)
@@ -66,6 +167,23 @@ impl State {
             },
             |result| crate::app::Message::Library(Message::DocumentsLoaded(result)),
         )
+    }
+
+    fn filtered_documents(&self) -> Vec<&DocumentRow> {
+        self.documents
+            .iter()
+            .filter(|d| self.type_filter.matches_mime(&d.mime_type))
+            .collect()
+    }
+
+    fn sorted_documents(docs: &mut Vec<DocumentRow>, sort: SortOption) {
+        match sort {
+            SortOption::RecentlyOpened => docs.sort_by(|a, b| b.last_opened_at.cmp(&a.last_opened_at)),
+            SortOption::NameAsc => docs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase())),
+            SortOption::NameDesc => docs.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase())),
+            SortOption::NewestFirst => docs.sort_by(|a, b| b.imported_at.cmp(&a.imported_at)),
+            SortOption::OldestFirst => docs.sort_by(|a, b| a.imported_at.cmp(&b.imported_at)),
+        }
     }
 
     pub fn update(&mut self, message: Message) -> Task<crate::app::Message> {
@@ -105,6 +223,15 @@ impl State {
                 self.search_results = None;
                 Task::none()
             }
+            Message::SortChanged(sort) => {
+                self.sort_option = sort;
+                Self::sorted_documents(&mut self.documents, self.sort_option);
+                Task::none()
+            }
+            Message::FilterChanged(filter) => {
+                self.type_filter = filter;
+                Task::none()
+            }
             Message::ToggleFavorite(id) => {
                 if let Some(doc) = self.documents.iter_mut().find(|d| d.id == id) {
                     doc.is_favorite = !doc.is_favorite;
@@ -115,6 +242,24 @@ impl State {
                 });
                 Task::none()
             }
+            Message::RequestDelete(id) => {
+                self.pending_delete_id = Some(id);
+                Task::none()
+            }
+            Message::ConfirmDelete(id) => {
+                self.pending_delete_id = None;
+                self.documents.retain(|d| d.id != id);
+                self.thumbnails.remove(&id);
+                let vault = self.vault.clone();
+                std::thread::spawn(move || {
+                    let _ = vault.delete_document(&id);
+                });
+                Task::none()
+            }
+            Message::CancelDelete => {
+                self.pending_delete_id = None;
+                Task::none()
+            }
             Message::DeleteDocument(id) => {
                 self.documents.retain(|d| d.id != id);
                 self.thumbnails.remove(&id);
@@ -123,6 +268,42 @@ impl State {
                     let _ = vault.delete_document(&id);
                 });
                 Task::none()
+            }
+            Message::ShowDocumentInfo(id) => {
+                if let Some(doc) = self.documents.iter().find(|d| d.id == id) {
+                    self.info_doc_id = Some(id);
+                    self.rename_name = doc.title.clone();
+                }
+                Task::none()
+            }
+            Message::HideDocumentInfo => {
+                self.info_doc_id = None;
+                Task::none()
+            }
+            Message::RenameNameChanged(name) => {
+                self.rename_name = name;
+                Task::none()
+            }
+            Message::RenameDocument(id, new_name) => {
+                let trimmed = new_name.trim().to_string();
+                if trimmed.is_empty() {
+                    return Task::none();
+                }
+                if let Some(doc) = self.documents.iter_mut().find(|d| d.id == id) {
+                    doc.title = trimmed.clone();
+                }
+                self.info_doc_id = None;
+                let vault = self.vault.clone();
+                let new_title = trimmed;
+                std::thread::spawn(move || {
+                    let _ = vault.rename_document(&id, &new_title);
+                });
+                Task::none()
+            }
+            Message::ConfirmRename(id) => {
+                let new_name = self.rename_name.clone();
+                self.rename_name.clear();
+                Task::done(crate::app::Message::Library(Message::RenameDocument(id, new_name)))
             }
             Message::OpenDocument(id) => {
                 if let Some(doc) = self.documents.iter().find(|d| d.id == id) {
@@ -157,10 +338,14 @@ impl State {
             Message::NavigateToExport => {
                 Task::done(crate::app::Message::Navigate(Navigation::Export(self.vault.clone())))
             }
+            Message::NavigateToExportDocs => {
+                Task::done(crate::app::Message::Navigate(Navigation::ExportDocs(self.vault.clone())))
+            }
             Message::NavigateToCollections => {
                 Task::done(crate::app::Message::Navigate(Navigation::Collections(self.vault.clone())))
             }
-            Message::DocumentsLoaded(Ok(docs)) => {
+            Message::DocumentsLoaded(Ok(mut docs)) => {
+                Self::sorted_documents(&mut docs, self.sort_option);
                 self.documents = docs;
                 self.loading = false;
                 self.thumbnails.clear();
@@ -247,6 +432,49 @@ impl State {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
+        let sort_picker = pick_list(SortOption::ALL, Some(self.sort_option), Message::SortChanged)
+            .width(Length::Fixed(140.0));
+
+        let filter_row = TypeFilter::ALL.iter().fold(
+            Row::new().spacing(6),
+            |row, &f| {
+                let is_active = self.type_filter == f;
+                let label = text(format!("{f}")).size(12);
+                let chip = if is_active {
+                    button(label).style(|_theme, _status| button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgb(0.25, 0.45, 0.7))),
+                        text_color: iced::Color::WHITE,
+                        border: iced::Border {
+                            color: iced::Color::from_rgb(0.3, 0.5, 0.8),
+                            width: 1.0,
+                            radius: 12.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                } else {
+                    button(label).style(|_theme, _status| button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgb(0.15, 0.15, 0.17))),
+                        text_color: iced::Color::from_rgb(0.7, 0.72, 0.75),
+                        border: iced::Border {
+                            color: iced::Color::from_rgb(0.25, 0.25, 0.28),
+                            width: 1.0,
+                            radius: 12.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                };
+                row.push(chip.on_press(Message::FilterChanged(f)))
+            },
+        );
+
+        let filter_bar = container(
+            row![sort_picker, text("").width(Length::Fill), filter_row]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+        )
+        .padding(iced::Padding::new(0.0).top(0.0).bottom(8.0).left(16.0).right(16.0))
+        .width(Length::Fill);
+
         let toolbar = container(
             row![
                 text("LibreCrate").size(20),
@@ -257,6 +485,7 @@ impl State {
                 button("⚙").on_press(Message::NavigateToSettings),
                 button("+").on_press(Message::Import),
                 button("⬇").on_press(Message::NavigateToExport),
+                button("ZIP").on_press(Message::NavigateToExportDocs),
             ]
             .spacing(10)
             .padding(12)
@@ -325,44 +554,256 @@ impl State {
                 );
                 scrollable(list).into()
             }
-        } else if self.documents.is_empty() {
-            container(
-                column![
-                    text("No documents yet").size(18),
-                    text("Press Ctrl+I or tap + to import files.").size(13),
-                ]
-                .spacing(8)
-                .align_x(iced::Alignment::Center),
-            )
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
         } else {
-            let grid = self.documents.chunks(4).fold(
-                Column::new().spacing(12).padding(16),
-                |col, chunk| {
-                    col.push(
-                        chunk
-                            .iter()
-                            .fold(
-                                Row::new().spacing(12).width(Length::Fill),
-                                |row, doc| {
-                                    let thumb = self.thumbnails.get(&doc.id);
-                                    row.push(document_card::view(doc, thumb))
-                                },
-                            )
-                            .width(Length::Fill),
-                    )
-                },
-            );
-            scrollable(grid).into()
+            let filtered = self.filtered_documents();
+            if filtered.is_empty() {
+                let hint = if self.type_filter != TypeFilter::All {
+                    "No documents match this filter."
+                } else {
+                    "Press Ctrl+I or tap + to import files."
+                };
+                container(
+                    column![
+                        text("No documents yet").size(18),
+                        text(hint).size(13),
+                    ]
+                    .spacing(8)
+                    .align_x(iced::Alignment::Center),
+                )
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+            } else {
+                let grid = filtered.chunks(4).fold(
+                    Column::new().spacing(12).padding(16),
+                    |col, chunk| {
+                        col.push(
+                            chunk
+                                .iter()
+                                .fold(
+                                    Row::new().spacing(12).width(Length::Fill),
+                                    |row, doc| {
+                                        let thumb = self.thumbnails.get(&doc.id);
+                                        row.push(document_card::view(doc, thumb))
+                                    },
+                                )
+                                .width(Length::Fill),
+                        )
+                    },
+                );
+                scrollable(grid).into()
+            }
         };
 
-        let content = column![toolbar, body];
+        let mut content = column![toolbar, filter_bar, body];
+
+        if let Some(ref doc_id) = self.info_doc_id {
+            if let Some(doc) = self.documents.iter().find(|d| d.id == *doc_id) {
+                let info_panel = self.info_panel(doc);
+                content = content.push(info_panel);
+            }
+        }
+
+        if let Some(ref delete_id) = self.pending_delete_id.clone() {
+            let doc_name = self
+                .documents
+                .iter()
+                .find(|d| d.id == *delete_id)
+                .map(|d| d.title.clone())
+                .unwrap_or_default();
+            let did = delete_id.clone();
+            let dname = doc_name.clone();
+            let overlay = Self::delete_dialog(did, dname);
+            return container(
+                column![content, overlay],
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into();
+        }
 
         container(content).width(Length::Fill).height(Length::Fill).into()
+    }
+
+    fn info_panel(&self, doc: &DocumentRow) -> Element<'_, Message> {
+        let mime_display = doc.mime_type
+            .split('/')
+            .last()
+            .unwrap_or(&doc.mime_type)
+            .to_uppercase();
+
+        let size_display = format_file_size(doc.file_size);
+
+        let imported_display = if doc.imported_at > 0 {
+            format_timestamp(doc.imported_at)
+        } else {
+            "Unknown".into()
+        };
+
+        let opened_display = if doc.last_opened_at > 0 {
+            format_timestamp(doc.last_opened_at)
+        } else {
+            "Never".into()
+        };
+
+        let page_display = if doc.page_count > 0 {
+            doc.page_count.to_string()
+        } else {
+            "-".into()
+        };
+
+        let content = column![
+            row![
+                text("Document Info").size(16),
+                text("").width(Length::Fill),
+                button(text("×").size(14))
+                    .on_press(Message::HideDocumentInfo)
+                    .style(|_theme, _status| button::Style {
+                        text_color: iced::Color::from_rgb(0.7, 0.7, 0.7),
+                        background: None,
+                        border: iced::Border::default(),
+                        ..Default::default()
+                    }),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+            row![
+                text("Title:").size(12).color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
+                text_input("Document title", &self.rename_name)
+                    .on_input(Message::RenameNameChanged)
+                    .on_submit(Message::ConfirmRename(doc.id.clone()))
+                    .width(Length::Fill),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+            row![
+                text("Type:").size(12).color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
+                text(mime_display).size(12),
+            ].spacing(8),
+            row![
+                text("Size:").size(12).color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
+                text(size_display).size(12),
+            ].spacing(8),
+            row![
+                text("Pages:").size(12).color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
+                text(page_display).size(12),
+            ].spacing(8),
+            row![
+                text("Author:").size(12).color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
+                text(if doc.author.is_empty() { "-".into() } else { doc.author.clone() }).size(12),
+            ].spacing(8),
+            row![
+                text("Imported:").size(12).color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
+                text(imported_display).size(12),
+            ].spacing(8),
+            row![
+                text("Last opened:").size(12).color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
+                text(opened_display).size(12),
+            ].spacing(8),
+        ]
+        .spacing(8)
+        .padding(16);
+
+        container(content)
+            .width(Length::Fixed(360.0))
+            .style(crate::widgets::common::card_style())
+            .into()
+    }
+
+    fn delete_dialog(doc_id: String, doc_name: String) -> Element<'static, Message> {
+        let dialog = column![
+            text("Delete Document").size(16),
+            text(format!("Are you sure you want to delete \"{}\"?", doc_name))
+                .size(13)
+                .width(Length::Fixed(320.0)),
+            text("This action cannot be undone.").size(11)
+                .color(iced::Color::from_rgb(0.7, 0.5, 0.5)),
+            row![
+                button(text("Cancel").size(13))
+                    .on_press(Message::CancelDelete)
+                    .style(|_theme, _status| button::Style {
+                        text_color: iced::Color::from_rgb(0.7, 0.7, 0.7),
+                        background: Some(iced::Background::Color(iced::Color::from_rgb(0.2, 0.2, 0.22))),
+                        border: iced::Border {
+                            color: iced::Color::from_rgb(0.3, 0.3, 0.35),
+                            width: 1.0,
+                            radius: 6.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .padding(iced::Padding::new(6.0).left(16.0).right(16.0)),
+                button(text("Delete").size(13).color(iced::Color::WHITE))
+                    .on_press(Message::ConfirmDelete(doc_id))
+                    .style(|_theme, _status| button::Style {
+                        text_color: iced::Color::WHITE,
+                        background: Some(iced::Background::Color(iced::Color::from_rgb(0.7, 0.2, 0.2))),
+                        border: iced::Border {
+                            color: iced::Color::from_rgb(0.8, 0.3, 0.3),
+                            width: 1.0,
+                            radius: 6.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .padding(iced::Padding::new(6.0).left(16.0).right(16.0)),
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(12)
+        .padding(20)
+        .width(Length::Fixed(380.0));
+
+        container(
+            container(dialog)
+                .style(crate::widgets::common::card_style())
+        )
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.5))),
+            ..Default::default()
+        })
+        .into()
+    }
+}
+
+fn format_file_size(bytes: i64) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+fn format_timestamp(ts: i64) -> String {
+    if ts <= 0 {
+        return "Unknown".into();
+    }
+    let secs = ts;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let diff = now - secs;
+    if diff < 0 {
+        return "Just now".into();
+    }
+    if diff < 60 {
+        format!("{}s ago", diff)
+    } else if diff < 3600 {
+        format!("{}m ago", diff / 60)
+    } else if diff < 86400 {
+        format!("{}h ago", diff / 3600)
+    } else if diff < 604800 {
+        format!("{}d ago", diff / 86400)
+    } else {
+        format!("{}w ago", diff / 604800)
     }
 }
 

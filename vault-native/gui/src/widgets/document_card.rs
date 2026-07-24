@@ -88,7 +88,10 @@ pub fn view<'a>(
                 text("").width(Length::Fill),
                 mouse_area(
                     text("×").size(12).color(Color::from_rgb(0.5, 0.3, 0.3)),
-                ).on_press(library::Message::DeleteDocument(doc.id.clone())),
+                ).on_press(library::Message::RequestDelete(doc.id.clone())),
+                mouse_area(
+                    text("i").size(10).color(Color::from_rgb(0.4, 0.5, 0.7)),
+                ).on_press(library::Message::ShowDocumentInfo(doc.id.clone())),
                 mouse_area(
                     text(star_label).size(12).color(star_color),
                 ).on_press(library::Message::ToggleFavorite(doc.id.clone())),

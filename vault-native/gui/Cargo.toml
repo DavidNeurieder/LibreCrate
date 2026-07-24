@@ -27,6 +27,7 @@ uuid = { version = "1", features = ["v4"] }
 tempfile = "3"
 anyhow = "1"
 raw-window-handle = "0.6"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { version = "0.13", features = ["allow-unsafe-code"] }

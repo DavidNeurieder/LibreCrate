@@ -2646,6 +2646,7 @@ dependencies = [
  "uuid",
  "vault-native",
  "x11rb",
+ "zip",
 ]
 
 [[package]]

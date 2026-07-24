@@ -176,6 +176,11 @@ impl Vault {
         Ok(())
     }
 
+    pub fn rename_document(&self, id: &str, new_title: &str) -> Result<()> {
+        self.db.update_document_title(id.to_string(), new_title.to_string())?;
+        Ok(())
+    }
+
     pub fn load_thumbnail(&self, id: &str) -> Option<Vec<u8>> {
         self.db
             .load_thumbnail(self.base_dir.to_string_lossy().to_string(), id.to_string())
