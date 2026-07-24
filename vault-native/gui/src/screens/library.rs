@@ -17,6 +17,7 @@ pub enum Message {
     Search,
     ClearSearch,
     ToggleFavorite(String),
+    DeleteDocument(String),
     OpenDocument(String),
     NavigateToSettings,
     NavigateToExport,
@@ -111,6 +112,15 @@ impl State {
                 let vault = self.vault.clone();
                 std::thread::spawn(move || {
                     let _ = vault.toggle_favorite(id);
+                });
+                Task::none()
+            }
+            Message::DeleteDocument(id) => {
+                self.documents.retain(|d| d.id != id);
+                self.thumbnails.remove(&id);
+                let vault = self.vault.clone();
+                std::thread::spawn(move || {
+                    let _ = vault.delete_document(&id);
                 });
                 Task::none()
             }
@@ -646,5 +656,51 @@ mod tests {
 
         // Empty query does not dispatch
         let _task = state.update(Message::Search);
+    }
+
+    #[test]
+    fn test_delete_document_removes_from_state() {
+        let (vault, _dir) = crate::vault::tests::make_test_vault_with_dir();
+        let file_path = _dir.path().join("delete_me.txt");
+        std::fs::write(&file_path, b"content").unwrap();
+        vault.import_file(&file_path).unwrap();
+
+        let docs = vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 1);
+        let doc_id = docs[0].id.clone();
+
+        let (mut state, _task) = State::new(vault.clone());
+        state.loading = false;
+        state.documents = docs;
+        state.thumbnails.insert(doc_id.clone(), image::Handle::from_bytes(vec![0u8; 10]));
+
+        let _ = state.update(Message::DeleteDocument(doc_id.clone()));
+        assert_eq!(state.documents.len(), 0);
+        assert!(state.thumbnails.is_empty());
+    }
+
+    #[test]
+    fn test_delete_document_only_removes_target() {
+        let (vault, _dir) = crate::vault::tests::make_test_vault_with_dir();
+
+        let path_a = _dir.path().join("doc_a.txt");
+        std::fs::write(&path_a, b"content a").unwrap();
+        vault.import_file(&path_a).unwrap();
+
+        let path_b = _dir.path().join("doc_b.txt");
+        std::fs::write(&path_b, b"content b").unwrap();
+        vault.import_file(&path_b).unwrap();
+
+        let docs = vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 2);
+        let id_a = docs.iter().find(|d| d.title == "doc_a.txt").unwrap().id.clone();
+
+        let (mut state, _task) = State::new(vault.clone());
+        state.loading = false;
+        state.documents = docs;
+
+        let _ = state.update(Message::DeleteDocument(id_a));
+        assert_eq!(state.documents.len(), 1);
+        assert_eq!(state.documents[0].title, "doc_b.txt");
     }
 }

@@ -168,6 +168,14 @@ impl Vault {
         Ok(())
     }
 
+    pub fn delete_document(&self, id: &str) -> Result<()> {
+        self.db.delete_document_full(
+            self.base_dir.to_string_lossy().to_string(),
+            id.to_string(),
+        )?;
+        Ok(())
+    }
+
     pub fn load_thumbnail(&self, id: &str) -> Option<Vec<u8>> {
         self.db
             .load_thumbnail(self.base_dir.to_string_lossy().to_string(), id.to_string())
@@ -715,5 +723,49 @@ pub(crate) mod tests {
         // The merge should handle gracefully
         assert!(stats.documents_skipped >= 0);
         assert!(stats.documents_conflicted >= 0);
+    }
+
+    #[test]
+    fn test_delete_document_removes_from_vault() {
+        let tv = create_test_vault_with_dir();
+
+        let path = tv._dir.path().join("to_delete.txt");
+        std::fs::write(&path, b"delete me").unwrap();
+        let id = tv.vault.import_file(&path).unwrap();
+
+        let docs = tv.vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].id, id);
+
+        tv.vault.delete_document(&id).unwrap();
+
+        let docs = tv.vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 0);
+    }
+
+    #[test]
+    fn test_delete_document_file_removed_from_disk() {
+        let tv = create_test_vault_with_dir();
+
+        let path = tv._dir.path().join("to_delete.txt");
+        std::fs::write(&path, b"delete me").unwrap();
+        let id = tv.vault.import_file(&path).unwrap();
+
+        // Find the stored file path
+        let docs = tv.vault.list_documents().unwrap();
+        let stored_path = tv._dir.path().join(&docs[0].file_path);
+        assert!(stored_path.exists());
+
+        tv.vault.delete_document(&id).unwrap();
+
+        assert!(!stored_path.exists());
+    }
+
+    #[test]
+    fn test_delete_nonexistent_document_is_noop() {
+        let vault = create_test_vault();
+        // Should not error — delete_document_full returns Ok(false) for nonexistent IDs
+        let result = vault.delete_document("nonexistent_id");
+        assert!(result.is_ok());
     }
 }
