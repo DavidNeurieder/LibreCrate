@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, image, row, text};
+use iced::widget::{button, column, container, image, mouse_area, row, text};
 use iced::{Border, Color, Element, Length, Padding};
 
 use crate::screens::library;
@@ -61,41 +61,39 @@ pub fn view<'a>(
 
     let (badge_label, badge_color) = mime_badge(&doc.mime_type);
 
-    container(
+    let card_content = column![
+        thumb_element,
         column![
-            thumb_element,
-            column![
-                text(&doc.title).size(13).width(Length::Fill),
-                row![
-                    container(
-                        text(badge_label).size(9).color(Color::from_rgb(0.9, 0.9, 0.9)),
-                    )
-                    .padding(Padding::new(2.0).left(6).right(6))
-                    .style(move |_| container::Style {
-                        background: Some(iced::Background::Color(badge_color)),
-                        border: Border {
-                            radius: 4.0.into(),
-                            ..Default::default()
-                        },
+            text(&doc.title).size(13).width(Length::Fill),
+            row![
+                container(
+                    text(badge_label).size(9).color(Color::from_rgb(0.9, 0.9, 0.9)),
+                )
+                .padding(Padding::new(2.0).left(6).right(6))
+                .style(move |_| container::Style {
+                    background: Some(iced::Background::Color(badge_color)),
+                    border: Border {
+                        radius: 4.0.into(),
                         ..Default::default()
-                    }),
-                    text(file_size).size(10).color(Color::from_rgb(0.5, 0.5, 0.5)),
-                ]
-                .spacing(6)
-                .align_y(iced::Alignment::Center),
-                row![
-                    button(if doc.is_favorite { "★" } else { "☆" })
-                        .on_press(library::Message::ToggleFavorite(doc.id.clone())),
-                    button("Open").on_press(library::Message::OpenDocument(doc.id.clone())),
-                ]
-                .spacing(4),
+                    },
+                    ..Default::default()
+                }),
+                text(file_size).size(10).color(Color::from_rgb(0.5, 0.5, 0.5)),
             ]
-            .spacing(2)
-            .padding(8),
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+            button(if doc.is_favorite { "★" } else { "☆" })
+                .on_press(library::Message::ToggleFavorite(doc.id.clone())),
         ]
-        .spacing(0)
-        .width(180),
+        .spacing(2)
+        .padding(8),
+    ]
+    .spacing(0)
+    .width(180);
+
+    mouse_area(
+        container(card_content).style(common::card_style()),
     )
-    .style(common::card_style())
+    .on_press(library::Message::OpenDocument(doc.id.clone()))
     .into()
 }
