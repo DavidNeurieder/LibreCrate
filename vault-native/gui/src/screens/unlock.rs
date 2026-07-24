@@ -223,6 +223,7 @@ mod tests {
     #[test]
     fn test_ui_error_displayed() {
         let mut state = State::new();
+        state.vault_exists = true;
         state.error = Some("Invalid password".into());
         let mut ui = iced_test::simulator(state.view());
         assert!(ui.find("Invalid password").is_ok());

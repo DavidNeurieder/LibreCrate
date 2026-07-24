@@ -55,12 +55,16 @@ impl State {
         match message {
             Message::ExportBackup => {
                 self.error = None;
+                self.pending_op = Some(PendingOp::Export);
+                let date_str = chrono::Local::now().format("%Y%m%d").to_string();
+                let default_name = format!("LibreCrate-{}.librecrate-backup", date_str);
                 Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
                             rfd::FileDialog::new()
                                 .set_title("Save Backup")
-                                .add_filter("LibreCrate Backup", &["lcb"])
+                                .add_filter("LibreCrate Backup", &["librecrate-backup"])
+                                .set_file_name(&default_name)
                                 .save_file()
                         })
                         .await
@@ -75,12 +79,13 @@ impl State {
             }
             Message::ImportBackup => {
                 self.error = None;
+                self.pending_op = Some(PendingOp::Import);
                 Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
                             rfd::FileDialog::new()
                                 .set_title("Open Backup")
-                                .add_filter("LibreCrate Backup", &["lcb"])
+                                .add_filter("LibreCrate Backup", &["librecrate-backup"])
                                 .add_filter("All Files", &["*"])
                                 .pick_file()
                         })
@@ -95,13 +100,10 @@ impl State {
                 )
             }
             Message::FileSelected(path) => {
-                let op = if self.pending_op.is_some() {
-                    self.pending_op.clone().unwrap()
-                } else {
-                    PendingOp::Export
-                };
+                if self.pending_op.is_none() {
+                    self.pending_op = Some(PendingOp::Export);
+                }
                 self.pending_path = Some(path);
-                self.pending_op = Some(op);
                 Task::none()
             }
             Message::FileSelectionCancelled => {
@@ -160,7 +162,7 @@ impl State {
                             let data =
                                 std::fs::read(&path).map_err(|e| e.to_string())?;
                             vault
-                                .merge_backup(&data, &password, &vault.password.clone())
+                                .restore_backup(&data, &password)
                                 .map_err(|e| e.to_string())?;
                             Ok(())
                         })
@@ -202,11 +204,22 @@ impl State {
 
     pub fn view(&self) -> Element<'_, Message> {
         let body: Element<'_, Message> = if self.pending_path.is_some() {
-            let op_label = match self.pending_op {
-                Some(PendingOp::Export) => "Export",
-                Some(PendingOp::Import) => "Import",
-                None => "",
+            let (title, description, action_label, on_submit_msg) = match self.pending_op {
+                Some(PendingOp::Export) => (
+                    "Encrypt Backup",
+                    "Enter your vault password to encrypt this backup.",
+                    "Export",
+                    Message::ConfirmExport,
+                ),
+                Some(PendingOp::Import) => (
+                    "Decrypt Backup",
+                    "The passkey of the vault that created this backup is needed to decrypt it.",
+                    "Import",
+                    Message::ConfirmImport,
+                ),
+                None => ("", "", "", Message::CancelPending),
             };
+
             let path_display = self
                 .pending_path
                 .as_ref()
@@ -214,17 +227,18 @@ impl State {
                 .unwrap_or_default();
 
             column![
-                text(format!("{op_label} backup")).size(14),
-                text(path_display).size(12).color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
-                text("Backup password").size(13),
-                text_input("Backup password", &self.backup_password)
+                text(title).size(16),
+                text(description).size(12).color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
+                text(path_display).size(11).color(iced::Color::from_rgb(0.5, 0.5, 0.5)),
+                text("Vault password").size(13),
+                text_input("Enter vault password", &self.backup_password)
                     .secure(true)
                     .on_input(Message::BackupPasswordChanged)
-                    .on_submit(Message::ConfirmExport)
+                    .on_submit(on_submit_msg)
                     .width(300),
                 row![
                     button("Cancel").on_press(Message::CancelPending),
-                    button(op_label).on_press(match self.pending_op {
+                    button(action_label).on_press(match self.pending_op {
                         Some(PendingOp::Export) => Message::ConfirmExport,
                         Some(PendingOp::Import) => Message::ConfirmImport,
                         _ => Message::CancelPending,
@@ -237,7 +251,7 @@ impl State {
             .into()
         } else {
             column![
-                text("Create or restore vault backups.").size(14),
+                text("Export your vault to a backup file, or restore from a backup.").size(14),
                 button("Export Backup").on_press(Message::ExportBackup),
                 button("Import Backup").on_press(Message::ImportBackup),
             ]
@@ -247,7 +261,7 @@ impl State {
         };
 
         let content = column![
-            common::navbar("Export / Import", Some(Message::Back)),
+            common::navbar("Backup", Some(Message::Back)),
             container(
                 column![
                     body,
@@ -305,7 +319,7 @@ mod tests {
     fn test_file_selected_sets_pending() {
         let vault = make_test_vault();
         let mut state = State::new(vault);
-        let path = PathBuf::from("/tmp/test.lcb");
+        let path = PathBuf::from("/tmp/test.librecrate-backup");
         let _ = state.update(Message::FileSelected(path.clone()));
         assert_eq!(state.pending_path, Some(path));
     }
@@ -314,7 +328,7 @@ mod tests {
     fn test_file_selection_cancelled_clears_pending() {
         let vault = make_test_vault();
         let mut state = State::new(vault);
-        state.pending_path = Some(PathBuf::from("/tmp/test.lcb"));
+        state.pending_path = Some(PathBuf::from("/tmp/test.librecrate-backup"));
         state.pending_op = Some(PendingOp::Export);
         let _ = state.update(Message::FileSelectionCancelled);
         assert!(state.pending_path.is_none());
@@ -325,7 +339,7 @@ mod tests {
     fn test_cancel_pending_clears_state() {
         let vault = make_test_vault();
         let mut state = State::new(vault);
-        state.pending_path = Some(PathBuf::from("/tmp/test.lcb"));
+        state.pending_path = Some(PathBuf::from("/tmp/test.librecrate-backup"));
         state.pending_op = Some(PendingOp::Import);
         state.backup_password = "secret".into();
         let _ = state.update(Message::CancelPending);
@@ -396,21 +410,21 @@ mod tests {
         let vault = make_test_vault();
         let state = State::new(vault);
         let mut ui = iced_test::simulator(state.view());
-        assert!(ui.find("Export / Import").is_ok());
+        assert!(ui.find("Backup").is_ok());
         assert!(ui.find("Export Backup").is_ok());
         assert!(ui.find("Import Backup").is_ok());
         assert!(ui.find("Back").is_ok());
-        assert!(ui.find("Create or restore vault backups.").is_ok());
+        assert!(ui.find("Export your vault to a backup file, or restore from a backup.").is_ok());
     }
 
     #[test]
     fn test_view_pending_shows_password_input() {
         let vault = make_test_vault();
         let mut state = State::new(vault);
-        state.pending_path = Some(PathBuf::from("/tmp/test.lcb"));
+        state.pending_path = Some(PathBuf::from("/tmp/test.librecrate-backup"));
         state.pending_op = Some(PendingOp::Export);
         let mut ui = iced_test::simulator(state.view());
-        assert!(ui.find("Backup password").is_ok());
+        assert!(ui.find("Vault password").is_ok());
         assert!(ui.find("Cancel").is_ok());
     }
 
@@ -442,6 +456,46 @@ mod tests {
         assert!(msgs.contains(&Message::Back));
     }
 
+    #[test]
+    fn test_import_backup_sets_pending_op() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        // ImportBackup triggers a file dialog; simulate the flow by
+        // manually setting pending_op as the handler does, then FileSelected
+        state.pending_op = Some(PendingOp::Import);
+        let _ = state.update(Message::FileSelected(PathBuf::from("/tmp/backup.librecrate-backup")));
+        assert_eq!(state.pending_op, Some(PendingOp::Import));
+    }
+
+    #[test]
+    fn test_export_backup_sets_pending_op() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.pending_op = Some(PendingOp::Export);
+        let _ = state.update(Message::FileSelected(PathBuf::from("/tmp/backup.librecrate-backup")));
+        assert_eq!(state.pending_op, Some(PendingOp::Export));
+    }
+
+    #[test]
+    fn test_view_export_pending_shows_encrypt_title() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.pending_path = Some(PathBuf::from("/tmp/test.librecrate-backup"));
+        state.pending_op = Some(PendingOp::Export);
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Encrypt Backup").is_ok());
+    }
+
+    #[test]
+    fn test_view_import_pending_shows_decrypt_title() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.pending_path = Some(PathBuf::from("/tmp/test.librecrate-backup"));
+        state.pending_op = Some(PendingOp::Import);
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Decrypt Backup").is_ok());
+    }
+
     // -----------------------------------------------------------------------
     // Real document roundtrip tests (file-system based, like the GUI does)
     // -----------------------------------------------------------------------
@@ -459,7 +513,7 @@ mod tests {
         assert_eq!(docs_before[0].title, "hello.txt");
 
         // Export to a temp file (same as GUI does)
-        let backup_path = dir.path().join("backup.lcb");
+        let backup_path = dir.path().join("backup.librecrate-backup");
         let data = vault.export_backup("backuppass").unwrap();
         std::fs::write(&backup_path, &data).unwrap();
 
@@ -467,12 +521,12 @@ mod tests {
         let data_read = std::fs::read(&backup_path).unwrap();
         assert_eq!(data, data_read);
 
-        // Merge into a fresh vault
-        let (vault2, _dir2) = make_test_vault_with_dir();
-        let stats = vault2
-            .merge_backup(&data_read, "backuppass", "testpass")
-            .unwrap();
-        assert_eq!(stats.documents_added, 1);
+        // Full restore into a fresh vault (Branch B, matching Android)
+        let (vault2, dir2) = make_test_vault_with_dir();
+        vault2.restore_backup(&data_read, "backuppass").unwrap();
+
+        // Re-open with the original vault password (matching Android unlock flow)
+        let vault2 = Vault::open(dir2.path(), "testpass").unwrap();
 
         let docs_after = vault2.list_documents().unwrap();
         assert_eq!(docs_after.len(), 1);
@@ -493,17 +547,16 @@ mod tests {
         assert_eq!(vault.list_documents().unwrap().len(), 3);
 
         // Export to file
-        let backup_path = dir.path().join("backup.lcb");
+        let backup_path = dir.path().join("backup.librecrate-backup");
         let data = vault.export_backup("backuppass").unwrap();
         std::fs::write(&backup_path, &data).unwrap();
 
-        // Read back and merge
+        // Read back and restore
         let data_read = std::fs::read(&backup_path).unwrap();
-        let (vault2, _dir2) = make_test_vault_with_dir();
-        let stats = vault2
-            .merge_backup(&data_read, "backuppass", "testpass")
-            .unwrap();
-        assert_eq!(stats.documents_added, 3);
+        let (vault2, dir2) = make_test_vault_with_dir();
+        vault2.restore_backup(&data_read, "backuppass").unwrap();
+
+        let vault2 = Vault::open(dir2.path(), "testpass").unwrap();
         assert_eq!(vault2.list_documents().unwrap().len(), 3);
     }
 
@@ -516,14 +569,14 @@ mod tests {
         vault.import_file(&path).unwrap();
 
         // Export with correct password
-        let backup_path = dir.path().join("backup.lcb");
+        let backup_path = dir.path().join("backup.librecrate-backup");
         let data = vault.export_backup("correctpass").unwrap();
         std::fs::write(&backup_path, &data).unwrap();
 
         // Try to import with wrong password
         let data_read = std::fs::read(&backup_path).unwrap();
         let (vault2, _dir2) = make_test_vault_with_dir();
-        let result = vault2.merge_backup(&data_read, "wrongpass", "testpass");
+        let result = vault2.restore_backup(&data_read, "wrongpass");
         assert!(result.is_err());
     }
 
@@ -531,16 +584,15 @@ mod tests {
     fn test_export_import_empty_vault_roundtrip() {
         let (vault, dir) = make_test_vault_with_dir();
 
-        let backup_path = dir.path().join("backup.lcb");
+        let backup_path = dir.path().join("backup.librecrate-backup");
         let data = vault.export_backup("backuppass").unwrap();
         std::fs::write(&backup_path, &data).unwrap();
 
         let data_read = std::fs::read(&backup_path).unwrap();
-        let (vault2, _dir2) = make_test_vault_with_dir();
-        let stats = vault2
-            .merge_backup(&data_read, "backuppass", "testpass")
-            .unwrap();
-        assert_eq!(stats.documents_added, 0);
+        let (vault2, dir2) = make_test_vault_with_dir();
+        vault2.restore_backup(&data_read, "backuppass").unwrap();
+
+        let vault2 = Vault::open(dir2.path(), "testpass").unwrap();
         assert_eq!(vault2.list_documents().unwrap().len(), 0);
     }
 
@@ -559,18 +611,16 @@ mod tests {
         let docs_before = vault.list_documents().unwrap();
         assert_eq!(docs_before.len(), 2);
 
-        // Export + read back + merge
-        let backup_path = dir.path().join("backup.lcb");
+        // Export + read back + restore
+        let backup_path = dir.path().join("backup.librecrate-backup");
         let data = vault.export_backup("backuppass").unwrap();
         std::fs::write(&backup_path, &data).unwrap();
 
         let data_read = std::fs::read(&backup_path).unwrap();
-        let (vault2, _dir2) = make_test_vault_with_dir();
-        let stats = vault2
-            .merge_backup(&data_read, "backuppass", "testpass")
-            .unwrap();
-        assert_eq!(stats.documents_added, 2);
+        let (vault2, dir2) = make_test_vault_with_dir();
+        vault2.restore_backup(&data_read, "backuppass").unwrap();
 
+        let vault2 = Vault::open(dir2.path(), "testpass").unwrap();
         let docs_after = vault2.list_documents().unwrap();
         assert_eq!(docs_after.len(), 2);
         let mimes: Vec<&str> = docs_after.iter().map(|d| d.mime_type.as_str()).collect();

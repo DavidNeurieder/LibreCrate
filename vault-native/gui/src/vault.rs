@@ -38,7 +38,7 @@ impl PartialEq for Vault {
 impl Vault {
     pub fn open(dir: &Path, password: &str) -> Result<Self> {
         let encryption_dir = dir.join("encryption");
-        let db_path = dir.join("databases").join("vault.db");
+        let db_path = dir.join("databases").join("librecrate.db");
 
         let salt = std::fs::read(encryption_dir.join("salt"))?;
         let wrapped_key = std::fs::read(encryption_dir.join("master_key"))?;
@@ -109,7 +109,7 @@ impl Vault {
             ),
         )?;
 
-        let db_path = db_dir.join("vault.db");
+        let db_path = db_dir.join("librecrate.db");
         let db = DbHandle::create_encrypted(
             db_path.to_str().unwrap().to_string(),
             master_key.clone(),
@@ -215,7 +215,7 @@ impl Vault {
 
     pub fn export_backup(&self, password: &str) -> Result<Vec<u8>> {
         let encryption_dir = self.base_dir.join("encryption");
-        let db_path = self.base_dir.join("databases").join("vault.db");
+        let db_path = self.base_dir.join("databases").join("librecrate.db");
         let files_dir = self.base_dir.join("files");
 
         let params_str = std::fs::read_to_string(encryption_dir.join("params.toml"))?;
@@ -243,14 +243,19 @@ impl Vault {
 
         let salt = std::fs::read(encryption_dir.join("salt"))?;
         let wrapped_key = std::fs::read(encryption_dir.join("master_key"))?;
+        let params_toml = std::fs::read(encryption_dir.join("params.toml"))?;
         let keys = vec![
             vault_native::types::KeyValue {
                 key: "salt".into(),
                 value: salt,
             },
             vault_native::types::KeyValue {
-                key: "wrapped_master_key".into(),
+                key: "master_key".into(),
                 value: wrapped_key,
+            },
+            vault_native::types::KeyValue {
+                key: "params.toml".into(),
+                value: params_toml,
             },
         ];
 
@@ -289,16 +294,19 @@ impl Vault {
         // Unwrap the backup's master key using the original vault password
         let backup_master_key = {
             let wrapped_key = contents.keys.iter()
-                .find(|k| k.key == "wrapped_master_key")
+                .find(|k| k.key == "master_key")
                 .map(|k| &k.value)
-                .ok_or_else(|| anyhow::anyhow!("missing wrapped_master_key in backup"))?;
+                .ok_or_else(|| anyhow::anyhow!("missing master_key in backup"))?;
             let salt = contents.keys.iter()
                 .find(|k| k.key == "salt")
                 .map(|k| &k.value)
                 .ok_or_else(|| anyhow::anyhow!("missing salt in backup"))?;
 
-            let params_str = std::fs::read_to_string(self.base_dir.join("encryption").join("params.toml"))?;
-            let p: toml::Value = toml::from_str(&params_str)?;
+            let params_toml = contents.keys.iter()
+                .find(|k| k.key == "params.toml")
+                .map(|k| &k.value)
+                .ok_or_else(|| anyhow::anyhow!("missing params.toml in backup"))?;
+            let p: toml::Value = toml::from_str(std::str::from_utf8(params_toml)?)?;
             let memory_cost = p["memory_cost"].as_integer().unwrap_or(19456) as u32;
             let iterations = p["iterations"].as_integer().unwrap_or(2) as u32;
             let parallelism = p["parallelism"].as_integer().unwrap_or(2) as u32;
@@ -325,6 +333,40 @@ impl Vault {
         ).map_err(|e| anyhow::anyhow!("{e}"))?;
 
         Ok(stats)
+    }
+
+    /// Full restore from backup — replaces the vault entirely (Branch B).
+    /// Matches Android's `restore_to_layout` behavior.
+    /// After this call, the vault on disk belongs to whoever created the backup.
+    /// The caller must re-open the vault with the appropriate password.
+    pub fn restore_backup(&self, backup_data: &[u8], backup_password: &str) -> Result<()> {
+        let contents = vault_native::ffi::import_vault(
+            backup_data.to_vec(),
+            backup_password.to_string(),
+        )?;
+
+        let db_data = contents.db_file
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("backup has no database file"))?;
+
+        let encryption_dir = self.base_dir.join("encryption");
+        let database_dir = self.base_dir.join("databases");
+        let files_dir = self.base_dir.join("files");
+
+        // Ensure directories exist
+        std::fs::create_dir_all(&encryption_dir)?;
+        std::fs::create_dir_all(&database_dir)?;
+        std::fs::create_dir_all(&files_dir)?;
+
+        vault_native::ffi::restore_to_layout(
+            contents,
+            db_data,
+            encryption_dir.to_string_lossy().to_string(),
+            database_dir.to_string_lossy().to_string(),
+            files_dir.to_string_lossy().to_string(),
+        )?;
+
+        Ok(())
     }
 }
 
@@ -567,7 +609,7 @@ pub(crate) mod tests {
             .unwrap();
         assert!(imported.db_file.is_some(), "backup must contain db");
         assert_eq!(imported.files.len(), 1, "backup must contain 1 file");
-        assert_eq!(imported.keys.len(), 2, "backup must contain salt + wrapped_master_key");
+        assert_eq!(imported.keys.len(), 3, "backup must contain salt + master_key + params.toml");
     }
 
     #[test]
