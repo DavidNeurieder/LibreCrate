@@ -5,13 +5,6 @@ use vault_native::db::fts::FtsSnippetResult;
 use vault_native::db::queries::{CollectionRow, DocumentRow, TagRow};
 use vault_native::ffi::DbHandle;
 
-struct Argon2Params {
-    memory_cost: u32,
-    iterations: u32,
-    parallelism: u32,
-    hash_length: i32,
-}
-
 #[derive(Clone)]
 pub struct Vault {
     pub db: Arc<DbHandle>,
@@ -41,16 +34,11 @@ impl Vault {
         let db_path = dir.join("databases").join("librecrate.db");
 
         let salt = std::fs::read(encryption_dir.join("salt"))?;
-        let wrapped_key = std::fs::read(encryption_dir.join("master_key"))?;
-        let params_val: toml::Value = toml::from_str(
+        let wrapped_key = std::fs::read(encryption_dir.join("wrapped_master_key"))
+            .or_else(|_| std::fs::read(encryption_dir.join("master_key")))?;
+        let params = vault_native::vault_ops::parse_kdf_params_from_toml(
             &std::fs::read_to_string(encryption_dir.join("params.toml"))?,
         )?;
-        let params = Argon2Params {
-            memory_cost: params_val["memory_cost"].as_integer().unwrap_or(19456) as u32,
-            iterations: params_val["iterations"].as_integer().unwrap_or(2) as u32,
-            parallelism: params_val["parallelism"].as_integer().unwrap_or(2) as u32,
-            hash_length: params_val["hash_length"].as_integer().unwrap_or(32) as i32,
-        };
 
         let kek = vault_native::ffi::derive_key(
             password.to_string(),
@@ -82,30 +70,26 @@ impl Vault {
 
         let salt = vault_native::ffi::generate_salt();
         let master_key = vault_native::ffi::generate_master_key();
-        let params = Argon2Params {
-            memory_cost: 19 * 1024,
-            iterations: 2,
-            parallelism: 2,
-            hash_length: 32,
-        };
+        let memory_cost = 19 * 1024u32;
+        let iterations = 2u32;
+        let parallelism = 2u32;
 
         let kek = vault_native::ffi::derive_key(
             password.to_string(),
             salt.clone(),
-            params.memory_cost,
-            params.iterations,
-            params.parallelism,
+            memory_cost,
+            iterations,
+            parallelism,
         )?;
 
         let wrapped_key = vault_native::ffi::wrap_key(kek, master_key.clone())?;
 
         std::fs::write(encryption_dir.join("salt"), &salt)?;
-        std::fs::write(encryption_dir.join("master_key"), &wrapped_key)?;
+        std::fs::write(encryption_dir.join("wrapped_master_key"), &wrapped_key)?;
         std::fs::write(
             encryption_dir.join("params.toml"),
             format!(
-                "memory_cost = {}\niterations = {}\nparallelism = {}\nhash_length = {}\n",
-                params.memory_cost, params.iterations, params.parallelism, params.hash_length
+                "memory_cost = {memory_cost}\niterations = {iterations}\nparallelism = {parallelism}\nhash_length = 32\n",
             ),
         )?;
 
@@ -214,125 +198,19 @@ impl Vault {
     }
 
     pub fn export_backup(&self, password: &str) -> Result<Vec<u8>> {
-        let encryption_dir = self.base_dir.join("encryption");
-        let db_path = self.base_dir.join("databases").join("librecrate.db");
-        let files_dir = self.base_dir.join("files");
-
-        let params_str = std::fs::read_to_string(encryption_dir.join("params.toml"))?;
-        let p: toml::Value = toml::from_str(&params_str)?;
-        let kdf_params = vault_native::crypto::argon2::Argon2Params {
-            memory_cost: p["memory_cost"].as_integer().unwrap_or(19456) as u32,
-            iterations: p["iterations"].as_integer().unwrap_or(2) as u32,
-            parallelism: p["parallelism"].as_integer().unwrap_or(2) as u32,
-            hash_length: p["hash_length"].as_integer().unwrap_or(32) as i32,
-        };
-
-        let mut files: Vec<vault_native::types::KeyValue> = Vec::new();
-        if files_dir.exists() {
-            for entry in std::fs::read_dir(&files_dir)? {
-                let entry = entry?;
-                if entry.file_type()?.is_file() {
-                    let data = std::fs::read(entry.path())?;
-                    files.push(vault_native::types::KeyValue {
-                        key: entry.file_name().to_string_lossy().to_string(),
-                        value: data,
-                    });
-                }
-            }
-        }
-
-        let salt = std::fs::read(encryption_dir.join("salt"))?;
-        let wrapped_key = std::fs::read(encryption_dir.join("master_key"))?;
-        let params_toml = std::fs::read(encryption_dir.join("params.toml"))?;
-        let keys = vec![
-            vault_native::types::KeyValue {
-                key: "salt".into(),
-                value: salt,
-            },
-            vault_native::types::KeyValue {
-                key: "master_key".into(),
-                value: wrapped_key,
-            },
-            vault_native::types::KeyValue {
-                key: "params.toml".into(),
-                value: params_toml,
-            },
-        ];
-
-        let db_data = std::fs::read(&db_path)?;
-
-        vault_native::ffi::export_vault(
-            files,
-            Some(db_data),
-            password.to_string(),
-            keys,
-            vault_native::crypto::argon2::Argon2Params {
-                memory_cost: kdf_params.memory_cost,
-                iterations: kdf_params.iterations,
-                parallelism: kdf_params.parallelism,
-                hash_length: kdf_params.hash_length,
-            },
-        )
-        .map_err(|e| anyhow::anyhow!("{e}"))
+        Ok(vault_native::vault_ops::export_vault_dir(
+            &self.base_dir,
+            password,
+        )?)
     }
 
     pub fn merge_backup(&self, backup_data: &[u8], backup_password: &str, vault_password: &str) -> Result<vault_native::merge::MergeStats> {
-        let contents = vault_native::ffi::import_vault(
-            backup_data.to_vec(),
-            backup_password.to_string(),
-        )?;
-
-        let tmp_dir = tempfile::tempdir()?;
-        let backup_db_path = tmp_dir.path().join("backup.db");
-
-        if let Some(db_bytes) = &contents.db_file {
-            std::fs::write(&backup_db_path, db_bytes)?;
-        } else {
-            anyhow::bail!("backup has no database file");
-        }
-
-        // Unwrap the backup's master key using the original vault password
-        let backup_master_key = {
-            let wrapped_key = contents.keys.iter()
-                .find(|k| k.key == "master_key")
-                .map(|k| &k.value)
-                .ok_or_else(|| anyhow::anyhow!("missing master_key in backup"))?;
-            let salt = contents.keys.iter()
-                .find(|k| k.key == "salt")
-                .map(|k| &k.value)
-                .ok_or_else(|| anyhow::anyhow!("missing salt in backup"))?;
-
-            let params_toml = contents.keys.iter()
-                .find(|k| k.key == "params.toml")
-                .map(|k| &k.value)
-                .ok_or_else(|| anyhow::anyhow!("missing params.toml in backup"))?;
-            let p: toml::Value = toml::from_str(std::str::from_utf8(params_toml)?)?;
-            let memory_cost = p["memory_cost"].as_integer().unwrap_or(19456) as u32;
-            let iterations = p["iterations"].as_integer().unwrap_or(2) as u32;
-            let parallelism = p["parallelism"].as_integer().unwrap_or(2) as u32;
-
-            vault_native::ffi::derive_backup_master_key(
-                wrapped_key.clone(),
-                vault_password.to_string(),
-                salt.clone(),
-                memory_cost,
-                iterations,
-                parallelism,
-            ).map_err(|e| anyhow::anyhow!("{e}"))?
-        };
-
-        let files_dir = self.base_dir.join("files").to_string_lossy().to_string();
-
-        let stats = self.db.merge_branch_a(
-            backup_db_path.to_string_lossy().to_string(),
-            backup_master_key,
-            contents.files,
-            Some(self.master_key.clone()),
-            Some(self.master_key.clone()),
-            files_dir,
-        ).map_err(|e| anyhow::anyhow!("{e}"))?;
-
-        Ok(stats)
+        Ok(vault_native::vault_ops::merge_vault_dir(
+            &self.base_dir,
+            backup_data,
+            backup_password,
+            vault_password,
+        )?)
     }
 
     /// Full restore from backup — replaces the vault entirely (Branch B).
@@ -340,33 +218,11 @@ impl Vault {
     /// After this call, the vault on disk belongs to whoever created the backup.
     /// The caller must re-open the vault with the appropriate password.
     pub fn restore_backup(&self, backup_data: &[u8], backup_password: &str) -> Result<()> {
-        let contents = vault_native::ffi::import_vault(
-            backup_data.to_vec(),
-            backup_password.to_string(),
-        )?;
-
-        let db_data = contents.db_file
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("backup has no database file"))?;
-
-        let encryption_dir = self.base_dir.join("encryption");
-        let database_dir = self.base_dir.join("databases");
-        let files_dir = self.base_dir.join("files");
-
-        // Ensure directories exist
-        std::fs::create_dir_all(&encryption_dir)?;
-        std::fs::create_dir_all(&database_dir)?;
-        std::fs::create_dir_all(&files_dir)?;
-
-        vault_native::ffi::restore_to_layout(
-            contents,
-            db_data,
-            encryption_dir.to_string_lossy().to_string(),
-            database_dir.to_string_lossy().to_string(),
-            files_dir.to_string_lossy().to_string(),
-        )?;
-
-        Ok(())
+        Ok(vault_native::vault_ops::restore_backup_to_dir(
+            backup_data,
+            backup_password,
+            &self.base_dir,
+        )?)
     }
 }
 

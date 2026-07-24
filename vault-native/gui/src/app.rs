@@ -65,7 +65,10 @@ pub fn boot() -> (App, Task<Message>) {
     let vault_exists = config
         .vault_dir
         .as_ref()
-        .map(|d| d.join("encryption").join("master_key").exists())
+        .map(|d| {
+            let enc = d.join("encryption");
+            enc.join("wrapped_master_key").exists() || enc.join("master_key").exists()
+        })
         .unwrap_or(false);
 
     // Request the X11 window XID after the window is created

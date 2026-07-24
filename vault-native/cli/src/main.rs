@@ -17,6 +17,8 @@ enum Commands {
     Export(commands::export::ExportArgs),
     /// Merge two vault files into one
     Merge(commands::merge::MergeArgs),
+    /// Export a vault directory as an encrypted backup file
+    BackupExport(commands::backup_export::BackupExportArgs),
     /// Inspect a vault file manifest
     Inspect(commands::inspect::InspectArgs),
     /// Vault file operations (init)
@@ -37,6 +39,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Create(args) => commands::create::run(args),
         Commands::Export(args) => commands::export::run(args),
         Commands::Merge(args) => commands::merge::run(args),
+        Commands::BackupExport(args) => commands::backup_export::run(args),
         Commands::Inspect(args) => commands::inspect::run(args),
         Commands::Vault(args) => commands::vault::run(args),
         Commands::Crypto(args) => commands::crypto::run(args),

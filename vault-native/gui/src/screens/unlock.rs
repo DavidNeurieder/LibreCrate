@@ -30,7 +30,10 @@ impl State {
         let vault_exists = config
             .vault_dir
             .as_ref()
-            .map(|d| d.join("encryption").join("master_key").exists())
+            .map(|d| {
+                let enc = d.join("encryption");
+                enc.join("wrapped_master_key").exists() || enc.join("master_key").exists()
+            })
             .unwrap_or(false);
 
         Self {

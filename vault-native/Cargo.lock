@@ -2656,6 +2656,7 @@ dependencies = [
  "mime_guess",
  "rusqlite",
  "tempfile",
+ "toml 0.8.23",
  "uuid",
  "vault-native",
 ]
@@ -5537,6 +5538,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror 1.0.69",
+ "toml 0.8.23",
  "uniffi",
  "uniffi_bindgen",
  "zip",

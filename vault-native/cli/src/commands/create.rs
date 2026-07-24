@@ -1,6 +1,5 @@
 use clap::Args;
 use std::path::PathBuf;
-use vault_native::crypto::argon2::Argon2Params;
 
 #[derive(Args)]
 pub struct CreateArgs {
@@ -53,23 +52,8 @@ pub fn run(args: CreateArgs) -> anyhow::Result<()> {
     }
     drop(conn);
 
-    let enc_dir = tmp.path().join("encryption");
-    let db_dir = tmp.path().join("databases");
-    let files_dir = tmp.path().join("files");
-
-    let keys = crate::commands::util::read_dir_files(&enc_dir)?;
-    let db_file = std::fs::read(db_dir.join("librecrate.db"))?;
-    let vault_files = crate::commands::util::read_dir_files(&files_dir)?;
-    let kdf = Argon2Params::default();
-
-    let exported = vault_native::format::export::export(
-        &vault_files,
-        Some(&db_file),
-        &args.password,
-        &keys,
-        &kdf,
-    )?;
-    std::fs::write(&args.output, &exported.data)?;
+    let exported = vault_native::vault_ops::export_vault_dir(tmp.path(), &args.password)?;
+    std::fs::write(&args.output, &exported)?;
     println!(
         "Vault written to {} ({} documents)",
         args.output.display(),

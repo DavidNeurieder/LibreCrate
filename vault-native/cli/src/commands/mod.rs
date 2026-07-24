@@ -1,3 +1,4 @@
+pub mod backup_export;
 pub mod bench;
 pub mod create;
 pub mod crypto;
