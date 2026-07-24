@@ -114,7 +114,7 @@ pub enum Message {
     NavigateToExportDocs,
     NavigateToCollections,
     Import,
-    Imported(Result<String, String>),
+    Imported(Result<usize, String>),
     DocumentsLoaded(Result<Vec<DocumentRow>, String>),
     SearchResultsLoaded(Vec<FtsSnippetResult>),
     DropResult(Result<usize, String>),
@@ -392,16 +392,33 @@ impl State {
                 let vault = self.vault.clone();
                 Task::perform(
                     async move {
-                        tokio::task::spawn_blocking(move || -> Result<String, String> {
-                            let file = rfd::FileDialog::new()
-                                .set_title("Import Document")
+                        tokio::task::spawn_blocking(move || -> Result<usize, String> {
+                            let files = rfd::FileDialog::new()
+                                .set_title("Import Documents")
                                 .add_filter("Documents", &["pdf", "epub", "cbz", "cbr", "djvu"])
                                 .add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp"])
                                 .add_filter("All Files", &["*"])
-                                .pick_file();
-                            match file {
-                                Some(path) => vault.import_file(&path).map_err(|e| e.to_string()),
-                                None => Err("No file selected".into()),
+                                .pick_files();
+                            match files {
+                                Some(paths) if !paths.is_empty() => {
+                                    let mut count = 0usize;
+                                    let mut first_error = None;
+                                    for path in &paths {
+                                        match vault.import_file(path) {
+                                            Ok(_) => count += 1,
+                                            Err(e) if first_error.is_none() => {
+                                                first_error = Some(e.to_string());
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    if count > 0 {
+                                        Ok(count)
+                                    } else {
+                                        Err(first_error.unwrap_or_else(|| "Import failed".into()))
+                                    }
+                                }
+                                _ => Ok(0),
                             }
                         })
                         .await
@@ -410,10 +427,14 @@ impl State {
                     |result| crate::app::Message::Library(Message::Imported(result)),
                 )
             }
-            Message::Imported(Ok(_)) => {
-                self.loading = true;
-                self.error = None;
-                self.reload()
+            Message::Imported(Ok(count)) => {
+                if count > 0 {
+                    self.loading = true;
+                    self.error = None;
+                    self.reload()
+                } else {
+                    Task::none()
+                }
             }
             Message::Imported(Err(e)) => {
                 self.error = Some(e);
@@ -936,8 +957,18 @@ mod tests {
         let vault = make_test_vault();
         let (mut state, _task) = State::new(vault);
         state.loading = false;
-        let _ = state.update(Message::Imported(Ok("new-id".into())));
+        let _ = state.update(Message::Imported(Ok(1)));
         assert!(state.loading);
+    }
+
+    #[test]
+    fn test_imported_ok_zero_does_nothing() {
+        let vault = make_test_vault();
+        let (mut state, _task) = State::new(vault);
+        state.loading = false;
+        let _ = state.update(Message::Imported(Ok(0)));
+        assert!(!state.loading);
+        assert!(state.error.is_none());
     }
 
     #[test]
