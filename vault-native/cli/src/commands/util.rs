@@ -24,17 +24,6 @@ pub fn resolve_master_key(vault_dir: &Path, password: &str) -> anyhow::Result<Ve
     Ok(mk)
 }
 
-/// Open an encrypted vault database, returning the connection and master key.
-pub fn resolve_vault(vault_dir: &Path, password: &str) -> anyhow::Result<(rusqlite::Connection, Vec<u8>)> {
-    let mk = resolve_master_key(vault_dir, password)?;
-    let db_path = vault_dir.join("databases").join("librecrate.db");
-    let conn = vault_native::db::schema::open_encrypted(
-        db_path.to_str().ok_or_else(|| anyhow::anyhow!("invalid vault path"))?,
-        &mk,
-    )?;
-    Ok((conn, mk))
-}
-
 /// Recursively walk a directory, returning (absolute, relative) pairs.
 pub fn walk_files(dir: &Path) -> anyhow::Result<Vec<(std::path::PathBuf, std::path::PathBuf)>> {
     let mut files = Vec::new();

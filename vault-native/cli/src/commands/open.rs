@@ -1,28 +1,24 @@
 use clap::Args;
-use std::path::PathBuf;
+
+use crate::session::Session;
 
 #[derive(Args)]
 pub struct OpenArgs {
-    /// Vault directory
-    pub dir: PathBuf,
-    /// Password
-    #[arg(short, long)]
-    pub password: String,
     /// Document ID
     pub id: String,
 }
 
-pub fn run(args: OpenArgs) -> anyhow::Result<()> {
-    let (conn, mk) = crate::commands::util::resolve_vault(&args.dir, &args.password)?;
+pub fn run(session: &Session, args: OpenArgs) -> anyhow::Result<()> {
+    let conn = session.open_db()?;
 
     let doc = vault_native::db::queries::get_document(&conn, &args.id)?
         .ok_or_else(|| anyhow::anyhow!("Document '{}' not found", args.id))?;
 
     let data = vault_native::db::storage::export_document_file(
         &conn,
-        &args.dir,
+        &session.vault_dir,
         &doc.id,
-        Some(&mk),
+        Some(&session.master_key),
     )
     .ok_or_else(|| anyhow::anyhow!("File data not found for document '{}'", doc.id))?;
 

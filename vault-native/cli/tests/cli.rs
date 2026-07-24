@@ -1,5 +1,6 @@
+use std::io::Write;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 fn bin() -> std::path::PathBuf {
     Path::new(env!("CARGO_BIN_EXE_librecrate")).to_path_buf()
@@ -502,4 +503,103 @@ fn test_full_workflow() {
     assert!(l.contains("Documents (2):"), "restored: {}", l);
     assert!(l.contains("alice.txt"), "restored: {}", l);
     assert!(l.contains("bob.txt"), "restored: {}", l);
+}
+
+// --- REPL tests ---
+
+/// Spawn the REPL with piped stdin, send lines, return combined output.
+fn repl(vault_dir: &Path, password: &str, commands: &[&str]) -> (bool, String, String) {
+    let mut child = Command::new(bin())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    {
+        let stdin = child.stdin.as_mut().unwrap();
+        writeln!(stdin, "{}", vault_dir.display()).unwrap();
+        writeln!(stdin, "{}", password).unwrap();
+        for cmd in commands {
+            writeln!(stdin, "{}", cmd).unwrap();
+        }
+        // quit at the end
+        writeln!(stdin, "quit").unwrap();
+    }
+
+    let output = child.wait_with_output().unwrap();
+    (
+        output.status.success(),
+        String::from_utf8_lossy(&output.stdout).to_string(),
+        String::from_utf8_lossy(&output.stderr).to_string(),
+    )
+}
+
+#[test]
+fn test_repl_list_empty() {
+    let d = v();
+    init(d.path(), "pw");
+    let (ok, out, err) = repl(d.path(), "pw", &["list"]);
+    assert!(ok, "repl failed: {}", err);
+    assert!(out.contains("No documents"), "expected No documents in stdout: {}", out);
+}
+
+#[test]
+fn test_repl_help() {
+    let d = v();
+    init(d.path(), "pw");
+    let (ok, out, err) = repl(d.path(), "pw", &["help"]);
+    assert!(ok, "repl failed: {}", err);
+    assert!(out.contains("Commands:"), "expected help output in stdout: {}", out);
+}
+
+#[test]
+fn test_repl_import_and_list() {
+    let d = v();
+    init(d.path(), "pw");
+    let src = sample(&[("test.txt", "hello repl")]);
+    let file_arg = src.path().join("test.txt").to_str().unwrap().to_string();
+    let (ok, out, err) = repl(d.path(), "pw", &[
+        &format!("import {}", file_arg),
+        "list",
+    ]);
+    assert!(ok, "repl failed: {}", err);
+    assert!(out.contains("Documents (1):") || out.contains("test.txt"),
+        "expected import+list output in stdout: {}", out);
+}
+
+#[test]
+fn test_repl_search() {
+    let d = v();
+    init(d.path(), "pw");
+    let src = sample(&[("lorem.txt", "lorem ipsum dolor")]);
+    let file_arg = src.path().join("lorem.txt").to_str().unwrap().to_string();
+    let (ok, out, err) = repl(d.path(), "pw", &[
+        &format!("import {}", file_arg),
+        "search lorem",
+    ]);
+    assert!(ok, "repl failed: {}", err);
+    assert!(out.contains("Results") || out.contains("lorem.txt"),
+        "expected search output in stdout: {}", out);
+}
+
+#[test]
+fn test_repl_wrong_password_fails() {
+    let d = v();
+    init(d.path(), "correct");
+    let mut child = Command::new(bin())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        let stdin = child.stdin.as_mut().unwrap();
+        writeln!(stdin, "{}", d.path().display()).unwrap();
+        writeln!(stdin, "wrong").unwrap();
+    }
+    let output = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success() || stderr.contains("Error") || stderr.contains("error"),
+        "expected failure for wrong password: {}", stderr);
 }

@@ -1,26 +1,23 @@
 use clap::Args;
 use std::path::PathBuf;
 
+use crate::session::Session;
+
 #[derive(Args)]
 pub struct ImportArgs {
-    /// Vault directory
-    pub dir: PathBuf,
-    /// Password
-    #[arg(short, long)]
-    pub password: String,
     /// Files to import
     #[arg(required = true)]
     pub files: Vec<PathBuf>,
 }
 
-pub fn run(args: ImportArgs) -> anyhow::Result<()> {
-    let (conn, mk) = crate::commands::util::resolve_vault(&args.dir, &args.password)?;
+pub fn run(session: &Session, args: ImportArgs) -> anyhow::Result<()> {
+    let conn = session.open_db()?;
 
     let mut imported = 0u32;
     let mut errors: Vec<String> = Vec::new();
 
     for path in &args.files {
-        match import_one(&conn, &args.dir, &mk, path) {
+        match import_one(&conn, &session.vault_dir, &session.master_key, path) {
             Ok(_) => imported += 1,
             Err(e) => errors.push(format!("{}: {}", path.display(), e)),
         }

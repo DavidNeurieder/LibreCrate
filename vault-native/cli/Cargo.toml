@@ -18,3 +18,5 @@ tempfile = "3"
 toml = "0.8"
 open = "5"
 rusqlite = { version = "0.31", default-features = false, features = ["bundled-sqlcipher"] }
+rustyline = "15"
+shlex = "1"

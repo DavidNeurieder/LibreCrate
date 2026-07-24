@@ -1,19 +1,15 @@
 use clap::Args;
-use std::path::PathBuf;
+
+use crate::session::Session;
 
 #[derive(Args)]
 pub struct SearchArgs {
-    /// Vault directory
-    pub dir: PathBuf,
-    /// Password
-    #[arg(short, long)]
-    pub password: String,
     /// Search query
     pub query: String,
 }
 
-pub fn run(args: SearchArgs) -> anyhow::Result<()> {
-    let (conn, _mk) = crate::commands::util::resolve_vault(&args.dir, &args.password)?;
+pub fn run(session: &Session, args: SearchArgs) -> anyhow::Result<()> {
+    let conn = session.open_db()?;
     let results = vault_native::db::fts::search(&conn, &args.query)?;
 
     if results.is_empty() {
