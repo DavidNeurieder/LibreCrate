@@ -165,6 +165,13 @@ impl Vault {
         Ok(())
     }
 
+    pub fn load_thumbnail(&self, id: &str) -> Option<Vec<u8>> {
+        self.db
+            .load_thumbnail(self.base_dir.to_string_lossy().to_string(), id.to_string())
+            .ok()
+            .flatten()
+    }
+
     pub fn import_file(&self, path: &Path) -> Result<String> {
         let file_data = std::fs::read(path)?;
         let file_name = path

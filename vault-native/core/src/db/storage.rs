@@ -1,8 +1,166 @@
 use crate::crypto::aes_gcm;
 use crate::db::queries::{self, DocumentRow};
+use image::GenericImageView;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
+use std::io::Read;
 use std::path::Path;
+
+/// Maximum width for generated thumbnails (in pixels).
+const THUMBNAIL_MAX_WIDTH: u32 = 200;
+
+/// Resize raw image bytes to a JPEG thumbnail capped at `max_width`.
+fn resize_image_to_jpeg(data: &[u8], max_width: u32) -> Option<Vec<u8>> {
+    let img = image::load_from_memory(data).ok()?;
+    let (w, h) = img.dimensions();
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let new_w = max_width.min(w);
+    let new_h = (h as f64 * new_w as f64 / w as f64).round() as u32;
+    let thumb = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
+    let mut out = Vec::new();
+    thumb
+        .write_to(
+            &mut std::io::Cursor::new(&mut out),
+            image::ImageFormat::Jpeg,
+        )
+        .ok()?;
+    Some(out)
+}
+
+/// Parse the root OPF path from an EPUB `META-INF/container.xml`.
+fn parse_container_rootfile(xml: &str) -> Option<String> {
+    let start = xml.find("full-path=\"")? + "full-path=\"".len();
+    let end = xml[start..].find('"')?;
+    Some(xml[start..start + end].to_string())
+}
+
+/// Extract the cover image href from an EPUB OPF manifest.
+fn parse_opf_cover(opf: &str) -> Option<String> {
+    // EPUB 3: <item ... properties="cover-image" .../>
+    if let Some(pos) = opf.find("properties=\"cover-image\"") {
+        let before = &opf[..pos];
+        if let Some(item_start) = before.rfind("<item ") {
+            let item = &opf[item_start..];
+            if let Some(href_start) = item.find("href=\"") {
+                let s = href_start + "href=\"".len();
+                let e = item[s..].find('"')?;
+                return Some(item[s..s + e].to_string());
+            }
+        }
+    }
+    // EPUB 2: <item id="cover-image" ...> or <item id="cover" ...>
+    for id_attr in &["cover-image", "cover", "coverImage"] {
+        let needle = format!("id=\"{id_attr}\"");
+        if let Some(pos) = opf.find(&needle) {
+            let after = &opf[pos..];
+            if let Some(href_start) = after.find("href=\"") {
+                let s = href_start + "href=\"".len();
+                let e = after[s..].find('"')?;
+                return Some(after[s..s + e].to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Render page 1 of a PDF to JPEG via the system `pdftoppm` tool (poppler-utils).
+fn generate_thumbnail_pdf(data: &[u8]) -> Option<Vec<u8>> {
+    let tmp_dir = tempfile::tempdir().ok()?;
+    let pdf_path = tmp_dir.path().join("input.pdf");
+    std::fs::write(&pdf_path, data).ok()?;
+    let prefix = tmp_dir.path().join("page");
+    let status = std::process::Command::new("pdftoppm")
+        .args(["-jpeg", "-r", "150", "-singlefile", "-f", "1", "-l", "1"])
+        .arg(&pdf_path)
+        .arg(&prefix)
+        .output()
+        .ok()?;
+    if !status.status.success() {
+        return None;
+    }
+    let jpg_path = tmp_dir.path().join("page.jpg");
+    std::fs::read(&jpg_path).ok()
+}
+
+/// Extract the cover image from an EPUB (ZIP) archive.
+fn generate_thumbnail_epub(data: &[u8]) -> Option<Vec<u8>> {
+    let cursor = std::io::Cursor::new(data);
+    let mut archive = zip::ZipArchive::new(cursor).ok()?;
+
+    let container_xml = {
+        let mut f = archive.by_name("META-INF/container.xml").ok()?;
+        let mut s = String::new();
+        f.read_to_string(&mut s).ok()?;
+        s
+    };
+    let rootfile_path = parse_container_rootfile(&container_xml)?;
+
+    let opf_content = {
+        let mut f = archive.by_name(&rootfile_path).ok()?;
+        let mut s = String::new();
+        f.read_to_string(&mut s).ok()?;
+        s
+    };
+    let cover_href = parse_opf_cover(&opf_content)?;
+
+    let opf_dir = std::path::Path::new(&rootfile_path)
+        .parent()
+        .unwrap_or(std::path::Path::new(""));
+    let cover_path = opf_dir.join(&cover_href).to_string_lossy().to_string();
+
+    let mut f = archive.by_name(&cover_path).ok()?;
+    let mut img = Vec::new();
+    f.read_to_end(&mut img).ok()?;
+    Some(img)
+}
+
+/// Extract the first page image from a CBZ (comic ZIP) archive.
+fn generate_thumbnail_cbz(data: &[u8]) -> Option<Vec<u8>> {
+    let cursor = std::io::Cursor::new(data);
+    let mut archive = zip::ZipArchive::new(cursor).ok()?;
+
+    let image_exts = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
+    let mut images: Vec<String> = archive
+        .file_names()
+        .filter(|name| {
+            let lower = name.to_lowercase();
+            !lower.starts_with("__MACOSX")
+                && image_exts.iter().any(|ext| lower.ends_with(ext))
+        })
+        .map(|s| s.to_string())
+        .collect();
+    images.sort();
+
+    let first = images.first()?;
+    let mut f = archive.by_name(first).ok()?;
+    let mut img = Vec::new();
+    f.read_to_end(&mut img).ok()?;
+    Some(img)
+}
+
+/// Generate a JPEG thumbnail for a document.
+///
+/// Supported formats:
+/// - `image/*` — decoded and resized directly
+/// - `application/pdf` — page 1 rendered via `pdftoppm`
+/// - `application/epub+zip` — cover image extracted from the EPUB archive
+/// - `application/vnd.comicbook+zip` — first page image from the CBZ archive
+///
+/// Returns `None` when the format is unsupported or generation fails.
+pub fn generate_thumbnail(data: &[u8], mime_type: &str) -> Option<Vec<u8>> {
+    let raw = match mime_type {
+        "application/pdf" => generate_thumbnail_pdf(data)?,
+        "application/epub+zip" => generate_thumbnail_epub(data)?,
+        "application/vnd.comicbook+zip" | "application/x-cbr" => {
+            generate_thumbnail_cbz(data)?
+        }
+        mt if mt.starts_with("image/") => data.to_vec(),
+        _ => return None,
+    };
+    resize_image_to_jpeg(&raw, THUMBNAIL_MAX_WIDTH)
+}
 
 /// Save a thumbnail blob at `base_dir/files/<id>.thumb`.
 pub fn store_thumbnail(base_dir: &Path, id: &str, data: &[u8], key: Option<&[u8]>) -> std::io::Result<()> {
@@ -162,6 +320,10 @@ pub fn import_document(
     save_file(base_dir, id, &stored_data).map_err(|e| {
         rusqlite::Error::ToSqlConversionFailure(Box::new(e))
     })?;
+
+    if let Some(thumb_data) = generate_thumbnail(file_data, mime_type) {
+        let _ = store_thumbnail(base_dir, id, &thumb_data, key);
+    }
 
     Ok(id.to_string())
 }

@@ -575,6 +575,38 @@ impl DbHandle {
         ))
     }
 
+    pub fn generate_thumbnail_for_document(
+        &self,
+        base_dir: String,
+        id: String,
+    ) -> Result<bool, crate::error::Error> {
+        let data = self.export_document_file(base_dir.clone(), id.clone())?;
+        match data {
+            Some(file_data) => {
+                let conn = self
+                    .inner
+                    .lock()
+                    .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+                let doc = crate::db::queries::get_document(&conn, &id)?
+                    .ok_or_else(|| crate::error::Error::Database("document not found".into()))?;
+                let mime = &doc.mime_type;
+                drop(conn);
+                if let Some(thumb) = crate::db::storage::generate_thumbnail(&file_data, mime) {
+                    crate::db::storage::store_thumbnail(
+                        std::path::Path::new(&base_dir),
+                        &id,
+                        &thumb,
+                        self.encryption_key.as_deref(),
+                    )?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            None => Ok(false),
+        }
+    }
+
     pub fn get_schema_version(&self) -> Result<i64, crate::error::Error> {
         let conn = self
             .inner

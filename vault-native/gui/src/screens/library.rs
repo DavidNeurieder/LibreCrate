@@ -2,10 +2,12 @@ use iced::{
     widget::{button, column, container, row, scrollable, text, text_input, Column, Row},
     Element, Task, Length,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::Navigation;
 use crate::vault::Vault;
+use crate::widgets::document_card;
 use vault_native::db::fts::FtsSnippetResult;
 use vault_native::db::queries::DocumentRow;
 
@@ -24,6 +26,8 @@ pub enum Message {
     DocumentsLoaded(Result<Vec<DocumentRow>, String>),
     SearchResultsLoaded(Vec<FtsSnippetResult>),
     DropResult(Result<usize, String>),
+    ThumbnailLoaded(String, Vec<u8>),
+    Noop,
 }
 
 pub struct State {
@@ -33,6 +37,7 @@ pub struct State {
     pub search_results: Option<Vec<FtsSnippetResult>>,
     pub loading: bool,
     pub error: Option<String>,
+    pub thumbnails: HashMap<String, Vec<u8>>,
 }
 
 impl State {
@@ -44,6 +49,7 @@ impl State {
             search_results: None,
             loading: true,
             error: None,
+            thumbnails: HashMap::new(),
         };
         let task = state.reload();
         (state, task)
@@ -152,7 +158,26 @@ impl State {
             Message::DocumentsLoaded(Ok(docs)) => {
                 self.documents = docs;
                 self.loading = false;
-                Task::none()
+                self.thumbnails.clear();
+                let vault = self.vault.clone();
+                let tasks: Vec<Task<crate::app::Message>> = self.documents.iter().map(|doc| {
+                    let vault = vault.clone();
+                    let id = doc.id.clone();
+                    let id2 = id.clone();
+                    Task::perform(
+                        async move {
+                            tokio::task::spawn_blocking(move || vault.load_thumbnail(&id2))
+                                .await
+                                .ok()
+                                .flatten()
+                        },
+                        move |thumb| {
+                            thumb.map(|data| crate::app::Message::Library(Message::ThumbnailLoaded(id, data)))
+                                .unwrap_or(crate::app::Message::Library(Message::Noop))
+                        },
+                    )
+                }).collect();
+                Task::batch(tasks)
             }
             Message::DocumentsLoaded(Err(e)) => {
                 self.error = Some(e);
@@ -163,6 +188,11 @@ impl State {
                 self.search_results = Some(results);
                 Task::none()
             }
+            Message::ThumbnailLoaded(id, data) => {
+                self.thumbnails.insert(id, data);
+                Task::none()
+            }
+            Message::Noop => Task::none(),
             Message::Import => {
                 let vault = self.vault.clone();
                 Task::perform(
@@ -258,26 +288,8 @@ impl State {
                         chunk
                             .iter()
                             .fold(Row::new().spacing(10), |row, doc| {
-                                row.push(
-                                    column![
-                                        text(&doc.title).size(14).width(140),
-                                        text(format!(
-                                            "{} · {}",
-                                            doc.file_size,
-                                            doc.mime_type
-                                        ))
-                                        .size(11)
-                                        .color(iced::Color::from_rgb(0.6, 0.64, 0.7)),
-                                        row![
-                                            button(if doc.is_favorite { "★" } else { "☆" })
-                                                .on_press(Message::ToggleFavorite(doc.id.clone())),
-                                            button("Open").on_press(Message::OpenDocument(doc.id.clone())),
-                                        ]
-                                        .spacing(4),
-                                    ]
-                                    .spacing(4)
-                                    .padding(12),
-                                )
+                                let thumb = self.thumbnails.get(&doc.id).map(|d| d.as_slice());
+                                row.push(document_card::view(doc, thumb))
                             }),
                     )
                 },
