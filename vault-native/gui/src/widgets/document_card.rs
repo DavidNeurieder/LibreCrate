@@ -60,6 +60,13 @@ pub fn view<'a>(
 
     let (badge_label, badge_color) = mime_badge(&doc.mime_type);
 
+    let star_color = if doc.is_favorite {
+        Color::from_rgb(1.0, 0.85, 0.0)
+    } else {
+        Color::from_rgb(0.4, 0.4, 0.4)
+    };
+    let star_label = if doc.is_favorite { "★" } else { "☆" };
+
     let card_content = column![
         thumb_element,
         column![
@@ -78,14 +85,16 @@ pub fn view<'a>(
                     ..Default::default()
                 }),
                 text(file_size).size(10).color(Color::from_rgb(0.5, 0.5, 0.5)),
+                text("").width(Length::Fill),
+                mouse_area(
+                    text(star_label).size(12).color(star_color),
+                ).on_press(library::Message::ToggleFavorite(doc.id.clone())),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
-            button(if doc.is_favorite { "★" } else { "☆" })
-                .on_press(library::Message::ToggleFavorite(doc.id.clone())),
         ]
-        .spacing(2)
-        .padding(8),
+        .spacing(4)
+        .padding(Padding::new(10.0)),
     ]
     .spacing(0)
     .width(180);
