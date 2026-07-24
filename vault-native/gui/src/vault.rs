@@ -17,6 +17,7 @@ pub struct Vault {
     pub db: Arc<DbHandle>,
     pub master_key: Vec<u8>,
     pub base_dir: PathBuf,
+    pub password: String,
 }
 
 impl std::fmt::Debug for Vault {
@@ -66,6 +67,7 @@ impl Vault {
             db: Arc::new(db),
             master_key,
             base_dir: dir.to_path_buf(),
+            password: password.to_string(),
         })
     }
 
@@ -117,6 +119,7 @@ impl Vault {
             db: Arc::new(db),
             master_key,
             base_dir: dir.to_path_buf(),
+            password: password.to_string(),
         })
     }
 
