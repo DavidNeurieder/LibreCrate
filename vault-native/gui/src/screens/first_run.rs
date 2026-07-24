@@ -1,12 +1,36 @@
 use iced::{
     widget::{button, column, container, row, text, text_input},
-    Element, Task,
+    Element, Task, Length,
 };
 use std::sync::Arc;
 
 use super::Navigation;
 use crate::config::Config;
 use crate::vault::Vault;
+use crate::widgets::common;
+
+fn step_indicator(current: &Step) -> Element<'_, Message> {
+    let steps = [("1. Welcome", Step::Welcome), ("2. Location", Step::ChooseDir), ("3. Password", Step::SetPassword)];
+    let all = steps.iter().fold(
+        row![].spacing(8),
+        |row, (label, step)| {
+            let is_active = step == current;
+            row.push(
+                container(
+                    text(*label)
+                        .size(if is_active { 13 } else { 11 })
+                        .color(if is_active {
+                            iced::Color::from_rgb(0.5, 0.7, 1.0)
+                        } else {
+                            iced::Color::from_rgb(0.5, 0.5, 0.5)
+                        }),
+                )
+                .padding(4),
+            )
+        },
+    );
+    all.into()
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Step {
@@ -128,25 +152,32 @@ impl State {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let content: Element<'_, Message> = match self.step {
+        let body: Element<'_, Message> = match self.step {
             Step::Welcome => column![
                 text("Welcome to LibreCrate").size(24),
-                text("Create a new encrypted document vault to get started."),
+                text("Create a new encrypted document vault to get started.").size(14),
                 button("Get Started").on_press(Message::Create),
             ]
-            .spacing(10)
+            .spacing(14)
+            .align_x(iced::Alignment::Center)
+            .padding(32)
+            .width(380)
             .into(),
             Step::ChooseDir => column![
                 text("Choose Vault Location").size(20),
                 text_input("Vault directory", &self.vault_dir)
-                    .on_input(Message::VaultDirChanged),
+                    .on_input(Message::VaultDirChanged)
+                    .width(340),
                 row![
                     button("Back").on_press(Message::StepBack),
                     button("Next").on_press(Message::Create),
                 ]
                 .spacing(10),
             ]
-            .spacing(10)
+            .spacing(12)
+            .align_x(iced::Alignment::Center)
+            .padding(32)
+            .width(380)
             .into(),
             Step::SetPassword => column![
                 text("Set Master Password").size(20),
@@ -157,7 +188,7 @@ impl State {
                     .secure(true)
                     .on_input(Message::ConfirmChanged),
                 if let Some(ref err) = self.error {
-                    text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3))
+                    text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
                 } else {
                     text("")
                 },
@@ -167,20 +198,34 @@ impl State {
                 ]
                 .spacing(10),
             ]
-            .spacing(10)
+            .spacing(12)
+            .align_x(iced::Alignment::Center)
+            .padding(32)
+            .width(380)
             .into(),
             Step::Creating => column![
                 text("Creating vault...").size(20),
-                text("This may take a moment."),
+                text("This may take a moment.").size(14),
             ]
-            .spacing(10)
+            .spacing(14)
+            .align_x(iced::Alignment::Center)
+            .padding(32)
+            .width(380)
             .into(),
         };
 
+        let content = column![
+            step_indicator(&self.step),
+            container(body).style(common::card_style()),
+        ]
+        .spacing(24)
+        .align_x(iced::Alignment::Center);
+
         container(content)
-            .center_x(400)
-            .center_y(400)
-            .padding(40)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .into()
     }
 }

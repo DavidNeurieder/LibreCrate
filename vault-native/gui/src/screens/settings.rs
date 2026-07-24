@@ -1,11 +1,12 @@
 use iced::{
     widget::{button, column, container, text, text_input},
-    Element, Task,
+    Element, Task, Length,
 };
 use std::sync::Arc;
 
 use super::Navigation;
 use crate::vault::Vault;
+use crate::widgets::common;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
@@ -75,33 +76,40 @@ impl State {
 
     pub fn view(&self) -> Element<'_, Message> {
         let content = column![
-            text("Settings").size(24),
-            text("Change Master Password").size(18),
-            text_input("Current password", &self.current_password)
-                .secure(true)
-                .on_input(Message::CurrentPasswordChanged),
-            text_input("New password", &self.new_password)
-                .secure(true)
-                .on_input(Message::NewPasswordChanged),
-            text_input("Confirm new password", &self.confirm)
-                .secure(true)
-                .on_input(Message::ConfirmChanged),
-            if let Some(ref err) = self.error {
-                text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3))
-            } else {
-                text("")
-            },
-            if let Some(ref suc) = self.success {
-                text(suc).color(iced::Color::from_rgb(0.3, 0.8, 0.4))
-            } else {
-                text("")
-            },
-            button("Change Password").on_press(Message::ChangePassword),
-            button("Back").on_press(Message::Back),
+            common::navbar("Settings", Some(Message::Back)),
+            container(
+                column![
+                    text("Change Master Password").size(18),
+                    text_input("Current password", &self.current_password)
+                        .secure(true)
+                        .on_input(Message::CurrentPasswordChanged),
+                    text_input("New password", &self.new_password)
+                        .secure(true)
+                        .on_input(Message::NewPasswordChanged),
+                    text_input("Confirm new password", &self.confirm)
+                        .secure(true)
+                        .on_input(Message::ConfirmChanged),
+                    if let Some(ref err) = self.error {
+                        text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
+                    } else {
+                        text("")
+                    },
+                    if let Some(ref suc) = self.success {
+                        text(suc).color(iced::Color::from_rgb(0.3, 0.8, 0.4)).size(13)
+                    } else {
+                        text("")
+                    },
+                    button("Change Password").on_press(Message::ChangePassword),
+                ]
+                .spacing(10)
+                .padding(20),
+            )
+            .style(common::card_style())
+            .width(Length::Fill),
         ]
-        .spacing(10);
+        .spacing(0);
 
-        container(content).padding(40).into()
+        container(content).width(Length::Fill).height(Length::Fill).into()
     }
 }
 

@@ -237,69 +237,123 @@ impl State {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let header = row![
-            text("LibreCrate").size(20),
-            text_input("Search documents...", &self.search_query)
-                .on_input(Message::SearchChanged)
-                .on_submit(Message::Search)
-                .width(Length::Fill),
-            button("⚙").on_press(Message::NavigateToSettings),
-            button("Import").on_press(Message::Import),
-            button("⬇").on_press(Message::NavigateToExport),
-        ]
-        .spacing(10)
-        .padding(10);
+        let toolbar = container(
+            row![
+                text("LibreCrate").size(20),
+                text_input("Search documents...", &self.search_query)
+                    .on_input(Message::SearchChanged)
+                    .on_submit(Message::Search)
+                    .width(Length::Fill),
+                button("⚙").on_press(Message::NavigateToSettings),
+                button("+").on_press(Message::Import),
+                button("⬇").on_press(Message::NavigateToExport),
+            ]
+            .spacing(10)
+            .padding(12)
+            .align_y(iced::Alignment::Center),
+        )
+        .width(Length::Fill)
+        .style(|_| container::Style {
+            border: iced::Border {
+                color: iced::Color::from_rgb(0.2, 0.2, 0.22),
+                width: 0.0,
+                radius: 0.0.into(),
+            },
+            ..Default::default()
+        });
 
         let body: Element<'_, Message> = if self.loading {
-            text("Loading documents...").into()
+            container(text("Loading documents...").size(16))
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
         } else if let Some(ref err) = self.error {
-            text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).into()
+            container(
+                column![
+                    text("Error").size(18).color(iced::Color::from_rgb(1.0, 0.3, 0.3)),
+                    text(err).size(14),
+                ]
+                .spacing(8)
+                .align_x(iced::Alignment::Center),
+            )
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
         } else if let Some(ref results) = self.search_results {
             if results.is_empty() {
-                text("No results found.").into()
+                container(text("No results found.").size(16))
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into()
             } else {
                 let list = results.iter().fold(
-                    Column::new().spacing(10).padding(10),
+                    Column::new().spacing(6).padding(16),
                     |col, r| {
                         let snippet = r.snippet.replace("<b>", "").replace("</b>", "");
                         col.push(
-                            column![
-                                text(&r.title).size(14).width(140),
-                                text(snippet).size(11).color(iced::Color::from_rgb(0.6, 0.64, 0.7)),
-                                row![
-                                    button("Open").on_press(Message::OpenDocument(r.id.clone())),
+                            container(
+                                column![
+                                    text(&r.title).size(14).width(300),
+                                    text(snippet)
+                                        .size(11)
+                                        .color(iced::Color::from_rgb(0.6, 0.64, 0.7)),
+                                    button("Open")
+                                        .on_press(Message::OpenDocument(r.id.clone())),
                                 ]
-                                .spacing(4),
-                            ]
-                            .spacing(4)
-                            .padding(12),
+                                .spacing(4)
+                                .padding(12),
+                            )
+                            .style(crate::widgets::common::card_style()),
                         )
                     },
                 );
                 scrollable(list).into()
             }
         } else if self.documents.is_empty() {
-            text("No documents. Press Ctrl+I to import files.").into()
+            container(
+                column![
+                    text("No documents yet").size(18),
+                    text("Press Ctrl+I or tap + to import files.").size(13),
+                ]
+                .spacing(8)
+                .align_x(iced::Alignment::Center),
+            )
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
         } else {
-            let grid = self.documents.chunks(3).fold(
-                Column::new().spacing(10).padding(10),
+            let grid = self.documents.chunks(4).fold(
+                Column::new().spacing(12).padding(16),
                 |col, chunk| {
                     col.push(
                         chunk
                             .iter()
-                            .fold(Row::new().spacing(10), |row, doc| {
-                                let thumb = self.thumbnails.get(&doc.id).map(|d| d.as_slice());
-                                row.push(document_card::view(doc, thumb))
-                            }),
+                            .fold(
+                                Row::new().spacing(12).width(Length::Fill),
+                                |row, doc| {
+                                    let thumb =
+                                        self.thumbnails.get(&doc.id).map(|d| d.as_slice());
+                                    row.push(document_card::view(doc, thumb))
+                                },
+                            )
+                            .width(Length::Fill),
                     )
                 },
             );
             scrollable(grid).into()
         };
 
-        let content = column![header, body,];
+        let content = column![toolbar, body];
 
-        container(content).padding(10).into()
+        container(content).width(Length::Fill).height(Length::Fill).into()
     }
 }
 
@@ -402,7 +456,7 @@ mod tests {
         let (mut state, _task) = State::new(vault);
         state.loading = false;
         let mut ui = iced_test::simulator(state.view());
-        assert!(ui.find("No documents. Press Ctrl+I to import files.").is_ok());
+        assert!(ui.find("No documents yet").is_ok());
     }
 
     #[test]
@@ -470,7 +524,7 @@ mod tests {
         let vault = make_test_vault();
         let (state, _task) = State::new(vault);
         let mut ui = iced_test::simulator(state.view());
-        assert!(ui.find("Import").is_ok());
+        assert!(ui.find("+").is_ok());
     }
 
     #[test]

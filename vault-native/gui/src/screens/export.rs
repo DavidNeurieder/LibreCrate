@@ -1,11 +1,12 @@
 use iced::{
     widget::{button, column, container, text},
-    Element, Task,
+    Element, Task, Length,
 };
 use std::sync::Arc;
 
 use super::Navigation;
 use crate::vault::Vault;
+use crate::widgets::common;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
@@ -63,25 +64,32 @@ impl State {
 
     pub fn view(&self) -> Element<'_, Message> {
         let content = column![
-            text("Export / Import").size(24),
-            text("Create or restore vault backups."),
-            if let Some(ref progress) = self.progress {
-                text(progress)
-            } else {
-                text("")
-            },
-            if let Some(ref err) = self.error {
-                text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3))
-            } else {
-                text("")
-            },
-            button("Export Backup").on_press(Message::ExportBackup),
-            button("Import Backup").on_press(Message::ImportBackup),
-            button("Back").on_press(Message::Back),
+            common::navbar("Export / Import", Some(Message::Back)),
+            container(
+                column![
+                    text("Create or restore vault backups.").size(14),
+                    if let Some(ref progress) = self.progress {
+                        text(progress).size(14).color(iced::Color::from_rgb(0.3, 0.7, 0.3))
+                    } else {
+                        text("")
+                    },
+                    if let Some(ref err) = self.error {
+                        text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
+                    } else {
+                        text("")
+                    },
+                    button("Export Backup").on_press(Message::ExportBackup),
+                    button("Import Backup").on_press(Message::ImportBackup),
+                ]
+                .spacing(10)
+                .padding(20),
+            )
+            .style(common::card_style())
+            .width(Length::Fill),
         ]
-        .spacing(10);
+        .spacing(0);
 
-        container(content).padding(40).into()
+        container(content).width(Length::Fill).height(Length::Fill).into()
     }
 }
 

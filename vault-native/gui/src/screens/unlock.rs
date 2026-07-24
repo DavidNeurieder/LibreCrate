@@ -1,12 +1,13 @@
 use iced::{
     widget::{button, column, container, text, text_input},
-    Element, Task,
+    Element, Task, Length,
 };
 use std::sync::Arc;
 
 use super::Navigation;
 use crate::config::Config;
 use crate::vault::Vault;
+use crate::widgets::common;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
@@ -95,36 +96,50 @@ impl State {
 
     pub fn view(&self) -> Element<'_, Message> {
         let content: Element<'_, Message> = if self.vault_exists {
-            column![
-                text("LibreCrate").size(28),
-                text("Enter your master password to unlock."),
-                text_input("Master password", &self.password)
-                    .secure(true)
-                    .on_input(Message::PasswordChanged)
-                    .on_submit(Message::Submit),
-                if let Some(ref err) = self.error {
-                    text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3))
-                } else {
-                    text("")
-                },
-                button("Unlock").on_press(Message::Submit),
-            ]
-            .spacing(10)
+            container(
+                column![
+                    text("LibreCrate").size(32),
+                    text("Enter your master password to unlock.").size(14),
+                    text_input("Master password", &self.password)
+                        .secure(true)
+                        .on_input(Message::PasswordChanged)
+                        .on_submit(Message::Submit)
+                        .width(300),
+                    if let Some(ref err) = self.error {
+                        text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
+                    } else {
+                        text("")
+                    },
+                    button("Unlock").on_press(Message::Submit),
+                ]
+                .spacing(12)
+                .align_x(iced::Alignment::Center)
+                .padding(32)
+                .width(360),
+            )
+            .style(common::card_style())
             .into()
         } else {
-            column![
-                text("LibreCrate").size(28),
-                text("No vault found. Create one to get started."),
-                button("Create New Vault").on_press(Message::CreateNewVault),
-            ]
-            .spacing(10)
+            container(
+                column![
+                    text("LibreCrate").size(32),
+                    text("No vault found. Create one to get started.").size(14),
+                    button("Create New Vault").on_press(Message::CreateNewVault),
+                ]
+                .spacing(12)
+                .align_x(iced::Alignment::Center)
+                .padding(32)
+                .width(360),
+            )
+            .style(common::card_style())
             .into()
         };
 
         container(content)
-            .center_x(400)
-            .center_y(400)
-            .padding(40)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .into()
     }
 }

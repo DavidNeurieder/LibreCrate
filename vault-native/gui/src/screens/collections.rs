@@ -1,11 +1,12 @@
 use iced::{
     widget::{button, column, container, row, text, text_input},
-    Element, Task,
+    Element, Task, Length,
 };
 use std::sync::Arc;
 
 use super::Navigation;
 use crate::vault::Vault;
+use crate::widgets::common;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
@@ -88,53 +89,64 @@ impl State {
 
     pub fn view(&self) -> Element<'_, Message> {
         let collection_list = self.collections.iter().fold(
-            column![text("Collections").size(18)].spacing(4),
+            column![text("Collections").size(16)].spacing(6),
             |col, (id, name)| {
                 col.push(
                     row![
-                        text(name),
+                        text(name).width(Length::Fill),
                         button("✕").on_press(Message::DeleteCollection(*id)),
                     ]
-                    .spacing(10),
+                    .spacing(10)
+                    .padding(4),
                 )
             },
         );
 
         let tag_list = self.tags.iter().fold(
-            column![text("Tags").size(18)].spacing(4),
-            |col, (id, name, _color)| {
+            column![text("Tags").size(16)].spacing(6),
+            |col, (id, name, color)| {
                 col.push(
                     row![
-                        text(name),
+                        text(name).width(Length::Fill),
+                        text(color).size(10).color(iced::Color::from_rgb(0.5, 0.5, 0.5)),
                         button("✕").on_press(Message::DeleteTag(*id)),
                     ]
-                    .spacing(10),
+                    .spacing(10)
+                    .padding(4),
                 )
             },
         );
 
         let content = column![
-            text("Collections & Tags").size(24),
-            collection_list,
-            text_input("New collection name", &self.new_collection_name)
-                .on_input(Message::NewCollectionNameChanged),
-            button("Add Collection").on_press(Message::AddCollection),
-            tag_list,
-            text_input("New tag name", &self.new_tag_name)
-                .on_input(Message::NewTagNameChanged),
-            text_input("Tag color (hex)", &self.new_tag_color)
-                .on_input(Message::NewTagColorChanged),
-            button("Add Tag").on_press(Message::AddTag),
+            common::navbar("Collections & Tags", Some(Message::Back)),
+            container(column![
+                collection_list,
+                text_input("New collection name", &self.new_collection_name)
+                    .on_input(Message::NewCollectionNameChanged),
+                button("Add Collection").on_press(Message::AddCollection),
+            ].spacing(10).padding(20))
+            .style(common::card_style())
+            .width(Length::Fill),
+            container(column![
+                tag_list,
+                text_input("New tag name", &self.new_tag_name)
+                    .on_input(Message::NewTagNameChanged),
+                text_input("Tag color (hex)", &self.new_tag_color)
+                    .on_input(Message::NewTagColorChanged),
+                button("Add Tag").on_press(Message::AddTag),
+            ].spacing(10).padding(20))
+            .style(common::card_style())
+            .width(Length::Fill),
             if let Some(ref err) = self.error {
-                text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3))
+                text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
             } else {
                 text("")
             },
-            button("Back").on_press(Message::Back),
         ]
-        .spacing(10);
+        .spacing(12)
+        .padding(16);
 
-        container(content).padding(40).into()
+        container(content).width(Length::Fill).height(Length::Fill).into()
     }
 }
 
