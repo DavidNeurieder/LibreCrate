@@ -156,10 +156,15 @@ fn prompt_string(prompt: &str) -> Result<String> {
 }
 
 fn prompt_password(prompt: &str) -> Result<String> {
-    use std::io::Write;
+    use std::io::{self, Write, IsTerminal};
     eprint!("{}", prompt);
-    std::io::stderr().flush()?;
-    let mut buf = String::new();
-    std::io::stdin().read_line(&mut buf)?;
-    Ok(buf.trim_end().to_string())
+    io::stderr().flush()?;
+    if io::stdin().is_terminal() {
+        let password = rpassword::prompt_password("")?;
+        Ok(password)
+    } else {
+        let mut buf = String::new();
+        io::stdin().read_line(&mut buf)?;
+        Ok(buf.trim_end().to_string())
+    }
 }

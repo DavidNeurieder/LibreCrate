@@ -34,13 +34,13 @@ enum Commands {
     Restore(RestoreOneShot),
 }
 
-// One-shot arg wrappers — include dir + password for CLI use
+// One-shot arg wrappers — password is optional, prompted if not provided
 
 #[derive(Parser)]
 struct InitOneShot {
     dir: PathBuf,
     #[arg(short, long)]
-    password: String,
+    password: Option<String>,
     #[arg(short, long)]
     from: Option<PathBuf>,
 }
@@ -49,7 +49,7 @@ struct InitOneShot {
 struct ImportOneShot {
     dir: PathBuf,
     #[arg(short, long)]
-    password: String,
+    password: Option<String>,
     #[arg(required = true)]
     files: Vec<PathBuf>,
 }
@@ -58,14 +58,14 @@ struct ImportOneShot {
 struct ListOneShot {
     dir: PathBuf,
     #[arg(short, long)]
-    password: String,
+    password: Option<String>,
 }
 
 #[derive(Parser)]
 struct OpenOneShot {
     dir: PathBuf,
     #[arg(short, long)]
-    password: String,
+    password: Option<String>,
     id: String,
 }
 
@@ -73,7 +73,7 @@ struct OpenOneShot {
 struct DeleteOneShot {
     dir: PathBuf,
     #[arg(short, long)]
-    password: String,
+    password: Option<String>,
     id: String,
 }
 
@@ -81,7 +81,7 @@ struct DeleteOneShot {
 struct SearchOneShot {
     dir: PathBuf,
     #[arg(short, long)]
-    password: String,
+    password: Option<String>,
     query: String,
 }
 
@@ -89,7 +89,7 @@ struct SearchOneShot {
 struct BackupOneShot {
     dir: PathBuf,
     #[arg(short, long)]
-    password: String,
+    password: Option<String>,
     #[arg(short, long)]
     output: PathBuf,
 }
@@ -98,10 +98,31 @@ struct BackupOneShot {
 struct RestoreOneShot {
     dir: PathBuf,
     #[arg(short, long)]
-    password: String,
+    password: Option<String>,
     backup: PathBuf,
     #[arg(short = 'P', long)]
     backup_password: Option<String>,
+}
+
+fn prompt_password() -> anyhow::Result<String> {
+    use std::io::{self, Write, IsTerminal};
+    eprint!("Password: ");
+    io::stderr().flush()?;
+    if io::stdin().is_terminal() {
+        let password = rpassword::prompt_password("")?;
+        Ok(password)
+    } else {
+        let mut buf = String::new();
+        io::stdin().read_line(&mut buf)?;
+        Ok(buf.trim_end().to_string())
+    }
+}
+
+fn resolve_password(provided: Option<String>) -> anyhow::Result<String> {
+    match provided {
+        Some(p) => Ok(p),
+        None => prompt_password(),
+    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -112,37 +133,47 @@ fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
     match cli.command {
-        Commands::Init(args) => commands::init::run(commands::init::InitArgs {
-            dir: args.dir,
-            password: args.password,
-            from: args.from,
-        }),
+        Commands::Init(args) => {
+            let password = resolve_password(args.password)?;
+            commands::init::run(commands::init::InitArgs {
+                dir: args.dir,
+                password,
+                from: args.from,
+            })
+        }
         Commands::Import(args) => {
-            let session = Session::open(args.dir, &args.password)?;
+            let password = resolve_password(args.password)?;
+            let session = Session::open(args.dir, &password)?;
             commands::import::run(&session, commands::import::ImportArgs { files: args.files })
         }
         Commands::List(args) => {
-            let session = Session::open(args.dir, &args.password)?;
+            let password = resolve_password(args.password)?;
+            let session = Session::open(args.dir, &password)?;
             commands::list::run(&session, commands::list::ListArgs)
         }
         Commands::Open(args) => {
-            let session = Session::open(args.dir, &args.password)?;
+            let password = resolve_password(args.password)?;
+            let session = Session::open(args.dir, &password)?;
             commands::open::run(&session, commands::open::OpenArgs { id: args.id })
         }
         Commands::Delete(args) => {
-            let session = Session::open(args.dir, &args.password)?;
+            let password = resolve_password(args.password)?;
+            let session = Session::open(args.dir, &password)?;
             commands::delete::run(&session, commands::delete::DeleteArgs { id: args.id })
         }
         Commands::Search(args) => {
-            let session = Session::open(args.dir, &args.password)?;
+            let password = resolve_password(args.password)?;
+            let session = Session::open(args.dir, &password)?;
             commands::search::run(&session, commands::search::SearchArgs { query: args.query })
         }
         Commands::Backup(args) => {
-            let session = Session::open(args.dir, &args.password)?;
+            let password = resolve_password(args.password)?;
+            let session = Session::open(args.dir, &password)?;
             commands::backup::run(&session, commands::backup::BackupArgs { output: args.output })
         }
         Commands::Restore(args) => {
-            let session = Session::open(args.dir, &args.password)?;
+            let password = resolve_password(args.password)?;
+            let session = Session::open(args.dir, &password)?;
             commands::restore::run(
                 &session,
                 commands::restore::RestoreArgs {

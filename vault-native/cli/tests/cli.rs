@@ -603,3 +603,44 @@ fn test_repl_wrong_password_fails() {
     assert!(!output.status.success() || stderr.contains("Error") || stderr.contains("error"),
         "expected failure for wrong password: {}", stderr);
 }
+
+#[test]
+fn test_oneshot_password_prompt_via_stdin() {
+    let d = v();
+    init(d.path(), "pw");
+    // Run list without -p flag — password is piped via stdin
+    let mut child = Command::new(bin())
+        .args(&["list", d.path().to_str().unwrap()])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        let stdin = child.stdin.as_mut().unwrap();
+        writeln!(stdin, "pw").unwrap();
+    }
+    let output = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(stdout.contains("No documents"), "expected No documents: {}", stdout);
+}
+
+#[test]
+fn test_oneshot_password_wrong_via_stdin() {
+    let d = v();
+    init(d.path(), "correct");
+    let mut child = Command::new(bin())
+        .args(&["list", d.path().to_str().unwrap()])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        let stdin = child.stdin.as_mut().unwrap();
+        writeln!(stdin, "wrong").unwrap();
+    }
+    let output = child.wait_with_output().unwrap();
+    assert!(!output.status.success(), "should fail with wrong password");
+}
