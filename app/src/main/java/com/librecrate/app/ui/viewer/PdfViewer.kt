@@ -181,8 +181,8 @@ fun PdfViewer(
                                         prevPanPos = pos
                                         hasPrevPanPos = true
                                     } else {
-                                        listState.dispatchRawDelta(-(pos.y - prevPanPos.y) / scale)
-                                        val dx = pos.x - prevPanPos.x
+                                        listState.dispatchRawDelta(-(pos.y - prevPanPos.y))
+                                        val dx = (pos.x - prevPanPos.x) * scale
                                         val maxPanX = (scale - 1f) * layoutWidthPx / 2f
                                         translationX = (translationX + dx).coerceIn(-maxPanX, maxPanX)
                                         prevPanPos = pos
