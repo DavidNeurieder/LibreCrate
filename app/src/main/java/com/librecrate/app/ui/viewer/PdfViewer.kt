@@ -85,6 +85,7 @@ fun PdfViewer(
     var pageAspectRatio by remember { mutableFloatStateOf(DEFAULT_PAGE_ASPECT) }
 
     var scale by remember { mutableFloatStateOf(1f) }
+    var translationX by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(Unit) {
         if (pageCount <= 0) {
@@ -144,6 +145,7 @@ fun PdfViewer(
                     .graphicsLayer(
                         scaleX = scale,
                         scaleY = scale,
+                        translationX = translationX,
                         transformOrigin = TransformOrigin(0.5f, 0f),
                     )
                     .pointerInput(Unit) {
@@ -170,6 +172,7 @@ fun PdfViewer(
                                     } else {
                                         scale = (scale * span / initialSpan).coerceIn(1f, 5f)
                                         initialSpan = span
+                                        if (scale <= 1f) translationX = 0f
                                     }
                                 } else if (pressed.size == 1 && scale > 1f) {
                                     for (ch in event.changes) { ch.consume() }
@@ -179,6 +182,9 @@ fun PdfViewer(
                                         hasPrevPanPos = true
                                     } else {
                                         listState.dispatchRawDelta(-(pos.y - prevPanPos.y) / scale)
+                                        val dx = pos.x - prevPanPos.x
+                                        val maxPanX = (scale - 1f) * layoutWidthPx / 2f
+                                        translationX = (translationX + dx).coerceIn(-maxPanX, maxPanX)
                                         prevPanPos = pos
                                     }
                                 }
