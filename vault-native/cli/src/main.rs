@@ -66,7 +66,7 @@ struct OpenOneShot {
     dir: PathBuf,
     #[arg(short, long)]
     password: Option<String>,
-    id: String,
+    name: String,
 }
 
 #[derive(Parser)]
@@ -74,7 +74,7 @@ struct DeleteOneShot {
     dir: PathBuf,
     #[arg(short, long)]
     password: Option<String>,
-    id: String,
+    name: String,
 }
 
 #[derive(Parser)]
@@ -154,12 +154,12 @@ fn main() -> anyhow::Result<()> {
         Commands::Open(args) => {
             let password = resolve_password(args.password)?;
             let session = Session::open(args.dir, &password)?;
-            commands::open::run(&session, commands::open::OpenArgs { id: args.id })
+            commands::open::run(&session, commands::open::OpenArgs { name: args.name })
         }
         Commands::Delete(args) => {
             let password = resolve_password(args.password)?;
             let session = Session::open(args.dir, &password)?;
-            commands::delete::run(&session, commands::delete::DeleteArgs { id: args.id })
+            commands::delete::run(&session, commands::delete::DeleteArgs { name: args.name })
         }
         Commands::Search(args) => {
             let password = resolve_password(args.password)?;

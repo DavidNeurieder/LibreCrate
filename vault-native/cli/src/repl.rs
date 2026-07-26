@@ -70,15 +70,15 @@ fn dispatch(session: &Session, line: &str) -> Result<()> {
         }
         "open" => {
             if args.len() < 2 {
-                anyhow::bail!("usage: open <document-id>");
+                anyhow::bail!("usage: open <name>");
             }
-            commands::open::run(session, commands::open::OpenArgs { id: args[1].clone() })?;
+            commands::open::run(session, commands::open::OpenArgs { name: args[1].clone() })?;
         }
         "delete" => {
             if args.len() < 2 {
-                anyhow::bail!("usage: delete <document-id>");
+                anyhow::bail!("usage: delete <name>");
             }
-            commands::delete::run(session, commands::delete::DeleteArgs { id: args[1].clone() })?;
+            commands::delete::run(session, commands::delete::DeleteArgs { name: args[1].clone() })?;
         }
         "search" => {
             if args.len() < 2 {

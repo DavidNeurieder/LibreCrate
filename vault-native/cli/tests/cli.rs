@@ -48,7 +48,7 @@ fn list(dir: &Path, pw: &str) -> String {
     out
 }
 
-fn first_id(dir: &Path, pw: &str) -> String {
+fn first_name(dir: &Path, pw: &str) -> String {
     let out = list(dir, pw);
     out.lines().nth(1).unwrap().split_whitespace().next().unwrap().to_string()
 }
@@ -192,7 +192,7 @@ fn test_list_after_delete() {
     imp(d.path(), "pw", &src.path().join("a.txt"));
     imp(d.path(), "pw", &src.path().join("b.txt"));
     assert!(list(d.path(), "pw").contains("Documents (2):"));
-    let id = first_id(d.path(), "pw");
+    let id = first_name(d.path(), "pw");
     cmd(&["delete", d.path().to_str().unwrap(), "-p", "pw", &id]);
     assert!(list(d.path(), "pw").contains("Documents (1):"));
 }
@@ -389,8 +389,8 @@ fn test_open_document() {
     init(d.path(), "pw");
     let src = sample(&[("hello.txt", "Hello, World!")]);
     imp(d.path(), "pw", &src.path().join("hello.txt"));
-    let id = first_id(d.path(), "pw");
-    let (ok, out, _) = cmd(&["open", d.path().to_str().unwrap(), "-p", "pw", &id]);
+    let name = first_name(d.path(), "pw");
+    let (ok, out, _) = cmd(&["open", d.path().to_str().unwrap(), "-p", "pw", &name]);
     assert!(ok);
     assert!(out.contains("Opened"), "got: {}", out);
 }
@@ -399,9 +399,9 @@ fn test_open_document() {
 fn test_open_nonexistent_fails() {
     let d = v();
     init(d.path(), "pw");
-    let (ok, _, e) = cmd(&["open", d.path().to_str().unwrap(), "-p", "pw", "no_such_id"]);
+    let (ok, _, e) = cmd(&["open", d.path().to_str().unwrap(), "-p", "pw", "no_such_file.txt"]);
     assert!(!ok);
-    assert!(e.contains("not found"));
+    assert!(e.contains("No document matching"));
 }
 
 #[test]
@@ -410,8 +410,8 @@ fn test_delete_document() {
     init(d.path(), "pw");
     let src = sample(&[("to_delete.txt", "delete me")]);
     imp(d.path(), "pw", &src.path().join("to_delete.txt"));
-    let id = first_id(d.path(), "pw");
-    let (ok, out, _) = cmd(&["delete", d.path().to_str().unwrap(), "-p", "pw", &id]);
+    let name = first_name(d.path(), "pw");
+    let (ok, out, _) = cmd(&["delete", d.path().to_str().unwrap(), "-p", "pw", &name]);
     assert!(ok);
     assert!(out.contains("Deleted"));
     assert!(out.contains("to_delete.txt"));
@@ -422,9 +422,9 @@ fn test_delete_document() {
 fn test_delete_nonexistent_fails() {
     let d = v();
     init(d.path(), "pw");
-    let (ok, _, e) = cmd(&["delete", d.path().to_str().unwrap(), "-p", "pw", "bad_id"]);
+    let (ok, _, e) = cmd(&["delete", d.path().to_str().unwrap(), "-p", "pw", "bad_file.txt"]);
     assert!(!ok);
-    assert!(e.contains("not found"));
+    assert!(e.contains("No document matching"));
 }
 
 #[test]

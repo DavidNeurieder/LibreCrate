@@ -1,18 +1,18 @@
 use clap::Args;
 
+use crate::commands::util;
 use crate::session::Session;
 
 #[derive(Args)]
 pub struct OpenArgs {
-    /// Document ID
-    pub id: String,
+    /// Document name (title)
+    pub name: String,
 }
 
 pub fn run(session: &Session, args: OpenArgs) -> anyhow::Result<()> {
     let conn = session.open_db()?;
 
-    let doc = vault_native::db::queries::get_document(&conn, &args.id)?
-        .ok_or_else(|| anyhow::anyhow!("Document '{}' not found", args.id))?;
+    let doc = util::resolve_document(&conn, &args.name)?;
 
     let data = vault_native::db::storage::export_document_file(
         &conn,
@@ -20,7 +20,7 @@ pub fn run(session: &Session, args: OpenArgs) -> anyhow::Result<()> {
         &doc.id,
         Some(&session.master_key),
     )
-    .ok_or_else(|| anyhow::anyhow!("File data not found for document '{}'", doc.id))?;
+    .ok_or_else(|| anyhow::anyhow!("File data not found for document '{}'", doc.title))?;
 
     let tmp_dir = tempfile::TempDir::new()?;
     let tmp_path = tmp_dir.path().join(&doc.file_name);

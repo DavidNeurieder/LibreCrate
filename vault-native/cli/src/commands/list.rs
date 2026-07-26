@@ -16,7 +16,7 @@ pub fn run(session: &Session, _args: ListArgs) -> anyhow::Result<()> {
         for doc in &docs {
             let fav = if doc.is_favorite { " *" } else { "" };
             let size = human_size(doc.file_size as u64);
-            println!("  {:<12} {:<30} {:<20} {}{}", doc.id, doc.title, doc.mime_type, size, fav);
+            println!("  {:<30} {:<20} {}{}", doc.title, doc.mime_type, size, fav);
         }
     }
     Ok(())

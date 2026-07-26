@@ -190,6 +190,29 @@ pub fn find_document_by_hash(conn: &Connection, hash: &str) -> Result<Option<Doc
     }
 }
 
+/// Find documents whose title contains the query (case-insensitive).
+/// Returns exact matches first, then substring matches.
+pub fn find_documents_by_name(conn: &Connection, name: &str) -> Result<Vec<DocumentRow>> {
+    let sql = format!("SELECT {DOCUMENT_COLUMNS} FROM documents WHERE title = ?1");
+    let mut stmt = conn.prepare(&sql)?;
+    let exact: Vec<DocumentRow> = stmt
+        .query_map(params![name], |row| document_from_row(row))?
+        .filter_map(|r| r.ok())
+        .collect();
+    if !exact.is_empty() {
+        return Ok(exact);
+    }
+
+    let pattern = format!("%{}%", name);
+    let sql = format!("SELECT {DOCUMENT_COLUMNS} FROM documents WHERE title LIKE ?1 ORDER BY title");
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(params![pattern], |row| document_from_row(row))?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(rows)
+}
+
 pub fn add_document(conn: &Connection, doc: &DocumentRow) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO documents (id, title, file_name, mime_type, file_path, file_size, page_count,

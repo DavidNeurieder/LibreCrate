@@ -51,3 +51,23 @@ fn walk_dir_recursive(
     }
     Ok(())
 }
+
+/// Resolve a document by name. Tries exact match, then substring match.
+/// Returns error if ambiguous or not found.
+pub fn resolve_document(
+    conn: &rusqlite::Connection,
+    name: &str,
+) -> anyhow::Result<vault_native::db::queries::DocumentRow> {
+    let matches = vault_native::db::queries::find_documents_by_name(conn, name)?;
+    match matches.len() {
+        0 => anyhow::bail!("No document matching '{}'", name),
+        1 => Ok(matches.into_iter().next().unwrap()),
+        _ => {
+            eprintln!("Found multiple matches:");
+            for doc in &matches {
+                eprintln!("  {}  ({})", doc.title, doc.mime_type);
+            }
+            anyhow::bail!("Please use a more specific name");
+        }
+    }
+}
