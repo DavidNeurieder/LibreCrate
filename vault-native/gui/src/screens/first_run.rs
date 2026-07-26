@@ -40,11 +40,12 @@ pub enum Step {
     Creating,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     VaultDirChanged(String),
     PasswordChanged(String),
     ConfirmChanged(String),
+    ToggleShowPassword,
     Create,
     StepBack,
     CreationFailed(String),
@@ -55,6 +56,7 @@ pub struct State {
     pub vault_dir: String,
     pub password: String,
     pub confirm: String,
+    pub show_password: bool,
     pub error: Option<String>,
 }
 
@@ -66,6 +68,7 @@ impl State {
             vault_dir: default_dir,
             password: String::new(),
             confirm: String::new(),
+            show_password: false,
             error: None,
         }
     }
@@ -85,6 +88,10 @@ impl State {
             Message::ConfirmChanged(cf) => {
                 self.confirm = cf;
                 self.error = None;
+                Task::none()
+            }
+            Message::ToggleShowPassword => {
+                self.show_password = !self.show_password;
                 Task::none()
             }
             Message::Create => match self.step {
@@ -181,12 +188,20 @@ impl State {
             .into(),
             Step::SetPassword => column![
                 text("Set Master Password").size(20),
-                text_input("Password", &self.password)
-                    .secure(true)
-                    .on_input(Message::PasswordChanged),
-                text_input("Confirm password", &self.confirm)
-                    .secure(true)
-                    .on_input(Message::ConfirmChanged),
+                common::secure_field(
+                    "Password",
+                    &self.password,
+                    self.show_password,
+                    Message::PasswordChanged,
+                    Message::ToggleShowPassword,
+                ),
+                common::secure_field(
+                    "Confirm password",
+                    &self.confirm,
+                    self.show_password,
+                    Message::ConfirmChanged,
+                    Message::ToggleShowPassword,
+                ),
                 if let Some(ref err) = self.error {
                     text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
                 } else {
@@ -240,6 +255,7 @@ mod tests {
         assert_eq!(state.step, Step::Welcome);
         assert!(state.password.is_empty());
         assert!(state.confirm.is_empty());
+        assert!(!state.show_password);
         assert!(state.error.is_none());
     }
 
@@ -263,6 +279,16 @@ mod tests {
         let mut state = State::new();
         let _ = state.update(Message::ConfirmChanged("hunter2".into()));
         assert_eq!(state.confirm, "hunter2");
+    }
+
+    #[test]
+    fn test_toggle_show_password() {
+        let mut state = State::new();
+        assert!(!state.show_password);
+        let _ = state.update(Message::ToggleShowPassword);
+        assert!(state.show_password);
+        let _ = state.update(Message::ToggleShowPassword);
+        assert!(!state.show_password);
     }
 
     #[test]
@@ -329,6 +355,14 @@ mod tests {
     fn test_view_welcome_step() {
         let state = State::new();
         let _view = state.view();
+    }
+
+    #[test]
+    fn test_view_set_password_shows_toggle() {
+        let mut state = State::new();
+        state.step = Step::SetPassword;
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Show").is_ok());
     }
 
     #[test]
@@ -454,5 +488,15 @@ mod tests {
         let mut state = State::new();
         state.step = Step::Creating;
         let _view = state.view();
+    }
+
+    #[test]
+    fn test_ui_toggle_show_password() {
+        let mut state = State::new();
+        state.step = Step::SetPassword;
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Show").unwrap();
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::ToggleShowPassword));
     }
 }

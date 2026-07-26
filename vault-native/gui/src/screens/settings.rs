@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, text, text_input},
+    widget::{button, column, container, text},
     Element, Task, Length,
 };
 use std::sync::Arc;
@@ -13,6 +13,7 @@ pub enum Message {
     CurrentPasswordChanged(String),
     NewPasswordChanged(String),
     ConfirmChanged(String),
+    ToggleShowPassword,
     ChangePassword,
     Back,
     PasswordChanged(Result<(), String>),
@@ -23,6 +24,7 @@ pub struct State {
     pub current_password: String,
     pub new_password: String,
     pub confirm: String,
+    pub show_password: bool,
     pub error: Option<String>,
     pub success: Option<String>,
 }
@@ -34,6 +36,7 @@ impl State {
             current_password: String::new(),
             new_password: String::new(),
             confirm: String::new(),
+            show_password: false,
             error: None,
             success: None,
         }
@@ -51,6 +54,10 @@ impl State {
             }
             Message::ConfirmChanged(cf) => {
                 self.confirm = cf;
+                Task::none()
+            }
+            Message::ToggleShowPassword => {
+                self.show_password = !self.show_password;
                 Task::none()
             }
             Message::ChangePassword => {
@@ -80,15 +87,27 @@ impl State {
             container(
                 column![
                     text("Change Master Password").size(18),
-                    text_input("Current password", &self.current_password)
-                        .secure(true)
-                        .on_input(Message::CurrentPasswordChanged),
-                    text_input("New password", &self.new_password)
-                        .secure(true)
-                        .on_input(Message::NewPasswordChanged),
-                    text_input("Confirm new password", &self.confirm)
-                        .secure(true)
-                        .on_input(Message::ConfirmChanged),
+                    common::secure_field(
+                        "Current password",
+                        &self.current_password,
+                        self.show_password,
+                        Message::CurrentPasswordChanged,
+                        Message::ToggleShowPassword,
+                    ),
+                    common::secure_field(
+                        "New password",
+                        &self.new_password,
+                        self.show_password,
+                        Message::NewPasswordChanged,
+                        Message::ToggleShowPassword,
+                    ),
+                    common::secure_field(
+                        "Confirm new password",
+                        &self.confirm,
+                        self.show_password,
+                        Message::ConfirmChanged,
+                        Message::ToggleShowPassword,
+                    ),
                     if let Some(ref err) = self.error {
                         text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
                     } else {
@@ -125,6 +144,7 @@ mod tests {
         assert!(state.current_password.is_empty());
         assert!(state.new_password.is_empty());
         assert!(state.confirm.is_empty());
+        assert!(!state.show_password);
         assert!(state.error.is_none());
         assert!(state.success.is_none());
     }
@@ -151,6 +171,17 @@ mod tests {
         let mut state = State::new(vault);
         let _ = state.update(Message::ConfirmChanged("new".into()));
         assert_eq!(state.confirm, "new");
+    }
+
+    #[test]
+    fn test_toggle_show_password() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        assert!(!state.show_password);
+        let _ = state.update(Message::ToggleShowPassword);
+        assert!(state.show_password);
+        let _ = state.update(Message::ToggleShowPassword);
+        assert!(!state.show_password);
     }
 
     #[test]
@@ -223,6 +254,14 @@ mod tests {
     }
 
     #[test]
+    fn test_view_show_password_button() {
+        let vault = make_test_vault();
+        let state = State::new(vault);
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Show").is_ok());
+    }
+
+    #[test]
     fn test_ui_settings_renders() {
         let vault = make_test_vault();
         let state = State::new(vault);
@@ -259,5 +298,15 @@ mod tests {
         ui.click("Back").unwrap();
         let msgs: Vec<Message> = ui.into_messages().collect();
         assert!(msgs.contains(&Message::Back));
+    }
+
+    #[test]
+    fn test_ui_toggle_show_password() {
+        let vault = make_test_vault();
+        let state = State::new(vault);
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Show").unwrap();
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::ToggleShowPassword));
     }
 }

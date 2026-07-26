@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, text, text_input},
+    widget::{button, column, container, text},
     Element, Task, Length,
 };
 use std::sync::Arc;
@@ -12,6 +12,7 @@ use crate::widgets::common;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     PasswordChanged(String),
+    ToggleShowPassword,
     Submit,
     VaultOpened(Result<Vault, String>),
     CreateNewVault,
@@ -19,6 +20,7 @@ pub enum Message {
 
 pub struct State {
     pub password: String,
+    pub show_password: bool,
     pub error: Option<String>,
     pub loading: bool,
     pub vault_exists: bool,
@@ -38,6 +40,7 @@ impl State {
 
         Self {
             password: String::new(),
+            show_password: false,
             error: None,
             loading: false,
             vault_exists,
@@ -49,6 +52,10 @@ impl State {
             Message::PasswordChanged(pw) => {
                 self.password = pw;
                 self.error = None;
+                Task::none()
+            }
+            Message::ToggleShowPassword => {
+                self.show_password = !self.show_password;
                 Task::none()
             }
             Message::Submit => {
@@ -103,11 +110,13 @@ impl State {
                 column![
                     text("LibreCrate").size(32),
                     text("Enter your master password to unlock.").size(14),
-                    text_input("Master password", &self.password)
-                        .secure(true)
-                        .on_input(Message::PasswordChanged)
-                        .on_submit(Message::Submit)
-                        .width(300),
+                    common::secure_field(
+                        "Master password",
+                        &self.password,
+                        self.show_password,
+                        Message::PasswordChanged,
+                        Message::ToggleShowPassword,
+                    ),
                     if let Some(ref err) = self.error {
                         text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
                     } else {
@@ -155,6 +164,7 @@ mod tests {
     fn test_initial_state_no_vault() {
         let state = State::new();
         assert!(state.password.is_empty());
+        assert!(!state.show_password);
         assert!(state.error.is_none());
         assert!(!state.loading);
     }
@@ -165,6 +175,16 @@ mod tests {
         let _ = state.update(Message::PasswordChanged("p4ss".into()));
         assert_eq!(state.password, "p4ss");
         assert!(state.error.is_none());
+    }
+
+    #[test]
+    fn test_toggle_show_password() {
+        let mut state = State::new();
+        assert!(!state.show_password);
+        let _ = state.update(Message::ToggleShowPassword);
+        assert!(state.show_password);
+        let _ = state.update(Message::ToggleShowPassword);
+        assert!(!state.show_password);
     }
 
     #[test]
@@ -204,6 +224,13 @@ mod tests {
     }
 
     #[test]
+    fn test_view_show_password_button() {
+        let state = State::new();
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("Show").is_ok());
+    }
+
+    #[test]
     fn test_ui_no_vault_found() {
         let mut state = State::new();
         state.vault_exists = false;
@@ -230,5 +257,14 @@ mod tests {
         state.error = Some("Invalid password".into());
         let mut ui = iced_test::simulator(state.view());
         assert!(ui.find("Invalid password").is_ok());
+    }
+
+    #[test]
+    fn test_ui_toggle_show_password() {
+        let state = State::new();
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Show").unwrap();
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::ToggleShowPassword));
     }
 }

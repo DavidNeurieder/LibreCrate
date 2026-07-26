@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, row, text, text_input},
+    widget::{button, column, container, row, text},
     Element, Task, Length,
 };
 use std::path::PathBuf;
@@ -23,6 +23,7 @@ pub enum Message {
     FileSelected(PathBuf),
     FileSelectionCancelled,
     BackupPasswordChanged(String),
+    ToggleShowPassword,
     ConfirmExport,
     ConfirmImport,
     CancelPending,
@@ -33,6 +34,7 @@ pub enum Message {
 pub struct State {
     pub vault: Arc<Vault>,
     pub backup_password: String,
+    pub show_password: bool,
     pub pending_path: Option<PathBuf>,
     pub pending_op: Option<PendingOp>,
     pub progress: Option<String>,
@@ -44,6 +46,7 @@ impl State {
         Self {
             vault,
             backup_password: String::new(),
+            show_password: false,
             pending_path: None,
             pending_op: None,
             progress: None,
@@ -113,6 +116,10 @@ impl State {
             }
             Message::BackupPasswordChanged(pw) => {
                 self.backup_password = pw;
+                Task::none()
+            }
+            Message::ToggleShowPassword => {
+                self.show_password = !self.show_password;
                 Task::none()
             }
             Message::ConfirmExport => {
@@ -204,20 +211,18 @@ impl State {
 
     pub fn view(&self) -> Element<'_, Message> {
         let body: Element<'_, Message> = if self.pending_path.is_some() {
-            let (title, description, action_label, on_submit_msg) = match self.pending_op {
+            let (title, description, action_label) = match self.pending_op {
                 Some(PendingOp::Export) => (
                     "Encrypt Backup",
                     "Enter your vault password to encrypt this backup.",
                     "Export",
-                    Message::ConfirmExport,
                 ),
                 Some(PendingOp::Import) => (
                     "Decrypt Backup",
                     "The passkey of the vault that created this backup is needed to decrypt it.",
                     "Import",
-                    Message::ConfirmImport,
                 ),
-                None => ("", "", "", Message::CancelPending),
+                None => ("", "", ""),
             };
 
             let path_display = self
@@ -231,11 +236,13 @@ impl State {
                 text(description).size(12).color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
                 text(path_display).size(11).color(iced::Color::from_rgb(0.5, 0.5, 0.5)),
                 text("Vault password").size(13),
-                text_input("Enter vault password", &self.backup_password)
-                    .secure(true)
-                    .on_input(Message::BackupPasswordChanged)
-                    .on_submit(on_submit_msg)
-                    .width(300),
+                common::secure_field(
+                    "Enter vault password",
+                    &self.backup_password,
+                    self.show_password,
+                    Message::BackupPasswordChanged,
+                    Message::ToggleShowPassword,
+                ),
                 row![
                     button("Cancel").on_press(Message::CancelPending),
                     button(action_label).on_press(match self.pending_op {
@@ -303,6 +310,7 @@ mod tests {
         assert!(state.progress.is_none());
         assert!(state.error.is_none());
         assert!(state.backup_password.is_empty());
+        assert!(!state.show_password);
         assert!(state.pending_path.is_none());
         assert!(state.pending_op.is_none());
     }
@@ -313,6 +321,17 @@ mod tests {
         let mut state = State::new(vault);
         let _ = state.update(Message::BackupPasswordChanged("secret".into()));
         assert_eq!(state.backup_password, "secret");
+    }
+
+    #[test]
+    fn test_toggle_show_password() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        assert!(!state.show_password);
+        let _ = state.update(Message::ToggleShowPassword);
+        assert!(state.show_password);
+        let _ = state.update(Message::ToggleShowPassword);
+        assert!(!state.show_password);
     }
 
     #[test]
@@ -425,7 +444,20 @@ mod tests {
         state.pending_op = Some(PendingOp::Export);
         let mut ui = iced_test::simulator(state.view());
         assert!(ui.find("Vault password").is_ok());
+        assert!(ui.find("Show").is_ok());
         assert!(ui.find("Cancel").is_ok());
+    }
+
+    #[test]
+    fn test_view_pending_toggle_show_password() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.pending_path = Some(PathBuf::from("/tmp/test.librecrate-backup"));
+        state.pending_op = Some(PendingOp::Export);
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Show").unwrap();
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::ToggleShowPassword));
     }
 
     #[test]
