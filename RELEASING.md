@@ -21,24 +21,58 @@ git tag -a v0.5.0 -m "Release v0.5.0"
 git push origin v0.5.0
 ```
 
-## Step 2: Build Android APK
+## Step 2: Build and sign Android APK
+
+### First-time setup: create keystore
 
 ```bash
-# Debug APK (for testing)
-make build
-
-# Release APK (unsigned — F-Droid builds from source)
-make build-release
+keytool -genkeypair -v \
+  -keystore release.keystore \
+  -alias librecrate \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000 \
+  -storepass <your-store-password> \
+  -keypass <your-key-password> \
+  -dname "CN=Your Name, OU=Your Org, O=Your Org, L=City, ST=State, C=US"
 ```
 
-The APK is at `app/build/outputs/apk/release/app-release-unsigned.apk`.
+Store `release.keystore` securely. It is gitignored. **Do not lose it** —
+Android requires the same signing key for all updates.
 
-F-Droid builds the APK from source using the recipe in `F-DROID.md`. No
-signing key is needed in the repo.
+### Get signing fingerprint for F-Droid
+
+After the first signed release, get the SHA-256 fingerprint:
+
+```bash
+apksigner verify --print-certs app-release.apk | grep SHA-256
+```
+
+Put the lowercase hex fingerprint into `F-DROID.md` as
+`AllowedAPKSigningKeys`.
+
+### Build and sign
+
+```bash
+# 1. Build unsigned release APK
+./gradlew assembleRelease
+
+# 2. Sign manually with apksigner
+apksigner sign \
+  --ks release.keystore \
+  --alias librecrate \
+  --out app-release.apk \
+  app/build/outputs/apk/release/app-release-unsigned.apk
+
+# 3. Verify signature
+apksigner verify --print-certs app-release.apk
+```
+
+The signed APK is at `app-release.apk` in the repo root.
 
 ## Step 3: Build desktop binaries
 
-### Option A: Tarball (recommended for quick release)
+### Option A: Tarball (recommended)
 
 ```bash
 packaging/release.sh --arch x86_64-unknown-linux-gnu
@@ -46,7 +80,7 @@ packaging/release.sh --arch x86_64-unknown-linux-gnu
 
 Output: `out/releases/librecrate-linux-x86_64.tar.gz`
 
-### Option B: AppImage (portable, no deps)
+### Option B: AppImage
 
 ```bash
 packaging/appimage/build-appimage.sh
@@ -55,8 +89,6 @@ packaging/appimage/build-appimage.sh
 Output: `out/appimage/LibreCrate-GUI-x86_64.AppImage`
 
 ### Option C: Cross-compile for aarch64
-
-Requires a cross-compilation toolchain (e.g., `cross`):
 
 ```bash
 packaging/release.sh --arch aarch64-unknown-linux-gnu
@@ -68,18 +100,26 @@ packaging/release.sh --arch aarch64-unknown-linux-gnu
 2. Select the tag `v0.5.0`
 3. Title: `LibreCrate v0.5.0`
 4. Attach artifacts:
+   - `app-release.apk` (signed Android APK)
    - `librecrate-linux-x86_64.tar.gz`
    - `LibreCrate-GUI-x86_64.AppImage` (if built)
-   - `app-release-unsigned.apk` (if desired)
-5. Copy the changelog section from `CHANGELOG.md` into the release notes
+5. Copy the changelog from `CHANGELOG.md` into release notes
+6. Publish the release
 
-## Step 5: Update F-Droid
+## Step 5: F-Droid
 
-When the new tag is pushed, F-Droid's metadata repo can be updated:
+F-Droid auto-detects new tags via `UpdateCheckMode: Tags` in the metadata.
+When you push a new tag:
 
-1. Update `CurrentVersion` and `CurrentVersionCode` in the F-Droid metadata
-2. Update the `commit` field to match the new tag
-3. Submit a merge request to `fdroiddata`
+1. F-Droid detects the new version
+2. Builds from source using the recipe in `F-DROID.md`
+3. Downloads your signed APK from the GitHub Release
+4. Verifies the builds match byte-for-byte
+5. If they match, publishes your signed APK
+6. If they don't match, publishes F-Droid's own build
+
+No manual action needed unless the build fails. Check
+https://gitlab.com/fdroid/fdroiddata/-/merge_requests for new MRs.
 
 ## Version numbering
 

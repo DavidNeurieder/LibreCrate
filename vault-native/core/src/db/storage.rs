@@ -65,23 +65,20 @@ fn parse_opf_cover(opf: &str) -> Option<String> {
     None
 }
 
-/// Render page 1 of a PDF to JPEG via the system `pdftoppm` tool (poppler-utils).
+/// Render page 1 of a PDF to JPEG using the Rust MuPDF wrapper.
 fn generate_thumbnail_pdf(data: &[u8]) -> Option<Vec<u8>> {
     let tmp_dir = tempfile::tempdir().ok()?;
     let pdf_path = tmp_dir.path().join("input.pdf");
     std::fs::write(&pdf_path, data).ok()?;
-    let prefix = tmp_dir.path().join("page");
-    let status = std::process::Command::new("pdftoppm")
-        .args(["-jpeg", "-r", "150", "-singlefile", "-f", "1", "-l", "1"])
-        .arg(&pdf_path)
-        .arg(&prefix)
-        .output()
-        .ok()?;
-    if !status.status.success() {
-        return None;
-    }
-    let jpg_path = tmp_dir.path().join("page.jpg");
-    std::fs::read(&jpg_path).ok()
+
+    let handle = crate::pdf::PdfHandle::open(pdf_path.to_str()?.to_string()).ok()?;
+    let rendered = handle.render_page(0, 200).ok()?;
+
+    let img = image::RgbaImage::from_raw(rendered.width as u32, rendered.height as u32, rendered.data)?;
+    let mut jpeg_buf = std::io::Cursor::new(Vec::new());
+    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg_buf, 90);
+    img.write_with_encoder(encoder).ok()?;
+    Some(jpeg_buf.into_inner())
 }
 
 /// Extract the cover image from an EPUB (ZIP) archive.

@@ -167,16 +167,15 @@ class PdfViewerInstrumentedTest {
         } else allBytes.toString(Charsets.ISO_8859_1)
         assertTrue("PDF header missing: $firstBytes", firstBytes.startsWith("%PDF"))
 
-        val doc = try {
-            com.artifex.mupdf.fitz.Document.openDocument(file.absolutePath)
+        val handle = try {
+            uniffi.vault_native.PdfHandle.open(file.absolutePath)
         } catch (e: Exception) {
-            throw AssertionError("MuPDF openDocument failed for $fileInfo: ${e.message}", e)
+            throw AssertionError("PdfHandle.open failed for $fileInfo: ${e.message}", e)
         }
         try {
-            val actualPages = doc.countPages()
+            val actualPages = handle.pageCount()
             assertTrue("Expected $expectedPages pages, got $actualPages", actualPages == expectedPages)
         } finally {
-            doc.destroy()
         }
     }
 

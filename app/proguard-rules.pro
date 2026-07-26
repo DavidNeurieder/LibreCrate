@@ -1,10 +1,6 @@
 # LibreCrate ProGuard rules
 -keepattributes *Annotation*
 
-# MuPDF (JNI)
--keep class com.artifex.mupdf.fitz.** { *; }
--dontwarn com.artifex.mupdf.fitz.**
-
 # Readium2
 -keep class org.readium.** { *; }
 -dontwarn org.readium.**

@@ -1,9 +1,6 @@
 package com.librecrate.app.reader.pdf
 
 import android.graphics.Bitmap
-import com.artifex.mupdf.fitz.ColorSpace
-import com.artifex.mupdf.fitz.Document
-import com.artifex.mupdf.fitz.Matrix
 import com.librecrate.app.vault.reader.DocumentReader
 import com.librecrate.app.vault.reader.RenderConfig
 import com.librecrate.app.vault.reader.RenderedPage
@@ -11,23 +8,24 @@ import com.librecrate.app.vault.reader.models.DocumentMetadata
 import com.librecrate.app.vault.reader.models.ReaderLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import uniffi.vault_native.PdfHandle
 import java.nio.ByteBuffer
 
 class PdfDocumentReader(filePath: String) : DocumentReader {
 
-    private val document: Document = try {
-        Document.openDocument(filePath)
+    private val handle: PdfHandle = try {
+        PdfHandle.open(filePath)
     } catch (e: Exception) {
         throw RuntimeException("Failed to open PDF: $filePath", e)
     }
 
-    override val pageCount: Int by lazy { document.countPages() }
+    override val pageCount: Int by lazy { handle.pageCount() }
 
     override val metadata: DocumentMetadata by lazy {
         DocumentMetadata(
-            title = document.getMetaData(Document.META_INFO_TITLE)
-                ?.takeIf { it.isNotBlank() } ?: "",
-            author = document.getMetaData(Document.META_INFO_AUTHOR) ?: "",
+            title = try { handle.metadata("title") } catch (_: Exception) { "" }
+                .takeIf { it.isNotBlank() } ?: "",
+            author = try { handle.metadata("author") } catch (_: Exception) { "" },
             pageCount = pageCount,
         )
     }
@@ -37,30 +35,15 @@ class PdfDocumentReader(filePath: String) : DocumentReader {
     }
 
     fun renderPageBitmap(pageIndex: Int, targetWidthPx: Int? = null): Bitmap {
-        val page = document.loadPage(pageIndex)
-        try {
-            val pageWidthPoints = (page.bounds.x1 - page.bounds.x0).toDouble()
-            val scale = if (targetWidthPx != null && targetWidthPx > 0 && pageWidthPoints > 0.0 && page.bounds.isValid) {
-                targetWidthPx.toFloat() / pageWidthPoints.toFloat()
-            } else {
-                (150f / 72f)
-            }
-            val matrix = Matrix(scale, 0f, 0f, scale, 0f, 0f)
-            val pixmap = page.toPixmap(matrix, ColorSpace.DeviceRGB, true)
-            try {
-                val bitmap = Bitmap.createBitmap(
-                    pixmap.width, pixmap.height,
-                    Bitmap.Config.ARGB_8888,
-                )
-                bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(pixmap.samples))
-                compositeOverWhite(bitmap)
-                return bitmap
-            } finally {
-                pixmap.destroy()
-            }
-        } finally {
-            page.destroy()
-        }
+        val target = targetWidthPx ?: 0
+        val rendered = handle.renderPage(pageIndex, target)
+        val bitmap = Bitmap.createBitmap(
+            rendered.width, rendered.height,
+            Bitmap.Config.ARGB_8888,
+        )
+        bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(rendered.data))
+        compositeOverWhite(bitmap)
+        return bitmap
     }
 
     override suspend fun renderPage(pageIndex: Int, config: RenderConfig): RenderedPage {
@@ -83,26 +66,17 @@ class PdfDocumentReader(filePath: String) : DocumentReader {
     override fun extractText(): String? {
         return buildString {
             for (i in 0 until pageCount) {
-                val page = document.loadPage(i)
                 try {
-                    val stext = page.toStructuredText()
-                    try {
-                        val text = stext.asText()
-                        if (text.isNotBlank()) {
-                            appendLine(text)
-                        }
-                    } finally {
-                        stext.destroy()
+                    val text = handle.extractText(i)
+                    if (text.isNotBlank()) {
+                        appendLine(text)
                     }
-                } finally {
-                    page.destroy()
-                }
+                } catch (_: Exception) { }
             }
         }.takeIf { it.isNotBlank() }
     }
 
     override fun close() {
-        document.destroy()
     }
 
     private fun compositeOverWhite(bitmap: Bitmap) {
