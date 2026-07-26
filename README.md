@@ -1,25 +1,52 @@
 # LibreCrate
 
-[![Get it on GitHub](https://img.shields.io/badge/Get_it_on_GitHub-181717?style=for-the-badge&logo=github)](https://github.com/DavidNeurieder/LibreCrate/releases/download/v0.3.0/LibreCrate_v0.3.0.apk)
+[![Get it on GitHub](https://img.shields.io/badge/Get_it_on_GitHub-181717?style=for-the-badge&logo=github)](https://github.com/DavidNeurieder/LibreCrate/releases/download/v0.4.0/LibreCrate_v0.4.0.apk)
 
-**Version 0.3.0** · 
+**Version 0.4.0** · 
 
-Encrypted document vault for Android — stores, views, organizes, and searches PDFs, EPUBs, PKPass files, comic archives (CBZ/CBR), images, and personal notes. All documents are encrypted at rest with optional password protection and zero network access.
+Encrypted document vault for Android, Linux, macOS, and Windows — stores, views, organizes, and searches PDFs, EPUBs, PKPass files, comic archives (CBZ/CBR), images, and personal notes. All documents are encrypted at rest with optional password protection and zero network access.
+
+## Platforms
+
+| Platform | UI | Status |
+|----------|-----|--------|
+| Android | Jetpack Compose | Stable |
+| Desktop (Linux/macOS/Windows) | Iced (Rust) | Stable |
+| CLI (Linux/macOS/Windows) | Terminal with interactive REPL | Stable |
+| Android Kotlin → Rust bridge | UniFFI | Stable |
 
 ## Features
 
 - **Six document types**: PDF, EPUB, PKPass (Apple Wallet passes), CBZ/CBR comics, Images, and Markdown notes
 - **Encryption at rest**: AES-256-GCM per-file encryption; master key wrapped via Argon2id + AES-256 Key Wrap (RFC 3394)
-- **Optional password**: Even with the phone unlocked, content can't be read without the password
+- **Optional password**: Even with the device unlocked, content can't be read without the password
 - **No network**: Zero internet permission — your documents never leave the device
 - **Library view**: Grid/list, type filter, favorites, sort options, and reading-progress indicators
 - **Reading position**: Remembers last page for PDFs and comics, last location for EPUBs; shows "Page X of Y" / "% read" on cards
 - **Full-text search**: FTS5 search across title, author, description, and extracted document text, with highlighted snippets
 - **Import**: Share intents (single or multiple) and SAF file picker (bulk import)
 - **Backup**: Single encrypted `.librecrate-backup` file via SAF, verified by your password
+- **Cross-platform backup**: Backups created on Android can be restored on desktop and vice versa
 - **F-Droid only**: No Google Play Services, Firebase, Crashlytics, or AdMob
 
-### Viewers
+### Desktop GUI
+
+- **Iced-based native UI** with vault creation, unlock, document library, and settings
+- **Multi-file import**: Drag-and-drop or file picker for bulk document import
+- **Collections & Tags**: Organize documents into collections and tag them
+- **Backup/Restore**: Export and import encrypted backups from the GUI
+- **Password change**: Change vault password from the settings screen
+- **Settings**: Theme selection, vault info, and security options
+
+### CLI
+
+- **Interactive REPL**: Launch `librecrate` with no arguments for a persistent shell session — enter vault and password once, then run commands
+- **One-shot mode**: `librecrate <command> <vault_dir> -p <password>` for scripting and automation
+- **Commands**: `init`, `import`, `list`, `open`, `delete`, `search`, `backup`, `restore`
+- **Readline support**: Command history (up/down arrows), line editing, ctrl-c/ctrl-d
+- **Tab completion**: Command names auto-complete
+
+### Android Viewers
 
 - **PDF** (MuPDF): paginated scroll, pinch-to-zoom/pan, fit modes (width/page/actual), night mode, last-page memory
 - **EPUB** (Readium 2): reflowable reader, table of contents, reader settings (font family/size, line height, margins), reading progress, rename/favorite/delete
@@ -32,8 +59,11 @@ Encrypted document vault for Android — stores, views, organizes, and searches 
 
 | Library | Purpose |
 |---------|---------|
-| [Jetpack Compose](https://developer.android.com/jetpack/compose) | UI framework |
-| [Coil](https://coil-kt.github.io/coil/) | Image loading |
+| [Jetpack Compose](https://developer.android.com/jetpack/compose) | Android UI framework |
+| [Iced](https://iced.rs/) | Desktop GUI framework (Rust) |
+| [Clap](https://docs.rs/clap) | CLI argument parsing |
+| [Rustyline](https://docs.rs/rustyline) | Interactive REPL (line editing, history) |
+| [Coil](https://coil-kt.github.io/coil/) | Image loading (Android) |
 | [MuPDF](https://mupdf.com/) | PDF rendering |
 | [Readium](https://readium.org/) | EPUB reader toolkit |
 | [ZXing](https://github.com/zxing/zxing) | Barcode display |
@@ -55,18 +85,22 @@ Encrypted document vault for Android — stores, views, organizes, and searches 
 | Lock | Clears in-memory master key when app is backgrounded; requires password re-entry |
 | Backup | Encrypted Zip bundle with wrapped master key + DB + files |
 
-## Known Limitations (current build)
+## Project Structure
 
-- **No idle auto-lock** — the vault locks only when the app is closed.
-- **Collections & Tags** exist internally but are not reachable from the current UI and cannot be assigned to documents.
-- **No in-document search** — search covers the whole library, not find-within a PDF/EPUB.
-- **Barcodes are display-only** — passes show barcodes; there is no camera scanning.
-
-## Screenshots
-
-<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="180" alt="Screenshot 1"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="180" alt="Screenshot 2"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="180" alt="Screenshot 3"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="180" alt="Screenshot 4"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" width="180" alt="Screenshot 5"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" width="180" alt="Screenshot 6"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/7.png" width="180" alt="Screenshot 7"> 
+```
+librecrate/
+├── vault-native/
+│   ├── core/          vault-native: shared Rust library (crypto, DB, merge, backup)
+│   ├── cli/           librecrate CLI (interactive REPL + one-shot commands)
+│   └── gui/           librecrate-gui (Iced desktop application)
+├── app/               Android application
+├── gradle/            Gradle build scripts
+└── fastlane/          F-Droid metadata and screenshots
+```
 
 ## Building
+
+### Android
 
 ```sh
 git clone https://github.com/DavidNeurieder/librecrate
@@ -88,7 +122,23 @@ The Rust native library (`vault-native`) is auto-built by Gradle via UniFFI — 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
+### Desktop CLI and GUI
+
+```sh
+cd vault-native
+
+# Build CLI
+cargo build --release --package librecrate
+# → target/release/librecrate
+
+# Build GUI
+cargo build --release --package librecrate-gui
+# → target/release/librecrate-gui
+```
+
 ## Testing
+
+### Android
 
 ```sh
 # Unit tests (JUnit 4 + MockK + Robolectric + Turbine)
@@ -100,6 +150,48 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 - 120+ unit tests
 - 47+ instrumented tests
+
+### Desktop (CLI + GUI + Core)
+
+```sh
+cd vault-native
+cargo test --workspace
+```
+
+- 226+ tests (CLI integration, GUI unit, core unit, e2e)
+
+## CLI Usage
+
+```sh
+# Launch interactive REPL
+librecrate
+# Vault: ~/my-vault
+# Password: ********
+# librecrate> list
+# librecrate> import ~/file.pdf
+# librecrate> search algorithm
+# librecrate> backup -o ~/backup.librecrate-backup
+# librecrate> quit
+
+# One-shot mode (for scripts/automation)
+librecrate init ~/my-vault -p "mypassword" --from ~/Documents
+librecrate import ~/my-vault -p "mypassword" ~/file.pdf ~/file.epub
+librecrate list ~/my-vault -p "mypassword"
+librecrate search ~/my-vault -p "mypassword" "search term"
+librecrate backup ~/my-vault -p "mypassword" -o ~/backup.librecrate-backup
+librecrate restore ~/my-vault -p "mypassword" ~/backup.librecrate-backup
+```
+
+## Known Limitations (current build)
+
+- **No idle auto-lock** — the vault locks only when the app is closed.
+- **No in-document search** — search covers the whole library, not find-within a PDF/EPUB.
+- **Barcodes are display-only** — passes show barcodes; there is no camera scanning.
+- **FTS after merge restore** — full-text search may not work immediately after restoring a backup via merge.
+
+## Screenshots
+
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="180" alt="Screenshot 1"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="180" alt="Screenshot 2"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="180" alt="Screenshot 3"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="180" alt="Screenshot 4"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" width="180" alt="Screenshot 5"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" width="180" alt="Screenshot 6"> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/7.png" width="180" alt="Screenshot 7"> 
 
 ## AllowedAPKSigningKeys to verify Releases:
 

@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.0 (2026-07-26)
+
+### Features
+
+- **CLI interactive REPL**: Launch `librecrate` with no arguments for a persistent shell — enter vault and password once, then run commands without re-typing credentials. Supports readline (history, line editing, ctrl-c/ctrl-d).
+- **CLI one-shot mode**: All commands available as one-shot invocations (`librecrate <cmd> <vault_dir> -p <password>`) for scripting and automation.
+- **CLI commands**: `init`, `import`, `list`, `open`, `delete`, `search`, `backup`, `restore` — full document lifecycle from the terminal.
+- **Desktop GUI (Iced)**: Native desktop application with vault creation, unlock, document library, multi-file import, collections, tags, backup/restore, and password change.
+- **Shared vault operations module**: `vault_ops` in core provides `VaultSnapshot`, `export_vault_dir`, `merge_vault_dir`, and `restore_backup_to_dir` — shared business logic for CLI, GUI, and Android.
+- **Cross-platform backup compatibility**: Backups created on Android can be restored on desktop (CLI/GUI) and vice versa.
+- **Multi-file import (GUI)**: Import multiple documents at once via file picker.
+- **Collections & Tags (GUI)**: Organize documents into collections and assign tags from the desktop GUI.
+- **Backup password verification**: CLI `backup` command verifies the password (derives master key) before encrypting, preventing silent corruption.
+
+### Architecture
+
+- **vault_ops module** (`core/src/vault_ops.rs`): Shared business logic for backup export, merge, and full restore — used by both CLI and GUI.
+- **Session struct** (`cli/src/session.rs`): Caches vault dir, password, and pre-derived master key for the REPL lifetime, avoiding ~1s Argon2id re-derivation per command.
+- **CLI refactored to 8 commands**: Minimal interface matching GUI patterns (vault directory + password). Deleted 10 old files (document.rs, vault.rs, create.rs, backup_export.rs, merge.rs, export.rs, inspect.rs, crypto.rs, bench.rs, password.rs).
+- **Key file naming normalized**: `master_key` → `wrapped_master_key` everywhere with fallback reads for backwards compatibility.
+- **DB filename normalized**: `vault.db` → `librecrate.db` across CLI, GUI, and vault_ops.
+
+### Tests
+
+- **226+ tests passing**: 31 CLI integration tests (including 5 REPL tests), 139 GUI unit tests, 51 core unit tests, 5 e2e tests.
+- **CLI integration tests**: Subprocess-based tests covering init, import, list, search, backup/restore, open, delete, errors, and full workflow.
+- **REPL tests**: Piped-stdin tests verifying list, help, import+list, search, and wrong-password handling in interactive mode.
+
 ## 0.3.0 (2026-07-22)
 
 ### Features
