@@ -1,0 +1,10 @@
+• Desktop GUI with full feature parity: library, PDF/CBZ/image viewer, settings, collections
+• Interactive CLI with REPL mode and persistent vault session
+• Shared vault format between Android and desktop (cross-platform backup/restore)
+• Document addressing by name in CLI (open/delete by title, not UUID)
+• Brand-colored UI with sage green accent theme
+• App icon set on desktop window
+• PDF viewer: horizontal pan when zoomed, faster scroll speed
+• Desktop password inputs with show/hide toggle
+• Dead code cleanup and flaky test fixes
+• Version bumped to 0.4.0

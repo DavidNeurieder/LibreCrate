@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=LibreCrate
+GenericName=Encrypted Document Vault
+Comment=Store, view, and manage encrypted documents
+Exec=librecrate-gui %f
+Icon=librecrate-gui
+Terminal=false
+Categories=Office;Utility;FileManager;
+Keywords=vault;encrypted;pdf;epub;documents;
+MimeType=application/pdf;application/epub+zip;application/vnd.comicbook+zip;image/png;image/jpeg;
+StartupWMClass=librecrate-gui

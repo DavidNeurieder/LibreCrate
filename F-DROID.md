@@ -111,8 +111,8 @@ git. **Gradle handles everything automatically:**
 Prerequisites: Rustup, `cargo`, and Android NDK (set `ANDROID_NDK_HOME`).
 
 Rust version is pinned via `vault-native/rust-toolchain.toml` (currently
-`1.78.0`). Rustup reads this file automatically and installs the correct
-version + Android target on first `cargo build`. No `rustup target add`
+`stable`). Rustup reads this file automatically and installs the correct
+channel + Android target on first `cargo build`. No `rustup target add`
 needed in the recipe.
 
 ### Recipe
@@ -152,7 +152,7 @@ installs the pinned Rust version + `aarch64-linux-android` target on the fly.
 
 | Item | Value |
 |------|-------|
-| Rust version | Pinned via `vault-native/rust-toolchain.toml` (currently `1.78.0`) |
+| Rust version | Pinned via `vault-native/rust-toolchain.toml` (currently `stable`) |
 | UniFFI version | 0.28 (library mode, no `.udl` file) |
 | Host target | `x86_64-unknown-linux-gnu` (default in Rustup, no action needed) |
 | Android target | `aarch64-linux-android` (auto-installed by `rust-toolchain.toml`) |

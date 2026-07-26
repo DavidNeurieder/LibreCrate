@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.librecrate.app</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>LibreCrate</name>
+  <summary>Encrypted document vault for Linux</summary>
+  <description>
+    <p>
+      LibreCrate is a secure document vault that stores, views, organizes, and
+      searches PDFs, EPUBs, comic archives (CBZ/CBR), images, and personal
+      Markdown notes — all encrypted at rest with AES-256-GCM.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Per-file AES-256-GCM encryption</li>
+      <li>Optional password protection with Argon2id key derivation</li>
+      <li>PDF viewer with pinch-to-zoom and horizontal/vertical pan</li>
+      <li>Full-text search across all documents</li>
+      <li>Collections and tags for organization</li>
+      <li>Encrypted backup export and import</li>
+      <li>Cross-platform vault format (compatible with Android app)</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">librecrate-gui.desktop</launchable>
+  <url type="homepage">https://github.com/neurieder/LibreCrate</url>
+  <url type="bugtracker">https://github.com/neurieder/LibreCrate/issues</url>
+  <developer id="com.librecrate">
+    <name>LibreCrate Contributors</name>
+  </developer>
+  <provides>
+    <binary>librecrate-gui</binary>
+    <binary>librecrate</binary>
+  </provides>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/neurieder/LibreCrate/main/docs/screenshot-library.png</image>
+      <caption>Document library with search and filtering</caption>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="0.4.0" date="2026-07-26">
+      <description>
+        <p>Desktop GUI, interactive CLI, cross-platform backup, and branding.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1" />
+</component>

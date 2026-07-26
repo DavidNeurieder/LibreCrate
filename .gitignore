@@ -44,6 +44,9 @@ Thumbs.db
 # Rust build artifacts (vault-native workspace)
 vault-native/target/
 
+# Packaging output
+out/
+
 # docs
 /old_docs
 /Download
