@@ -38,7 +38,7 @@
 
 ### F-Droid
 
-- **F-Droid build recipe documented**: `F-DROID.md` covers MuPDF srclib, Rust toolchain, NDK config, and full recipe
+- **F-Droid build recipe documented**: `F-DROID.md` covers Rust toolchain, NDK config, and full recipe
 - **Rust version pinned**: `vault-native/rust-toolchain.toml` pins Rust 1.78.0 for reproducible builds
 - **NDK path hardcoding removed**: `.cargo/config.toml` deleted; NDK discovered automatically via `ANDROID_NDK_HOME` or `android.ndkDirectory`
 

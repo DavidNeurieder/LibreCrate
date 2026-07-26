@@ -3,17 +3,6 @@
 This file contains the complete F-Droid metadata for LibreCrate, ready for
 submission to [fdroiddata](https://gitlab.com/fdroid/fdroiddata).
 
-## srclib: MupdfAndroidFitz.yml
-
-Submit this file to `fdroiddata/srclibs/`:
-
-```yaml
-RepoType: git
-Repo: https://github.com/ArtifexSoftware/mupdf-android-fitz.git
-Prepare: |
-  git submodule update --init --recursive
-```
-
 ## App metadata: com.librecrate.app.yml
 
 Submit this file to `fdroiddata/metadata/`:
@@ -60,21 +49,12 @@ Builds:
       - apt-get install -y make pkg-config curl openjdk-17-jdk-headless
       - update-java-alternatives -a
     ndk: r28c
-    srclibs:
-      - MupdfAndroidFitz@1.27.1
     prebuild:
-      # MuPDF: remove Ghostscript Maven repo, copy source, set up subproject
-      - sed -i -e '/maven.ghostscript.com/d' settings.gradle.kts
-      - cp -r $$MupdfAndroidFitz$$ libs/mupdf-android-fitz
-      - make -C libs/mupdf-android-fitz/libmupdf generate
-      - echo 'include(":libs:mupdf-android-fitz")' >> settings.gradle.kts
-      - sed -i 's|implementation(libs.mupdf.fitz)|implementation(project(":libs:mupdf-android-fitz"))|' app/build.gradle.kts
       # Rust: install Rustup (rust-toolchain.toml handles channel + targets)
+      # MuPDF is compiled from source by Cargo via the mupdf crate (no Java/srclib needed)
       - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     gradle:
       - yes
-    scandelete:
-      - libs/mupdf-android-fitz/libmupdf/thirdparty
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
@@ -88,10 +68,9 @@ CurrentVersionCode: 4
 ### Build flow
 
 1. F-Droid clones the repo at the specified `commit` tag
-2. `prebuild` strips `maven.ghostscript.com`, copies MuPDF source, installs Rustup
+2. `prebuild` installs Rustup
 3. Gradle's `assembleRelease` triggers:
    - Rust host build → UniFFI Kotlin bindings → Rust Android cross-compile → copy .so
-   - MuPDF NDK build (via project dependency)
    - APK compilation and minification
 4. F-Droid downloads the signed APK from `Binaries:` URL
 5. F-Droid copies the signature from your APK onto its own build
@@ -101,13 +80,12 @@ CurrentVersionCode: 4
 
 | Item | Value |
 |------|-------|
-| MuPDF version | 1.27.1 (match `gradle/libs.versions.toml`) |
+| PDF rendering | Rust `mupdf` crate (compiles MuPDF from source via Cargo) |
 | NDK version | r28c |
 | Rust version | Pinned via `vault-native/rust-toolchain.toml` (stable) |
 | UniFFI version | 0.28 (library mode, no `.udl` file) |
 | Android target | `aarch64-linux-android` |
 | Min API | 26 |
-| scandelete | `libs/mupdf-android-fitz/libmupdf/thirdparty` |
 
 ### Updating
 
@@ -119,16 +97,17 @@ CurrentVersionCode: 4
 
 ## Troubleshooting
 
-### Build fails on MuPDF
-
-Verify the srclib tag matches `gradle/libs.versions.toml`. The
-`mupdf-android-fitz` tag must have a compatible `build.gradle` with the
-correct NDK version.
-
 ### Build fails on Rust
 
 Ensure `rust-toolchain.toml` is present at the repo root. Rustup reads it
 automatically and installs the correct channel + Android target.
+
+### Build fails on MuPDF
+
+The `mupdf` crate compiles MuPDF from source via its `build.rs`. On Android,
+this uses the NDK toolchain. Ensure `ndk:` version in the metadata matches
+your local NDK installation, and that `BINDGEN_EXTRA_CLANG_ARGS` includes
+the NDK sysroot (handled automatically by `vault-native-android/build.gradle.kts`).
 
 ### APKs don't match (reproducibility failure)
 
@@ -136,6 +115,7 @@ Common causes:
 - Different NDK version (check `ndk:` field)
 - Different Rust toolchain version
 - `codegen-units` not set to 1 (check `vault-native/Cargo.toml`)
+- `mupdf` crate features differ (check `default-features` in `vault-native/core/Cargo.toml`)
 - Embedded build paths (F-Droid uses `/builds/fdroid/fdroiddata/build/...`)
 - ZIP ordering differences (use `./gradlew assembleRelease`, not Android Studio)
 

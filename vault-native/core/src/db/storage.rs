@@ -141,7 +141,7 @@ fn generate_thumbnail_cbz(data: &[u8]) -> Option<Vec<u8>> {
 ///
 /// Supported formats:
 /// - `image/*` — decoded and resized directly
-/// - `application/pdf` — page 1 rendered via `pdftoppm`
+/// - `application/pdf` — page 1 rendered via Rust MuPDF
 /// - `application/epub+zip` — cover image extracted from the EPUB archive
 /// - `application/vnd.comicbook+zip` — first page image from the CBZ archive
 ///
