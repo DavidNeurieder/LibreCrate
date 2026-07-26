@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -129,7 +130,12 @@ class ImportOpenAllTypesInstrumentedTest {
             }
         }
 
-        composeTestRule.waitForIdle()
+        composeTestRule.waitUntil(15_000) {
+            composeTestRule
+                .onAllNodesWithText("test_import.cbz", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
 
         composeTestRule.onNodeWithText("test_import.pdf", useUnmergedTree = true).assertExists()
         composeTestRule.onNodeWithText("test_import.epub", useUnmergedTree = true).assertExists()

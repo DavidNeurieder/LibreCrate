@@ -305,42 +305,6 @@ class VaultRepository(private val context: Context) {
         handle?.setSchemaVersion(version)
     }
     // -----------------------------------------------------------------------
-    // Vault format (export/import) — static FFI functions, not on DbHandle
-    // -----------------------------------------------------------------------
-    suspend fun exportVaultStatic(
-        files: List<KeyValue>,
-        dbFile: ByteArray?,
-        vaultPassword: String,
-        keys: List<KeyValue>,
-        kdfParams: Argon2Params,
-    ): ByteArray? = withContext(Dispatchers.IO) {
-        try {
-            exportVault(files, dbFile, vaultPassword, keys, kdfParams)
-        } catch (e: Exception) {
-            ErrorLogger.logException(context, TAG, "exportVault failed", e); null
-        }
-    }
-    suspend fun importVaultStatic(vaultData: ByteArray, vaultPassword: String): ImportedContents? = withContext(Dispatchers.IO) {
-        try {
-            importVault(vaultData, vaultPassword)
-        } catch (e: Exception) {
-            ErrorLogger.logException(context, TAG, "importVault failed", e); null
-        }
-    }
-    suspend fun restoreToLayoutStatic(
-        contents: ImportedContents,
-        dbData: ByteArray,
-        encryptionDir: String,
-        databaseDir: String,
-        filesDir: String,
-    ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            restoreToLayout(contents, dbData, encryptionDir, databaseDir, filesDir)
-            true
-        } catch (e: Exception) {
-            ErrorLogger.logException(context, TAG, "restoreToLayout failed", e); false
-        }
-    }
     suspend fun mergeBranchA(
         backupDbPath: String,
         backupMasterKey: ByteArray,
