@@ -168,26 +168,6 @@ val copyJniLib by tasks.registering(Copy::class) {
     into(jniLibDir)
     inputs.file(androidLibFile)
     outputs.file(jniLibFile)
-
-    doFirst {
-        val ndkDir = sequenceOf(
-            android.ndkDirectory.takeIf { it.exists() },
-            System.getenv("ANDROID_NDK_HOME")?.let { file(it).takeIf { it.exists() } },
-            let {
-                val ndkParent = file("${System.getProperty("user.home")}/Android/Sdk/ndk")
-                if (ndkParent.isDirectory) ndkParent.listFiles()?.maxOrNull() else null
-            }?.takeIf { it.exists() },
-        ).firstOrNull() ?: return@doFirst
-        val libcxx = ndkDir.resolve("toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so")
-        if (!libcxx.exists()) {
-            val macLibcxx = ndkDir.resolve("toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so")
-            if (macLibcxx.exists()) {
-                copy { from(macLibcxx); into(jniLibDir) }
-            }
-        } else {
-            copy { from(libcxx); into(jniLibDir) }
-        }
-    }
 }
 
 // Wire into build pipeline — bindings before compile, .so before JNI merge
