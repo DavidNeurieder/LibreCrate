@@ -18,6 +18,7 @@ SourceCode: https://github.com/neurieder/LibreCrate
 IssueTracker: https://github.com/neurieder/LibreCrate/issues
 
 AutoName: LibreCrate
+Summary: Offline document vault
 
 Description: |-
   Encrypted document vault for Android. Stores, views, organizes, and

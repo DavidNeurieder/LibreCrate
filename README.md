@@ -1,4 +1,4 @@
-# LibreCrate
+# LibreCrate — offline document vault
 
 [![Get it on GitHub](https://img.shields.io/badge/Get_it_on_GitHub-181717?style=for-the-badge&logo=github)](https://github.com/DavidNeurieder/LibreCrate/releases)
 
