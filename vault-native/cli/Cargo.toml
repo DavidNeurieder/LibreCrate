@@ -2,6 +2,7 @@
 name = "librecrate"
 version = "0.4.0"
 edition = "2021"
+license = "AGPL-3.0-or-later"
 description = "LibreCrate CLI — encrypted vault management, document storage, full-text search, backup and restore with an interactive REPL"
 
 [[bin]]
