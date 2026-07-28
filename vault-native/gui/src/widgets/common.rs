@@ -14,31 +14,6 @@ pub fn card_style() -> impl Fn(&iced::Theme) -> container::Style {
     }
 }
 
-/// Styling for a toolbar / header row with bottom border.
-pub fn toolbar_style() -> impl Fn(&iced::Theme) -> container::Style {
-    |_| container::Style {
-        border: Border {
-            color: Color::from_rgb(0.25, 0.25, 0.28),
-            width: 0.0,
-            radius: 0.0.into(),
-        },
-        ..Default::default()
-    }
-}
-
-/// Styling for a prominent action or primary card background.
-pub fn elevated_style() -> impl Fn(&iced::Theme) -> container::Style {
-    |_| container::Style {
-        background: Some(Background::Color(Color::from_rgb(0.17, 0.17, 0.2))),
-        border: Border {
-            color: Color::from_rgb(0.3, 0.3, 0.35),
-            width: 1.0,
-            radius: 12.0.into(),
-        },
-        ..Default::default()
-    }
-}
-
 /// Navigation bar with optional back button and screen title.
 pub fn navbar<'a, Message: 'a + Clone>(
     title: &'a str,

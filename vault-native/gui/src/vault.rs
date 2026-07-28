@@ -2,15 +2,13 @@ use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use vault_native::db::fts::FtsSnippetResult;
-use vault_native::db::queries::{CollectionRow, DocumentRow, TagRow};
+use vault_native::db::queries::DocumentRow;
 use vault_native::ffi::DbHandle;
 
 #[derive(Clone)]
 pub struct Vault {
     pub db: Arc<DbHandle>,
-    pub master_key: Vec<u8>,
     pub base_dir: PathBuf,
-    pub password: String,
 }
 
 impl std::fmt::Debug for Vault {
@@ -49,13 +47,11 @@ impl Vault {
         )?;
 
         let master_key = vault_native::ffi::unwrap_key(wrapped_key, kek)?;
-        let db = DbHandle::open_encrypted(db_path.to_str().unwrap().to_string(), master_key.clone())?;
+        let db = DbHandle::open_encrypted(db_path.to_str().unwrap().to_string(), master_key)?;
 
         Ok(Self {
             db: Arc::new(db),
-            master_key,
             base_dir: dir.to_path_buf(),
-            password: password.to_string(),
         })
     }
 
@@ -96,14 +92,12 @@ impl Vault {
         let db_path = db_dir.join("librecrate.db");
         let db = DbHandle::create_encrypted(
             db_path.to_str().unwrap().to_string(),
-            master_key.clone(),
+            master_key,
         )?;
 
         Ok(Self {
             db: Arc::new(db),
-            master_key,
             base_dir: dir.to_path_buf(),
-            password: password.to_string(),
         })
     }
 
@@ -121,14 +115,6 @@ impl Vault {
             Some(d) => Ok(self.db.update_document(id, d.title, !d.is_favorite)?),
             None => Ok(false),
         }
-    }
-
-    pub fn list_collections(&self) -> Result<Vec<CollectionRow>> {
-        Ok(self.db.list_collections()?)
-    }
-
-    pub fn list_tags(&self) -> Result<Vec<TagRow>> {
-        Ok(self.db.list_tags()?)
     }
 
     pub fn open_document(&self, doc: &DocumentRow) -> Result<()> {
@@ -201,15 +187,6 @@ impl Vault {
         Ok(vault_native::vault_ops::export_vault_dir(
             &self.base_dir,
             password,
-        )?)
-    }
-
-    pub fn merge_backup(&self, backup_data: &[u8], backup_password: &str, vault_password: &str) -> Result<vault_native::merge::MergeStats> {
-        Ok(vault_native::vault_ops::merge_vault_dir(
-            &self.base_dir,
-            backup_data,
-            backup_password,
-            vault_password,
         )?)
     }
 
@@ -300,20 +277,6 @@ pub(crate) mod tests {
         let vault = create_test_vault();
         let results = vault.search_with_snippet("nothing").unwrap();
         assert!(results.is_empty());
-    }
-
-    #[test]
-    fn test_list_collections_empty() {
-        let vault = create_test_vault();
-        let cols = vault.list_collections().unwrap();
-        assert!(cols.is_empty());
-    }
-
-    #[test]
-    fn test_list_tags_empty() {
-        let vault = create_test_vault();
-        let tags = vault.list_tags().unwrap();
-        assert!(tags.is_empty());
     }
 
     #[test]
@@ -502,130 +465,6 @@ pub(crate) mod tests {
         let backup = tv.vault.export_backup("correctpass").unwrap();
         let result = vault_native::ffi::import_vault(backup, "wrongpass".into());
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_merge_backup_adds_documents() {
-        let tv = create_test_vault_with_dir();
-
-        // Import a document into the vault
-        let path_a = tv._dir.path().join("doc_a.txt");
-        std::fs::write(&path_a, b"document A").unwrap();
-        tv.vault.import_file(&path_a).unwrap();
-
-        // Export backup
-        let backup = tv.vault.export_backup("backuppass").unwrap();
-
-        // Import another document
-        let path_b = tv._dir.path().join("doc_b.txt");
-        std::fs::write(&path_b, b"document B").unwrap();
-        tv.vault.import_file(&path_b).unwrap();
-
-        assert_eq!(tv.vault.list_documents().unwrap().len(), 2);
-
-        // Merge the backup back in (backup has only doc_a)
-        let stats = tv.vault.merge_backup(&backup, "backuppass", "testpass").unwrap();
-        assert_eq!(stats.documents_added, 0, "doc_a already exists, should not be re-added");
-        assert!(stats.documents_updated == 1 || stats.documents_skipped == 1,
-            "doc_a should be updated or skipped since it already exists");
-
-        // Both documents should still be present
-        let docs = tv.vault.list_documents().unwrap();
-        assert_eq!(docs.len(), 2, "both doc_a and doc_b must remain after merge");
-    }
-
-    #[test]
-    fn test_merge_backup_into_empty_vault_adds_all() {
-        let tv = create_test_vault_with_dir();
-
-        let path = tv._dir.path().join("doc.txt");
-        std::fs::write(&path, b"data").unwrap();
-        tv.vault.import_file(&path).unwrap();
-
-        let backup = tv.vault.export_backup("backuppass").unwrap();
-
-        // Create a second vault and merge backup into it (empty target)
-        let tv2 = create_test_vault_with_dir();
-        let stats = tv2.vault.merge_backup(&backup, "backuppass", "testpass").unwrap();
-        assert_eq!(stats.documents_added, 1, "empty vault should gain 1 document from backup");
-        assert_eq!(tv2.vault.list_documents().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn test_backup_roundtrip_preserves_content() {
-        let tv = create_test_vault_with_dir();
-
-        let path = tv._dir.path().join("hello.txt");
-        std::fs::write(&path, b"Hello, world!").unwrap();
-        let orig_id = tv.vault.import_file(&path).unwrap();
-
-        let backup = tv.vault.export_backup("backuppass").unwrap();
-
-        // Import backup into a fresh vault
-        let tv2 = create_test_vault_with_dir();
-        let stats = tv2.vault.merge_backup(&backup, "backuppass", "testpass").unwrap();
-        assert_eq!(stats.documents_added, 1);
-
-        let docs = tv2.vault.list_documents().unwrap();
-        assert_eq!(docs.len(), 1);
-        assert_eq!(docs[0].title, "hello.txt");
-        assert_eq!(docs[0].mime_type, "text/plain");
-        assert!(docs[0].file_size > 0);
-
-        // The document ID may differ since import_document assigns new IDs
-        // but the title and content should match
-    }
-
-    #[test]
-    fn test_merge_backup_dedup_same_content() {
-        let tv = create_test_vault_with_dir();
-
-        // Import same file twice (dedup should mean only one doc in DB)
-        let path = tv._dir.path().join("doc.txt");
-        std::fs::write(&path, b"same content").unwrap();
-        tv.vault.import_file(&path).unwrap();
-        tv.vault.import_file(&path).unwrap();
-
-        let docs = tv.vault.list_documents().unwrap();
-        assert_eq!(docs.len(), 1, "dedup should prevent duplicate");
-
-        let backup = tv.vault.export_backup("backuppass").unwrap();
-
-        // Merge into a fresh vault — should add 1
-        let tv2 = create_test_vault_with_dir();
-        let stats = tv2.vault.merge_backup(&backup, "backuppass", "testpass").unwrap();
-        assert_eq!(stats.documents_added, 1);
-        assert_eq!(tv2.vault.list_documents().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn test_merge_backup_conflicting_content() {
-        let tv = create_test_vault_with_dir();
-
-        // Import doc_a
-        let path_a = tv._dir.path().join("doc_a.txt");
-        std::fs::write(&path_a, b"version 1").unwrap();
-        tv.vault.import_file(&path_a).unwrap();
-        let docs_v1 = tv.vault.list_documents().unwrap();
-        let id_a = docs_v1[0].id.clone();
-
-        // Export backup (with doc_a version 1)
-        let backup = tv.vault.export_backup("backuppass").unwrap();
-
-        // Now import a doc with the SAME title but DIFFERENT content into the same vault
-        // (Since import generates new UUID, the IDs won't match — so this isn't a true conflict)
-        // To create a real conflict scenario, we'd need to import a backup where doc IDs match
-        // but content differs. This is better tested at the core level.
-        // For now, just verify the merge doesn't crash and adds no extra docs
-        let path_a2 = tv._dir.path().join("doc_a.txt");
-        std::fs::write(&path_a2, b"version 2").unwrap();
-        tv.vault.import_file(&path_a2).unwrap();
-
-        // Merge backup (doc_a version 1) into current vault (has doc_a v1 and v2)
-        let stats = tv.vault.merge_backup(&backup, "backuppass", "testpass").unwrap();
-        // The merge should handle gracefully
-        assert!(stats.documents_skipped >= 0);
-        assert!(stats.documents_conflicted >= 0);
     }
 
     #[test]

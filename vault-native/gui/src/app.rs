@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 
 use crate::config::Config;
 use crate::dnd;
-use crate::keychain::SecureStore;
 use crate::screens::{self, Navigation};
 
 struct DndPending(Arc<Mutex<VecDeque<PathBuf>>>);
@@ -30,7 +29,6 @@ pub enum Screen {
     Settings(screens::settings::State),
     Export(screens::export::State),
     ExportDocs(screens::export_docs::State),
-    Collections(screens::collections::State),
 }
 
 #[derive(Debug)]
@@ -41,7 +39,6 @@ pub enum Message {
     Settings(screens::settings::Message),
     Export(screens::export::Message),
     ExportDocs(screens::export_docs::Message),
-    Collections(screens::collections::Message),
     Navigate(Navigation),
     FileDropped(PathBuf),
     WindowReady(Option<u32>),
@@ -49,15 +46,12 @@ pub enum Message {
 
 pub struct App {
     pub screen: Screen,
-    pub _keychain: SecureStore,
-    pub config: Config,
     pub dnd: dnd::Dnd,
     pub dnd_pending: Arc<Mutex<VecDeque<PathBuf>>>,
 }
 
 pub fn boot() -> (App, Task<Message>) {
     let config = Config::load();
-    let keychain = SecureStore::new("com.librecrate.desktop");
 
     let dnd = dnd::Dnd::new();
     let dnd_pending = dnd.pending();
@@ -97,8 +91,6 @@ pub fn boot() -> (App, Task<Message>) {
         (
             App {
                 screen: Screen::Unlock(unlock),
-                _keychain: keychain,
-                config,
                 dnd,
                 dnd_pending,
             },
@@ -109,8 +101,6 @@ pub fn boot() -> (App, Task<Message>) {
         (
             App {
                 screen: Screen::FirstRun(first_run),
-                _keychain: keychain,
-                config,
                 dnd,
                 dnd_pending,
             },
@@ -158,13 +148,6 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::ExportDocs(msg) => {
             if let Screen::ExportDocs(ref mut state) = app.screen {
-                let task = state.update(msg);
-                return task;
-            }
-            Task::none()
-        }
-        Message::Collections(msg) => {
-            if let Screen::Collections(ref mut state) = app.screen {
                 let task = state.update(msg);
                 return task;
             }
@@ -238,11 +221,6 @@ fn handle_navigation(app: &mut App, nav: Navigation) -> Task<Message> {
             app.screen = Screen::ExportDocs(state);
             task
         }
-        Navigation::Collections(vault) => {
-            let state = screens::collections::State::new(vault);
-            app.screen = Screen::Collections(state);
-            Task::none()
-        }
         Navigation::OpenDocument(doc, vault) => {
             if let Err(e) = vault.open_document(&doc) {
                 tracing::error!("Failed to open document: {e}");
@@ -260,7 +238,6 @@ pub fn view(app: &App) -> Element<'_, Message> {
         Screen::Settings(state) => state.view().map(Message::Settings),
         Screen::Export(state) => state.view().map(Message::Export),
         Screen::ExportDocs(state) => state.view().map(Message::ExportDocs),
-        Screen::Collections(state) => state.view().map(Message::Collections),
     }
 }
 

@@ -16,7 +16,6 @@ pub enum Message {
     ToggleShowPassword,
     ChangePassword,
     Back,
-    PasswordChanged(Result<(), String>),
 }
 
 pub struct State {
@@ -77,7 +76,6 @@ impl State {
                 Task::none()
             }
             Message::Back => Task::done(crate::app::Message::Navigate(Navigation::Library(self.vault.clone()))),
-            Message::PasswordChanged(_) => Task::none(),
         }
     }
 

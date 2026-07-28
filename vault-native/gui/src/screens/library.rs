@@ -95,14 +95,12 @@ impl std::fmt::Display for TypeFilter {
 pub enum Message {
     SearchChanged(String),
     Search,
-    ClearSearch,
     SortChanged(SortOption),
     FilterChanged(TypeFilter),
     ToggleFavorite(String),
     RequestDelete(String),
     ConfirmDelete(String),
     CancelDelete,
-    DeleteDocument(String),
     OpenDocument(String),
     ShowDocumentInfo(String),
     HideDocumentInfo,
@@ -112,7 +110,6 @@ pub enum Message {
     NavigateToSettings,
     NavigateToExport,
     NavigateToExportDocs,
-    NavigateToCollections,
     Import,
     Imported(Result<usize, String>),
     DocumentsLoaded(Result<Vec<DocumentRow>, String>),
@@ -218,11 +215,6 @@ impl State {
                     },
                 )
             }
-            Message::ClearSearch => {
-                self.search_query.clear();
-                self.search_results = None;
-                Task::none()
-            }
             Message::SortChanged(sort) => {
                 self.sort_option = sort;
                 Self::sorted_documents(&mut self.documents, self.sort_option);
@@ -258,15 +250,6 @@ impl State {
             }
             Message::CancelDelete => {
                 self.pending_delete_id = None;
-                Task::none()
-            }
-            Message::DeleteDocument(id) => {
-                self.documents.retain(|d| d.id != id);
-                self.thumbnails.remove(&id);
-                let vault = self.vault.clone();
-                std::thread::spawn(move || {
-                    let _ = vault.delete_document(&id);
-                });
                 Task::none()
             }
             Message::ShowDocumentInfo(id) => {
@@ -340,9 +323,6 @@ impl State {
             }
             Message::NavigateToExportDocs => {
                 Task::done(crate::app::Message::Navigate(Navigation::ExportDocs(self.vault.clone())))
-            }
-            Message::NavigateToCollections => {
-                Task::done(crate::app::Message::Navigate(Navigation::Collections(self.vault.clone())))
             }
             Message::DocumentsLoaded(Ok(mut docs)) => {
                 Self::sorted_documents(&mut docs, self.sort_option);
@@ -842,17 +822,6 @@ mod tests {
     }
 
     #[test]
-    fn test_clear_search() {
-        let vault = make_test_vault();
-        let (mut state, _task) = State::new(vault);
-        state.search_query = "test".into();
-        state.search_results = Some(Vec::new());
-        let _ = state.update(Message::ClearSearch);
-        assert!(state.search_query.is_empty());
-        assert!(state.search_results.is_none());
-    }
-
-    #[test]
     fn test_documents_loaded_success() {
         let vault = make_test_vault();
         let (mut state, _task) = State::new(vault);
@@ -1114,65 +1083,7 @@ mod tests {
         let _ = state.update(Message::SearchResultsLoaded(results));
         assert_eq!(state.search_results.as_ref().unwrap().len(), 0);
 
-        // Clear resets state
-        state.search_query = "Rust".into();
-        state.search_results = Some(vec![FtsSnippetResult {
-            rank: 1.0,
-            id: "doc_search_1".into(),
-            title: "Rust Programming".into(),
-            snippet: "".into(),
-        }]);
-        let _ = state.update(Message::ClearSearch);
-        assert!(state.search_query.is_empty());
-        assert!(state.search_results.is_none());
-
         // Empty query does not dispatch
         let _task = state.update(Message::Search);
-    }
-
-    #[test]
-    fn test_delete_document_removes_from_state() {
-        let (vault, _dir) = crate::vault::tests::make_test_vault_with_dir();
-        let file_path = _dir.path().join("delete_me.txt");
-        std::fs::write(&file_path, b"content").unwrap();
-        vault.import_file(&file_path).unwrap();
-
-        let docs = vault.list_documents().unwrap();
-        assert_eq!(docs.len(), 1);
-        let doc_id = docs[0].id.clone();
-
-        let (mut state, _task) = State::new(vault.clone());
-        state.loading = false;
-        state.documents = docs;
-        state.thumbnails.insert(doc_id.clone(), image::Handle::from_bytes(vec![0u8; 10]));
-
-        let _ = state.update(Message::DeleteDocument(doc_id.clone()));
-        assert_eq!(state.documents.len(), 0);
-        assert!(state.thumbnails.is_empty());
-    }
-
-    #[test]
-    fn test_delete_document_only_removes_target() {
-        let (vault, _dir) = crate::vault::tests::make_test_vault_with_dir();
-
-        let path_a = _dir.path().join("doc_a.txt");
-        std::fs::write(&path_a, b"content a").unwrap();
-        vault.import_file(&path_a).unwrap();
-
-        let path_b = _dir.path().join("doc_b.txt");
-        std::fs::write(&path_b, b"content b").unwrap();
-        vault.import_file(&path_b).unwrap();
-
-        let docs = vault.list_documents().unwrap();
-        assert_eq!(docs.len(), 2);
-        let id_a = docs.iter().find(|d| d.title == "doc_a.txt").unwrap().id.clone();
-
-        let (mut state, _task) = State::new(vault.clone());
-        state.loading = false;
-        state.documents = docs;
-
-        let _ = state.update(Message::DeleteDocument(id_a));
-        assert_eq!(state.documents.len(), 1);
-        assert_eq!(state.documents[0].title, "doc_b.txt");
     }
 }

@@ -14,11 +14,9 @@ path = "src/main.rs"
 vault-native = { path = "../core" }
 iced = { version = "0.14", features = ["svg", "image", "tokio", "selector"] }
 tokio = { version = "1", features = ["rt", "fs", "io-util"] }
-keyring = "4"
 dirs = "5"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
-thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 open = "5"

@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, image, mouse_area, row, text};
+use iced::widget::{column, container, image, mouse_area, row, text};
 use iced::{Border, Color, Element, Length, Padding};
 
 use crate::screens::library;

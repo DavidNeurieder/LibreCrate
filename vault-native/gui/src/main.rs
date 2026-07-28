@@ -1,7 +1,6 @@
 mod app;
 mod config;
 mod dnd;
-mod keychain;
 mod screens;
 mod vault;
 mod widgets;

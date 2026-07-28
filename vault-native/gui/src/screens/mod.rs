@@ -1,4 +1,3 @@
-pub mod collections;
 pub mod export;
 pub mod export_docs;
 pub mod first_run;
@@ -18,6 +17,5 @@ pub enum Navigation {
     Settings(Arc<Vault>),
     Export(Arc<Vault>),
     ExportDocs(Arc<Vault>),
-    Collections(Arc<Vault>),
     OpenDocument(DocumentRow, Arc<Vault>),
 }
