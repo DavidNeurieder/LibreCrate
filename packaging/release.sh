@@ -30,7 +30,7 @@ echo "=== Building release binaries for $ARCH (v$VERSION) ==="
 cargo build --release --target "$ARCH" --manifest-path "$REPO_ROOT/vault-native/Cargo.toml" \
     -p librecrate-gui -p librecrate
 
-BIN_DIR="$REPO_ROOT/target/$ARCH/release"
+BIN_DIR="$REPO_ROOT/vault-native/target/$ARCH/release"
 STAGE_DIR="$REPO_ROOT/out/releases/librecrate-linux-$(echo "$ARCH" | sed 's/-unknown-linux-gnu//')"
 TARBALL="$REPO_ROOT/out/releases/librecrate-linux-$(echo "$ARCH" | sed 's/-unknown-linux-gnu//').tar.gz"
 

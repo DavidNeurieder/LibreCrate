@@ -25,8 +25,8 @@ ARCH="${ARCH:-x86_64}"
 echo "=== Building LibreCrate GUI + CLI (release) ==="
 cargo build --release --manifest-path "$REPO_ROOT/vault-native/Cargo.toml" -p librecrate-gui -p librecrate
 
-BINARY_GUI="$REPO_ROOT/target/release/librecrate-gui"
-BINARY_CLI="$REPO_ROOT/target/release/librecrate"
+BINARY_GUI="$REPO_ROOT/vault-native/target/release/librecrate-gui"
+BINARY_CLI="$REPO_ROOT/vault-native/target/release/librecrate"
 
 if [[ ! -f "$BINARY_GUI" ]]; then
     echo "ERROR: GUI binary not found at $BINARY_GUI"
