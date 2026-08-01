@@ -43,7 +43,7 @@ AllowedAPKSigningKeys: REPLACE_WITH_SHA256_FINGERPRINT
 Builds:
   - versionName: 0.5.0
     versionCode: 5
-    commit: v0.5.0
+    commit: v0.5.1
     subdir: app
     sudo:
       - apt-get update
