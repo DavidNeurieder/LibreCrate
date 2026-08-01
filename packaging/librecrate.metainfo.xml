@@ -39,6 +39,11 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.5.0" date="2026-08-01">
+      <description>
+        <p>F-Droid compliance: dropped CBR support and non-free junrar dependency, removed GitHub Packages publishing, desktop dead-code cleanup.</p>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-07-26">
       <description>
         <p>Desktop GUI, interactive CLI, cross-platform backup, and branding.</p>

@@ -41,9 +41,9 @@ Binaries: https://github.com/neurieder/LibreCrate/releases/download/v%v/app-rele
 AllowedAPKSigningKeys: REPLACE_WITH_SHA256_FINGERPRINT
 
 Builds:
-  - versionName: 0.4.0
-    versionCode: 4
-    commit: v0.4.0
+  - versionName: 0.5.0
+    versionCode: 5
+    commit: v0.5.0
     subdir: app
     sudo:
       - apt-get update
@@ -59,8 +59,8 @@ Builds:
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: app/build.gradle.kts|versionCode\s=\s(\d+)|.|versionName\s=\s"(.*)"
-CurrentVersion: 0.4.0
-CurrentVersionCode: 4
+CurrentVersion: 0.5.0
+CurrentVersionCode: 5
 ```
 
 ## How it works

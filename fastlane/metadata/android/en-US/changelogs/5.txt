@@ -1,0 +1,5 @@
+• F-Droid compliance: removed non-free junrar dependency and dropped CBR support
+• CBZ comics fully supported (no external archive library needed)
+• Removed GitHub Packages publishing config for F-Droid scanner approval
+• Fixed F-Droid build dependencies (bindgen/libclang, MuPDF build, perl)
+• Version bumped to 0.5.0

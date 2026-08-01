@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0 (2026-08-01)
+
+### F-Droid compliance
+
+- **Dropped CBR (RAR) comic support**: Removed the non-free `junrar` dependency (UnRAR license, rejected by the F-Droid license scanner). CBZ comics are unaffected — they use the JDK's built-in zip support.
+- **Removed GitHub Packages publishing**: Deleted the `maven-publish` plugin and `publishing {}` block from `vault-native-android/build.gradle.kts`, removing the `maven.pkg.github.com` repo rejected by the F-Droid scanner.
+- **F-Droid build dependencies fixed**: `F-DROID.md` recipe now installs `build-essential clang libclang-dev perl pkg-config curl` (needed for bindgen, the MuPDF C build, and vendored OpenSSL); dropped the unnecessary OpenJDK 17 lines.
+
+### Changes
+
+- Comics: CBZ only (`application/vnd.comicbook+zip`); CBR MIME type and code paths removed from the importer, library, and viewer.
+- README and AppStream metadata updated to reflect CBZ-only comic support.
+
 ## 0.4.0 (2026-07-26)
 
 ### Features
