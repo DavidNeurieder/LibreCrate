@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.1 (2026-08-01)
+
+### Reproducible builds
+
+- **Byte-identical builds between local and F-Droid**: `libvault_native.so` now builds identically on any machine. Verified section-by-section against F-Droid's build — the only remaining APK difference is the git revision embedded in `META-INF/version-control-info.textproto`.
+- **No embedded build paths**: `--remap-path-prefix` in the Android Rust build strips all local source and Cargo registry paths from the binary.
+- **Deterministic MuPDF layout**: fixed non-deterministic C source ordering in the bundled `mupdf-sys` wrapper (previously compiled in filesystem `readdir` order). The wrapper sources are now sorted, making the native library layout machine-independent.
+
+### F-Droid
+
+- **OpenSSL ranlib fix**: `RANLIB_aarch64_linux_android` set to the NDK's `llvm-ranlib` (fixes `make install_dev Error 127`).
+- **Robust cargo discovery**: the Gradle build now probes more cargo locations before failing.
+- **Rust pinned to 1.94.0** via `vault-native/rust-toolchain.toml`.
+
 ## 0.5.0 (2026-08-01)
 
 ### F-Droid compliance

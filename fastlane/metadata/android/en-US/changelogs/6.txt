@@ -1,0 +1,6 @@
+• Reproducible builds: Android native library now builds byte-identically for F-Droid
+• Removed embedded build paths from the app binary
+• Deterministic MuPDF library layout (stable across build machines)
+• Fixed OpenSSL build for F-Droid (llvm-ranlib)
+• Robust cargo discovery and pinned Rust 1.94.0
+• Version bumped to 0.5.1

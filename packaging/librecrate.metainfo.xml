@@ -39,6 +39,11 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.5.1" date="2026-08-01">
+      <description>
+        <p>Reproducible builds: Android native library now builds byte-identically for F-Droid, embedded build paths removed, deterministic MuPDF wrapper layout, and OpenSSL ranlib fix.</p>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-08-01">
       <description>
         <p>F-Droid compliance: dropped CBR support and non-free junrar dependency, removed GitHub Packages publishing, desktop dead-code cleanup.</p>

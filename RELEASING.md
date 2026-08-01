@@ -17,8 +17,8 @@ This document covers how to cut a new release of LibreCrate across all targets.
 ## Step 1: Tag the release
 
 ```bash
-git tag -a v0.5.0 -m "Release v0.5.0"
-git push origin v0.5.0
+git tag -a v0.5.1 -m "Release v0.5.1"
+git push origin v0.5.1
 ```
 
 ## Step 2: Build and sign Android APK
@@ -97,8 +97,8 @@ packaging/release.sh --arch aarch64-unknown-linux-gnu
 ## Step 4: Create GitHub Release
 
 1. Go to https://github.com/neurieder/LibreCrate/releases/new
-2. Select the tag `v0.5.0`
-3. Title: `LibreCrate v0.5.0`
+2. Select the tag `v0.5.1`
+3. Title: `LibreCrate v0.5.1`
 4. Attach artifacts:
    - `app-release.apk` (signed Android APK)
    - `librecrate-linux-x86_64.tar.gz`
