@@ -129,6 +129,20 @@ val buildHostRustLib by tasks.registering(Exec::class) {
     ensureCargoOnPath()
 }
 
+// --- Fetch crates.io dependencies so the mupdf-sys registry copy can be patched ---
+val fetchRustDeps by tasks.registering(Exec::class) {
+    description = "Fetch Rust crates.io dependencies into the cargo registry"
+    workingDir = vaultProjectDir
+    commandLine("cargo", "fetch")
+    inputs.files(fileTree(vaultProjectDir) { include("Cargo.toml", "Cargo.lock") })
+    outputs.file(vaultProjectDir.resolve("target/.cargo_fetch_complete"))
+    ensureCargoOnPath()
+    doLast {
+        outputs.files.singleFile.parentFile.mkdirs()
+        outputs.files.singleFile.writeText("ok")
+    }
+}
+
 // --- Generate Kotlin bindings from the host .so ---
 val generateKotlinBindings by tasks.registering(Exec::class) {
     description = "Generate Kotlin UniFFI bindings from Rust"
@@ -147,7 +161,7 @@ val generateKotlinBindings by tasks.registering(Exec::class) {
 // --- Build Rust library for Android ---
 val buildAndroidRustLib by tasks.registering(Exec::class) {
     description = "Build Rust library for Android (arm64-v8a)"
-    dependsOn(generateKotlinBindings)
+    dependsOn(generateKotlinBindings, fetchRustDeps)
     workingDir = vaultProjectDir
     commandLine("cargo", "build", "-p", "vault-native", "--target", androidTarget, "--release")
     inputs.files(rustSource)
@@ -201,6 +215,49 @@ val buildAndroidRustLib by tasks.registering(Exec::class) {
                 "--remap-path-prefix=${vaultProjectDir.absolutePath}=/src"
             ).joinToString(" ")
         environment("RUSTFLAGS", rustFlags)
+
+        val mupdfSysDir = registrySrcDirs
+            .flatMap { it.listFiles()?.asSequence() ?: emptySequence() }
+            .firstOrNull { it.isDirectory && it.name.startsWith("mupdf-sys-") }
+            ?: throw GradleException("mupdf-sys crate not found in cargo registry after cargo fetch")
+        val mupdfBuildRs = mupdfSysDir.resolve("build.rs")
+        if (mupdfBuildRs.readText().contains("// libre-reproducible")) {
+            logger.lifecycle("mupdf-sys build.rs already patched for a deterministic wrapper layout")
+        } else {
+            val old = """fn build_wrapper() -> Result<()> {
+    let mut build = cc::Build::new();
+    for entry in fs::read_dir("wrapper")? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "c") {
+            build.file(&path);
+        }
+    }"""
+            val new = """// libre-reproducible: sort wrapper sources for a deterministic link layout
+fn build_wrapper() -> Result<()> {
+    let mut build = cc::Build::new();
+    let mut files = Vec::new();
+    for entry in fs::read_dir("wrapper")? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "c") {
+            files.push(path);
+        }
+    }
+    files.sort();
+    for path in files {
+        build.file(&path);
+    }"""
+            val patched = mupdfBuildRs.readText().replace(old, new)
+            if (patched == mupdfBuildRs.readText()) {
+                throw GradleException(
+                    "Unexpected mupdf-sys build.rs content; cannot apply the deterministic wrapper sort. " +
+                        "Crate dir: ${mupdfSysDir.absolutePath}"
+                )
+            }
+            mupdfBuildRs.writeText(patched)
+            logger.lifecycle("Patched ${mupdfSysDir.name}/build.rs for a deterministic wrapper layout")
+        }
     }
 }
 
