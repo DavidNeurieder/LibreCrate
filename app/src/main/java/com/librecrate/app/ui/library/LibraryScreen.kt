@@ -70,7 +70,6 @@ private val IMPORT_MIME_TYPES = arrayOf(
     "application/epub+zip",
     "application/vnd.apple.pkpass",
     "application/vnd.comicbook+zip",
-    "application/x-cbr",
     "image/*",
     "text/markdown",
 )
@@ -280,7 +279,7 @@ fun LibraryScreen(
                 val typeLabel = when {
                     filterType == DocumentType.PDF -> "PDFs"
                     filterType == DocumentType.EPUB -> "Books"
-                    filterType == DocumentType.CBZ || filterType == DocumentType.CBR -> "Comics"
+                    filterType == DocumentType.CBZ -> "Comics"
                     filterType == DocumentType.PKPASS -> "Passes"
                     filterType == DocumentType.IMAGE -> "Images"
                     filterType == DocumentType.NOTE -> "Notes"

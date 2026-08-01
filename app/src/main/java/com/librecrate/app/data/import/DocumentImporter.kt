@@ -117,7 +117,7 @@ class DocumentImporter(
                     val result = ImageProcessor().process(file, mimeType)
                     DocumentContent(null, result.thumbnailBitmap?.toPngBytes())
                 }
-                mimeType == "application/vnd.comicbook+zip" || mimeType == "application/x-cbr" -> {
+                mimeType == "application/vnd.comicbook+zip" -> {
                     val result = ComicProcessor().process(file, mimeType)
                     DocumentContent(null, result.thumbnailBitmap?.toPngBytes())
                 }

@@ -8,7 +8,7 @@
   <description>
     <p>
       LibreCrate is a secure document vault that stores, views, organizes, and
-      searches PDFs, EPUBs, comic archives (CBZ/CBR), images, and personal
+      searches PDFs, EPUBs, comic archives (CBZ), images, and personal
       Markdown notes — all encrypted at rest with AES-256-GCM.
     </p>
     <p>Features:</p>

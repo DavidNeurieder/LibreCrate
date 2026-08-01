@@ -37,7 +37,7 @@
 -keep class coil.** { *; }
 -dontwarn coil.**
 
-# SLF4J (used by junrar / commons-compress, no binding needed on Android)
+# SLF4J (used by commons-compress, no binding needed on Android)
 -dontwarn org.slf4j.impl.StaticLoggerBinder
 
 # UniFFI / JNA

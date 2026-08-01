@@ -40,11 +40,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.librecrate.app.util.ErrorLogger
-import com.github.junrar.Archive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileInputStream
 import java.util.zip.ZipFile
 
 private const val MAX_BITMAP_CACHE = 20
@@ -247,12 +245,7 @@ private fun FullPageViewer(
 
 private fun loadComicPageInfos(file: File): List<ComicPageInfo> {
     return try {
-        val name = file.name.lowercase()
-        val entries = when {
-            name.endsWith(".cbz") -> loadCbzEntries(file)
-            name.endsWith(".cbr") -> loadRarEntries(file)
-            else -> emptyList()
-        }
+        val entries = loadCbzEntries(file)
         entries.mapIndexed { index, entryName -> ComicPageInfo(index, entryName) }
     } catch (e: Exception) {
         ErrorLogger.logWarning(null, "ComicViewer", "loadComicPageInfos failed", e)
@@ -275,30 +268,9 @@ private fun loadCbzEntries(file: File): List<String> {
     }
 }
 
-private fun loadRarEntries(file: File): List<String> {
-    return try {
-        FileInputStream(file).use { fis ->
-            Archive(fis).use { archive ->
-                archive.fileHeaders
-                    .filter { !it.isDirectory && isImageEntry(it.fileName) }
-                    .sortedBy { it.fileName }
-                    .map { it.fileName }
-            }
-        }
-    } catch (e: Exception) {
-        ErrorLogger.logWarning(null, "ComicViewer", "loadRarEntries failed", e)
-        emptyList()
-    }
-}
-
 private fun decodeSinglePage(file: File, entryName: String, maxWidth: Int): Bitmap? {
     return try {
-        val name = file.name.lowercase()
-        val bitmap = when {
-            name.endsWith(".cbz") -> decodeCbzEntry(file, entryName)
-            name.endsWith(".cbr") -> decodeRarEntry(file, entryName)
-            else -> null
-        }
+        val bitmap = decodeCbzEntry(file, entryName)
         if (bitmap != null && maxWidth > 0 && bitmap.width > maxWidth) {
             val h = (maxWidth * bitmap.height) / bitmap.width
             Bitmap.createScaledBitmap(bitmap, maxWidth, h.coerceAtLeast(1), true)
@@ -329,32 +301,6 @@ private fun decodeCbzEntry(file: File, entryName: String): Bitmap? {
         }
     } catch (e: Exception) {
         ErrorLogger.logWarning(null, "ComicViewer", "decodeCbzEntry failed", e)
-        null
-    }
-}
-
-private fun decodeRarEntry(file: File, entryName: String): Bitmap? {
-    return try {
-        FileInputStream(file).use { fis ->
-            Archive(fis).use { archive ->
-                val fh = archive.fileHeaders.find { it.fileName == entryName } ?: return null
-                archive.getInputStream(fh).use { stream ->
-                    val opts = BitmapFactory.Options().apply {
-                        inJustDecodeBounds = true
-                    }
-                    BitmapFactory.decodeStream(stream, null, opts)
-                    if (opts.outWidth <= 0 || opts.outHeight <= 0) return@use null
-                    val sampleSize = calculateSampleSize(opts.outWidth, opts.outHeight, 2048)
-                    archive.getInputStream(fh).use { s ->
-                        BitmapFactory.decodeStream(s, null, BitmapFactory.Options().apply {
-                            inSampleSize = sampleSize
-                        })
-                    }
-                }
-            }
-        }
-    } catch (e: Exception) {
-        ErrorLogger.logWarning(null, "ComicViewer", "decodeRarEntry failed", e)
         null
     }
 }

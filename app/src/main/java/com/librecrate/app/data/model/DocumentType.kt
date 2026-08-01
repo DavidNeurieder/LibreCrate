@@ -4,7 +4,6 @@ enum class DocumentType(val mimeType: String, val extensions: List<String> = emp
     PDF("application/pdf", listOf("pdf")),
     EPUB("application/epub+zip", listOf("epub")),
     CBZ("application/vnd.comicbook+zip", listOf("cbz")),
-    CBR("application/x-cbr", listOf("cbr")),
     PKPASS("application/vnd.apple.pkpass", listOf("pkpass")),
     IMAGE("image/*", listOf("png", "jpg", "jpeg", "gif", "webp", "bmp")),
     NOTE("text/markdown", listOf("md", "markdown")),

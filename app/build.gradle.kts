@@ -103,7 +103,6 @@ dependencies {
     implementation(libs.commonmark)
     implementation(libs.zxing.core)
     implementation(libs.commons.compress)
-    implementation(libs.junrar)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.work.runtime)
     implementation(libs.preference.ktx)

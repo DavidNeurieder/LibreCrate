@@ -47,8 +47,7 @@ Builds:
     subdir: app
     sudo:
       - apt-get update
-      - apt-get install -y make pkg-config curl openjdk-17-jdk-headless
-      - update-java-alternatives -a
+      - apt-get install -y build-essential clang libclang-dev perl pkg-config curl
     ndk: r28c
     prebuild:
       # Rust: install Rustup (rust-toolchain.toml handles channel + targets)

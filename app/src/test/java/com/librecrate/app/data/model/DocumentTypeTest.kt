@@ -26,11 +26,6 @@ class DocumentTypeTest {
     }
 
     @Test
-    fun `fromMimeType matches CBR`() {
-        assertEquals(DocumentType.CBR, DocumentType.fromMimeType("application/x-cbr"))
-    }
-
-    @Test
     fun `fromMimeType matches IMAGE for image-png`() {
         assertEquals(DocumentType.IMAGE, DocumentType.fromMimeType("image/png"))
     }
@@ -91,7 +86,6 @@ class DocumentTypeTest {
         assertEquals("application/epub+zip", DocumentType.EPUB.mimeType)
         assertEquals("application/vnd.apple.pkpass", DocumentType.PKPASS.mimeType)
         assertEquals("application/vnd.comicbook+zip", DocumentType.CBZ.mimeType)
-        assertEquals("application/x-cbr", DocumentType.CBR.mimeType)
         assertEquals("image/*", DocumentType.IMAGE.mimeType)
         assertEquals("text/markdown", DocumentType.NOTE.mimeType)
         assertEquals("application/octet-stream", DocumentType.UNKNOWN.mimeType)

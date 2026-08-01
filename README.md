@@ -4,7 +4,7 @@
 
 **Version 0.4.0** · 
 
-Encrypted document vault for Android, Linux, macOS, and Windows — stores, views, organizes, and searches PDFs, EPUBs, PKPass files, comic archives (CBZ/CBR), images, and personal notes. All documents are encrypted at rest with optional password protection and zero network access.
+Encrypted document vault for Android, Linux, macOS, and Windows — stores, views, organizes, and searches PDFs, EPUBs, PKPass files, comic archives (CBZ), images, and personal notes. All documents are encrypted at rest with optional password protection and zero network access.
 
 ## Platforms
 
@@ -17,7 +17,7 @@ Encrypted document vault for Android, Linux, macOS, and Windows — stores, view
 
 ## Features
 
-- **Six document types**: PDF, EPUB, PKPass (Apple Wallet passes), CBZ/CBR comics, Images, and Markdown notes
+- **Six document types**: PDF, EPUB, PKPass (Apple Wallet passes), CBZ comics, Images, and Markdown notes
 - **Encryption at rest**: AES-256-GCM per-file encryption; master key wrapped via Argon2id + AES-256 Key Wrap (RFC 3394)
 - **Optional password**: Even with the device unlocked, content can't be read without the password
 - **No network**: Zero internet permission — your documents never leave the device
@@ -50,7 +50,7 @@ Encrypted document vault for Android, Linux, macOS, and Windows — stores, view
 
 - **PDF** (MuPDF): paginated scroll, pinch-to-zoom/pan, fit modes (width/page/actual), night mode, last-page memory
 - **EPUB** (Readium 2): reflowable reader, table of contents, reader settings (font family/size, line height, margins), reading progress, rename/favorite/delete
-- **Comics** (CBZ/CBR): thumbnail grid + full-page reader, zoom/pan, last-page memory
+- **Comics** (CBZ): thumbnail grid + full-page reader, zoom/pan, last-page memory
 - **Apple Wallet pass** (PKPass): pass fields, themed colors, logo/strip images, barcode display (ZXing)
 - **Images**: full-screen Coil viewer with zoom/pan and an info overlay
 - **Notes**: Markdown editor with live preview, formatting toolbar, word/character count, and debounced autosave
@@ -68,7 +68,7 @@ Encrypted document vault for Android, Linux, macOS, and Windows — stores, view
 | [Readium](https://readium.org/) | EPUB reader toolkit |
 | [ZXing](https://github.com/zxing/zxing) | Barcode display |
 | [CommonMark](https://github.com/commonmark/commonmark-java) | Markdown parsing |
-| [Apache Commons Compress](https://commons.apache.org/proper/commons-compress/) + [Junrar](https://github.com/junrar/junrar) | Comic archive (CBZ/CBR) extraction |
+| [Apache Commons Compress](https://commons.apache.org/proper/commons-compress/) | Comic archive (CBZ) extraction |
 | [Argon2id](https://en.wikipedia.org/wiki/Argon2) + [AES-256-GCM](https://en.wikipedia.org/wiki/Galois/Counter_Mode) (Rust) | Encryption at rest |
 | [SQLCipher](https://www.zetetic.net/sqlcipher/) (Rust via `rusqlite`) | Encrypted database |
 | [UniFFI](https://mozilla.github.io/uniffi-rs/) | Kotlin–Rust bridge |

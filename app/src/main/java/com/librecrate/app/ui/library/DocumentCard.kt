@@ -145,7 +145,7 @@ fun DocumentTypeIcon(type: DocumentType, modifier: Modifier = Modifier) {
         DocumentType.PDF -> Icons.Outlined.PictureAsPdf
         DocumentType.EPUB -> Icons.AutoMirrored.Outlined.MenuBook
         DocumentType.PKPASS -> Icons.Outlined.ConfirmationNumber
-        DocumentType.CBZ, DocumentType.CBR -> Icons.Outlined.AutoStories
+        DocumentType.CBZ -> Icons.Outlined.AutoStories
         DocumentType.IMAGE -> Icons.Outlined.Image
         DocumentType.NOTE -> Icons.AutoMirrored.Outlined.Notes
         DocumentType.UNKNOWN -> Icons.AutoMirrored.Outlined.InsertDriveFile

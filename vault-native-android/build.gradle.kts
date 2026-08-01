@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    `maven-publish`
 }
 
 android {
@@ -176,31 +175,4 @@ tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }.c
 }
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
     dependsOn(copyJniLib)
-}
-
-publishing {
-    publications {
-        register<MavenPublication>("release") {
-            groupId = "com.librecrate"
-            artifactId = "vault-native-android"
-            version = "0.1.0"
-
-            afterEvaluate {
-                from(components["release"])
-            }
-        }
-    }
-
-    repositories {
-        mavenLocal()
-
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/davidneurieder/LibreCrate")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: ""
-                password = System.getenv("GITHUB_TOKEN") ?: ""
-            }
-        }
-    }
 }

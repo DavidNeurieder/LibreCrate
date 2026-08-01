@@ -2,7 +2,6 @@ package com.librecrate.app.data.import
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import com.github.junrar.Archive
 import com.librecrate.app.util.ErrorLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,26 +14,6 @@ class ComicProcessor : DocumentProcessor {
     private val imageExtensions = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp")
 
     override suspend fun process(input: File, mimeType: String): ProcessorResult = withContext(Dispatchers.IO) {
-        val isCbr = mimeType == "application/x-cbr" || input.extension.equals("cbr", ignoreCase = true)
-
-        if (isCbr) {
-            val entries = readRarEntries(input)
-            val imageEntries = entries.filter { isImageEntry(it) }
-            val pageCount = imageEntries.size
-
-            val thumbnailBitmap = imageEntries.firstOrNull()?.let { entryName ->
-                decodeRarImage(input, entryName)?.let { scaleToWidth(it, 200) }
-            }
-
-            return@withContext ProcessorResult(
-                title = input.nameWithoutExtension,
-                author = "",
-                pageCount = pageCount,
-                textContent = null,
-                thumbnailBitmap = thumbnailBitmap,
-            )
-        }
-
         val entries = readZipEntries(input)
         val imageEntries = entries.filter { isImageEntry(it) }
         val pageCount = imageEntries.size
@@ -78,41 +57,6 @@ class ComicProcessor : DocumentProcessor {
             }
         } catch (e: Exception) {
             ErrorLogger.logWarning(null, "ComicProcessor", "decodeZipImage failed", e)
-            null
-        }
-    }
-
-    private fun readRarEntries(file: File): List<String> {
-        val result = mutableListOf<String>()
-        try {
-            FileInputStream(file).use { fis ->
-                Archive(fis).use { archive ->
-                    for (fh in archive.fileHeaders) {
-                        if (!fh.isDirectory) {
-                            result.add(fh.fileName)
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            ErrorLogger.logWarning(null, "ComicProcessor", "readRarEntries failed", e)
-        }
-        return result
-    }
-
-    private fun decodeRarImage(file: File, entryName: String): Bitmap? {
-        return try {
-            FileInputStream(file).use { fis ->
-                Archive(fis).use { archive ->
-                    val fh = archive.fileHeaders.firstOrNull { it.fileName == entryName }
-                        ?: return@use null
-                    archive.getInputStream(fh).use { stream ->
-                        BitmapFactory.decodeStream(stream)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            ErrorLogger.logWarning(null, "ComicProcessor", "decodeRarImage failed", e)
             null
         }
     }

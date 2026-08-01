@@ -381,7 +381,7 @@ fun ViewerScreen(
                             }
                         }
                         DocumentType.PKPASS -> PkPassViewer(file = file)
-                        DocumentType.CBZ, DocumentType.CBR -> ComicViewer(
+                        DocumentType.CBZ -> ComicViewer(
                             file = file,
                             initialPage = doc.currentPage,
                             onPageChanged = viewModel::saveReadingPosition,
