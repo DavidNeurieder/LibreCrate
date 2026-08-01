@@ -46,14 +46,38 @@ dependencies {
 // Rust native library build — runs automatically on every Gradle build
 // ---------------------------------------------------------------------------
 
-/** Ensure ~/.cargo/bin is on PATH so `cargo` is found even if Gradle daemon
- *  doesn't inherit the shell's PATH (e.g. on F-Droid CI). */
+fun isExecutableOnPath(name: String, path: String): File? =
+    path.split(File.pathSeparator).filter { it.isNotBlank() }.firstNotNullOfOrNull { dir ->
+        File(dir, name).takeIf { it.canExecute() }
+    }
+
+fun candidateCargoDirs(): Sequence<File> = sequenceOf(
+    System.getenv("CARGO_HOME")?.let { file("$it/bin") },
+    System.getenv("HOME")?.let { file("$it/.cargo/bin") },
+    file("${System.getProperty("user.home")}/.cargo/bin"),
+    file("/root/.cargo/bin"),
+    file("/home/vagrant/.cargo/bin"),
+    file("/home/fdroid/.cargo/bin"),
+    file("/usr/local/cargo/bin"),
+).filterNotNull().distinct()
+
 fun Exec.ensureCargoOnPath() {
     doFirst {
-        val cargoDir = file("${System.getProperty("user.home")}/.cargo/bin")
-        if (cargoDir.exists()) {
-            environment("PATH", "${cargoDir.absolutePath}:${System.getenv("PATH") ?: ""}")
-        }
+        val pathEnv = System.getenv("PATH").orEmpty()
+        val cargoFile = isExecutableOnPath("cargo", pathEnv)
+            ?: candidateCargoDirs().firstNotNullOfOrNull { dir -> File(dir, "cargo").takeIf { it.canExecute() } }
+            ?: throw GradleException(
+                "cargo not found. HOME=${System.getenv("HOME") ?: ""}, " +
+                    "user.home=${System.getProperty("user.home")}, " +
+                    "user.name=${System.getProperty("user.name")}, " +
+                    "CARGO_HOME=${System.getenv("CARGO_HOME") ?: ""}. " +
+                    "Probed: " +
+                    (candidateCargoDirs().map { it.absolutePath } + "PATH=$pathEnv").joinToString(", ") +
+                    ". Install Rustup and retry."
+            )
+        logger.lifecycle("using cargo at ${cargoFile.absolutePath}")
+        setCommandLine(listOf(cargoFile.absolutePath) + (commandLine as List<Any>).drop(1))
+        environment("PATH", "${cargoFile.parent}${File.pathSeparator}$pathEnv")
     }
 }
 

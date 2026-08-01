@@ -53,6 +53,7 @@ Builds:
       # Rust: install Rustup (rust-toolchain.toml handles channel + targets)
       # MuPDF is compiled from source by Cargo via the mupdf crate (no Java/srclib needed)
       - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - test -x "$HOME/.cargo/bin/cargo"
     gradle:
       - yes
 
@@ -101,6 +102,22 @@ CurrentVersionCode: 5
 
 Ensure `rust-toolchain.toml` is present at the repo root. Rustup reads it
 automatically and installs the correct channel + Android target.
+
+### `command 'cargo'` not found
+
+The `buildHostRustLib` task fails with
+`A problem occurred starting process 'command 'cargo''` when Gradle cannot
+find `cargo`. Gradle resolves a bare command name against the Gradle
+process's PATH, so neither `export PATH=...` in `prebuild` nor a task-level
+`environment("PATH", ...)` override helps — `vault-native-android/build.gradle.kts`
+resolves the absolute `cargo` path itself and injects it into the task's
+`commandLine`. It probes (in order) the current PATH, `$CARGO_HOME/bin`,
+`$HOME/.cargo/bin`, `${user.home}/.cargo/bin`, `/root/.cargo/bin`,
+`/home/vagrant/.cargo/bin`, `/home/fdroid/.cargo/bin`, `/usr/local/cargo/bin`.
+If none exist it fails with a `GradleException` listing the probed paths and
+`HOME`/`user.home`/`CARGO_HOME`. Make sure the `prebuild` rustup install
+actually succeeded (the `test -x "$HOME/.cargo/bin/cargo"` line fails fast if
+not).
 
 ### Build fails on MuPDF
 
