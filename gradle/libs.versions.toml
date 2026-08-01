@@ -19,7 +19,6 @@ commonmark = "0.21.0"
 zxing = "3.5.2"
 commonsCompress = "1.25.0"
 kotlinSerializationJson = "1.6.2"
-work = "2.9.0"
 preference = "1.2.1"
 readium = "3.0.0"
 desugarJdkLibs = "2.0.4"
@@ -69,7 +68,6 @@ commonmark = { group = "org.commonmark", name = "commonmark", version.ref = "com
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinSerializationJson" }
-work-runtime = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 preference-ktx = { group = "androidx.preference", name = "preference-ktx", version.ref = "preference" }
 readium-shared = { group = "org.readium.kotlin-toolkit", name = "readium-shared", version.ref = "readium" }
 readium-streamer = { group = "org.readium.kotlin-toolkit", name = "readium-streamer", version.ref = "readium" }

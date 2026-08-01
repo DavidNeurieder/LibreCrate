@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2 (2026-08-01)
+
+### Privacy
+
+- **App permissions trimmed**: removed `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`, and `FOREGROUND_SERVICE` from the APK. All four were inherited from library manifests (WorkManager/ExoPlayer) and never used — the APK now declares only AndroidX's inert `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`.
+- **Removed the unused WorkManager dependency**: `work-runtime` was declared in `app/build.gradle.kts` but never referenced in code.
+
+### Store listing
+
+- Rewrote the Play Store description in plain, non-technical language and added multi-device backup/restore.
+
 ## 0.5.1 (2026-08-01)
 
 ### Reproducible builds

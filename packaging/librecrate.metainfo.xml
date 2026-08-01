@@ -39,6 +39,11 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.5.2" date="2026-08-01">
+      <description>
+        <p>Privacy: removed unused permissions (WAKE_LOCK, ACCESS_NETWORK_STATE, RECEIVE_BOOT_COMPLETED, FOREGROUND_SERVICE) and the unused WorkManager dependency — the app now requests no special permissions.</p>
+      </description>
+    </release>
     <release version="0.5.1" date="2026-08-01">
       <description>
         <p>Reproducible builds: Android native library now builds byte-identically for F-Droid, embedded build paths removed, deterministic MuPDF wrapper layout, and OpenSSL ranlib fix.</p>

@@ -17,8 +17,8 @@ android {
         applicationId = "com.librecrate.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.5.1"
+        versionCode = 7
+        versionName = "0.5.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -104,7 +104,6 @@ dependencies {
     implementation(libs.zxing.core)
     implementation(libs.commons.compress)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.work.runtime)
     implementation(libs.preference.ktx)
     implementation(libs.coil.core)
     implementation(libs.coil.compose)
