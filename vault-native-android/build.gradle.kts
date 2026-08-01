@@ -111,7 +111,7 @@ val hostLibDir = vaultTargetDir.resolve("$hostTarget/debug")
 val hostLibFile = hostLibDir.resolve(if (isMac) "libvault_native.dylib" else "libvault_native.so")
 
 val androidTarget = "aarch64-linux-android"
-val androidLibDir = vaultTargetDir.resolve("$androidTarget/release")
+val androidLibDir = File("/tmp/librecrate-cargo-target/$androidTarget/release")
 val androidLibFile = androidLibDir.resolve("libvault_native.so")
 
 val jniLibDir = project.projectDir.resolve("src/main/jniLibs/arm64-v8a")
@@ -182,6 +182,25 @@ val buildAndroidRustLib by tasks.registering(Exec::class) {
         environment("RANLIB_aarch64_linux_android", ranlib)
         environment("CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", clang)
         environment("BINDGEN_EXTRA_CLANG_ARGS", "--sysroot=$sysroot --target=aarch64-linux-android26")
+
+        environment("CARGO_TARGET_DIR", androidLibDir.parentFile.parentFile.absolutePath)
+
+        val cargoHomes = sequenceOf(
+            System.getenv("CARGO_HOME"),
+            System.getenv("HOME")?.let { File(it, ".cargo").absolutePath },
+            File(System.getProperty("user.home"), ".cargo").absolutePath,
+        ).filterNotNull().distinct()
+        val registrySrcDirs = cargoHomes
+            .map { File(it, "registry/src") }
+            .filter { it.isDirectory }
+            .flatMap { it.listFiles()?.asSequence() ?: emptySequence() }
+            .filter { it.isDirectory && it.name.startsWith("index.crates.io-") }
+            .distinct()
+        val rustFlags = (
+            registrySrcDirs.map { "--remap-path-prefix=${it.absolutePath}=/crate-src" } +
+                "--remap-path-prefix=${vaultProjectDir.absolutePath}=/src"
+            ).joinToString(" ")
+        environment("RUSTFLAGS", rustFlags)
     }
 }
 

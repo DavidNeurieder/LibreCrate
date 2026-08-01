@@ -9,16 +9,16 @@ Submit this file to `fdroiddata/metadata/`:
 
 ```yaml
 Categories:
-  - Security
-  - Files and Files
+  - Ebook Reader
+  - Pass Wallet
+  - Wallet
 License: AGPL-3.0-or-later
-AuthorName: LibreCrate Contributors
-WebSite: https://github.com/neurieder/LibreCrate
-SourceCode: https://github.com/neurieder/LibreCrate
-IssueTracker: https://github.com/neurieder/LibreCrate/issues
+AuthorName: David Neurieder
+AuthorWebSite: https://davidneurieder.github.io/
+SourceCode: https://github.com/DavidNeurieder/LibreCrate
+IssueTracker: https://github.com/DavidNeurieder/LibreCrate/issues
 
 AutoName: LibreCrate
-Summary: Offline document vault
 
 Description: |-
   Encrypted document vault for Android. Stores, views, organizes, and
@@ -31,14 +31,11 @@ Description: |-
   network access.
 
 RepoType: git
-Repo: https://github.com/neurieder/LibreCrate.git
+Repo: https://github.com/DavidNeurieder/LibreCrate
 
-Binaries: https://github.com/neurieder/LibreCrate/releases/download/v%v/app-release.apk
+Binaries: https://github.com/DavidNeurieder/LibreCrate/releases/download/v%v/LibreCrate_v%v.apk
 
-# Replace with actual SHA-256 fingerprint after first signed release.
-# Get with: keytool -exportcert -alias librecrate -keystore release.keystore \
-#   -storepass <password> | sha256sum | tr -d ' ' | tr '[:upper:]' '[:lower:]'
-AllowedAPKSigningKeys: REPLACE_WITH_SHA256_FINGERPRINT
+AllowedAPKSigningKeys: 11f860ee7ac19b8d992a52bf114a491f9b8b598091b7a5e94ce775b50e6e69fa
 
 Builds:
   - versionName: 0.5.0
@@ -47,7 +44,7 @@ Builds:
     subdir: app
     sudo:
       - apt-get update
-      - apt-get install -y build-essential clang libclang-dev perl pkg-config curl
+      - apt-get install -y build-essential clang libclang-dev perl curl
     ndk: r28c
     prebuild:
       # Rust: install Rustup (rust-toolchain.toml pins channel 1.94.0 + targets)
@@ -144,6 +141,23 @@ sets `RANLIB_aarch64_linux_android` to the NDK's absolute `llvm-ranlib`
 path, mirroring the existing `AR_aarch64_linux_android`/
 `CC_aarch64_linux_android` env vars. This takes highest precedence in the
 `cc` crate, so the build no longer depends on what's on PATH.
+
+### `checkupdate failed ... : Couldn't find any version information`
+
+With AGP 7+, the source `AndroidManifest.xml` no longer contains
+`package`, `versionCode`, or `versionName` (they live in
+`app/build.gradle.kts`), so F-Droid's manifest parser reports
+`package=None, version=None, vercode=None` and checkupdates fails. Fix: the
+metadata must set `UpdateCheckData` to extract the versions from the Gradle
+file:
+
+```yaml
+UpdateCheckData: app/build.gradle.kts|versionCode\s=\s(\d+)|.|versionName\s=\s"(.*)"
+```
+
+Note the second filename is `.` (reuse the first file). Without this field
+`fdroid checkupdates` falls back to parsing manifests and fails with
+"Couldn't find any version information".
 
 ### APKs don't match (reproducibility failure)
 
