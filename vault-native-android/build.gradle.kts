@@ -174,10 +174,12 @@ val buildAndroidRustLib by tasks.registering(Exec::class) {
         val clang = toolchainDir.resolve("bin/aarch64-linux-android26-clang").absolutePath
         val clangxx = toolchainDir.resolve("bin/aarch64-linux-android26-clang++").absolutePath
         val ar = toolchainDir.resolve("bin/llvm-ar").absolutePath
+        val ranlib = toolchainDir.resolve("bin/llvm-ranlib").absolutePath
         val sysroot = toolchainDir.resolve("sysroot").absolutePath
         environment("CC_aarch64_linux_android", clang)
         environment("CXX_aarch64_linux_android", clangxx)
         environment("AR_aarch64_linux_android", ar)
+        environment("RANLIB_aarch64_linux_android", ranlib)
         environment("CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", clang)
         environment("BINDGEN_EXTRA_CLANG_ARGS", "--sysroot=$sysroot --target=aarch64-linux-android26")
     }

@@ -50,7 +50,7 @@ Builds:
       - apt-get install -y build-essential clang libclang-dev perl pkg-config curl
     ndk: r28c
     prebuild:
-      # Rust: install Rustup (rust-toolchain.toml handles channel + targets)
+      # Rust: install Rustup (rust-toolchain.toml pins channel 1.94.0 + targets)
       # MuPDF is compiled from source by Cargo via the mupdf crate (no Java/srclib needed)
       - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - test -x "$HOME/.cargo/bin/cargo"
@@ -83,7 +83,7 @@ CurrentVersionCode: 5
 |------|-------|
 | PDF rendering | Rust `mupdf` crate (compiles MuPDF from source via Cargo) |
 | NDK version | r28c |
-| Rust version | Pinned via `vault-native/rust-toolchain.toml` (stable) |
+| Rust version | Pinned to 1.94.0 via `vault-native/rust-toolchain.toml` |
 | UniFFI version | 0.28 (library mode, no `.udl` file) |
 | Android target | `aarch64-linux-android` |
 | Min API | 26 |
@@ -125,6 +125,25 @@ The `mupdf` crate compiles MuPDF from source via its `build.rs`. On Android,
 this uses the NDK toolchain. Ensure `ndk:` version in the metadata matches
 your local NDK installation, and that `BINDGEN_EXTRA_CLANG_ARGS` includes
 the NDK sysroot (handled automatically by `vault-native-android/build.gradle.kts`).
+
+### `aarch64-linux-android-ranlib: not found` while building OpenSSL
+
+The Rust build script for `openssl-src` (pulled in by rusqlite's
+`bundled-sqlcipher-vendored-openssl`) fails with
+`make: *** [Makefile:2799: install_dev] Error 127` when the Android
+`make install_dev` phase can't find ranlib. Root cause: the `cc` crate
+resolves ranlib for Android targets by first checking the
+`RANLIB_aarch64_linux_android`/`RANLIB` env vars, then probing `llvm-ranlib`
+on PATH, and finally falling back to `aarch64-linux-android-ranlib` — which
+does not exist in NDK r28 (it ships `llvm-ranlib`). Locally this works if
+`llvm-ranlib` happens to be on PATH; on F-Droid's build box it isn't, so the
+fallback name is used and make fails.
+
+Fixed in `vault-native-android/build.gradle.kts`: `buildAndroidRustLib`
+sets `RANLIB_aarch64_linux_android` to the NDK's absolute `llvm-ranlib`
+path, mirroring the existing `AR_aarch64_linux_android`/
+`CC_aarch64_linux_android` env vars. This takes highest precedence in the
+`cc` crate, so the build no longer depends on what's on PATH.
 
 ### APKs don't match (reproducibility failure)
 
