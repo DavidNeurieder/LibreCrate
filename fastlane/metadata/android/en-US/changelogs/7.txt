@@ -1,0 +1,5 @@
+• Removed unused permissions: WAKE_LOCK, ACCESS_NETWORK_STATE, RECEIVE_BOOT_COMPLETED, FOREGROUND_SERVICE
+• Dropped the unused WorkManager dependency
+• App now requests no special permissions at all
+• Simplified the store description
+• Version bumped to 0.5.2
