@@ -1,1 +1,1 @@
-Encrypted document vault for Android
+Private offline vault for your documents and notes

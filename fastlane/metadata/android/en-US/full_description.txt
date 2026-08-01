@@ -1,15 +1,16 @@
-<p>LibreCrate is a secure document vault that stores, views, organizes, and searches PDFs, EPUBs, Apple Wallet passes (PKPass), comic archives (CBZ/CBR), images, and personal Markdown notes — all encrypted at rest.</p>
+<p>LibreCrate is a private, offline vault for your documents. Store PDFs, ebooks, boarding passes and wallet cards, comics, photos, and notes — all safely locked away and organized.</p>
 
-<p>All documents are encrypted with AES-256-GCM. An optional password wraps the master key via Argon2id + AES-256-KW, so content stays protected even when the phone is unlocked. There is no internet permission — documents never leave the device.</p>
+<p>Everything you save is encrypted on your device and protected by a password you set. Nobody can read your files without you. LibreCrate never connects to the internet, so your documents never leave your phone.</p>
 
 <p>Features:</p>
 <ul>
-<li>Six supported types: PDF, EPUB, PKPass, CBZ/CBR, images, and notes</li>
-<li>Per-file AES-256-GCM encryption</li>
-<li>Optional password protection (Argon2id key derivation)</li>
-<li>PDF viewer with pinch-to-zoom, smooth vertical scrolling, and pixel-perfect page rendering</li>
-<li>Search, sort, and filter library with reading progress indicators</li>
-<li>Share intent and SAF file picker import</li>
-<li>Encrypted backup export/import via SAF</li>
-<li>Zero network access — no Google Play Services, Firebase, or ads</li>
+<li>Store PDFs, EPUBs, Apple Wallet passes, CBZ comics, images, and notes</li>
+<li>Everything stays encrypted on your device, protected by your password</li>
+<li>Built-in PDF reader with pinch-to-zoom and smooth scrolling</li>
+<li>Search your library, including the text inside documents</li>
+<li>Sort and filter to keep your library tidy</li>
+<li>Add files easily — share to LibreCrate or pick them from your phone</li>
+<li>Back up and restore your vault as one encrypted file</li>
+<li>Use on multiple devices — restore your backup on another phone, tablet, or computer</li>
+<li>Fully offline — no account, no tracking, no ads</li>
 </ul>
