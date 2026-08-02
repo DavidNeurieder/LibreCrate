@@ -50,7 +50,10 @@ pub struct App {
     pub screen: Screen,
     pub dnd: dnd::Dnd,
     pub dnd_pending: Arc<Mutex<VecDeque<PathBuf>>>,
+    pub pdf_cache: VecDeque<screens::pdf::CachedPdf>,
 }
+
+const PDF_CACHE_MAX: usize = 2;
 
 pub fn boot() -> (App, Task<Message>) {
     let config = Config::load();
@@ -95,6 +98,7 @@ pub fn boot() -> (App, Task<Message>) {
                 screen: Screen::Unlock(unlock),
                 dnd,
                 dnd_pending,
+                pdf_cache: VecDeque::new(),
             },
             xid_task.map(Message::WindowReady),
         )
@@ -105,6 +109,7 @@ pub fn boot() -> (App, Task<Message>) {
                 screen: Screen::FirstRun(first_run),
                 dnd,
                 dnd_pending,
+                pdf_cache: VecDeque::new(),
             },
             xid_task.map(Message::WindowReady),
         )
@@ -237,8 +242,29 @@ fn handle_navigation(app: &mut App, nav: Navigation) -> Task<Message> {
             Task::none()
         }
         Navigation::OpenPdf(doc, vault) => {
-            let (state, task) = screens::pdf::State::new(doc, vault);
-            app.screen = Screen::Pdf(state);
+            if let Some(cached) = app.pdf_cache.iter().position(|c| c.doc_id == doc.id) {
+                let cached = app.pdf_cache.remove(cached).expect("just located");
+                let (state, task) = screens::pdf::State::from_cached(doc, vault, cached);
+                app.screen = Screen::Pdf(state);
+                task
+            } else {
+                let (state, task) = screens::pdf::State::new(doc, vault);
+                app.screen = Screen::Pdf(state);
+                task
+            }
+        }
+        Navigation::PdfExit(vault) => {
+            if let Screen::Pdf(state) = &mut app.screen {
+                if let Some(cached) = state.leaving() {
+                    app.pdf_cache.retain(|c| c.doc_id != cached.doc_id);
+                    app.pdf_cache.push_back(cached);
+                    while app.pdf_cache.len() > PDF_CACHE_MAX {
+                        app.pdf_cache.pop_front();
+                    }
+                }
+            }
+            let (state, task) = screens::library::State::new(vault);
+            app.screen = Screen::Library(state);
             task
         }
     }

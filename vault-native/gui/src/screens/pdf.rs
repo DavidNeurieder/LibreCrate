@@ -14,7 +14,8 @@ const PAD_TOP: f32 = 10.0;
 const PAD_BOTTOM: f32 = 10.0;
 const BASE_WIDTH: f32 = 880.0;
 const ZOOM_STEPS: [f32; 6] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-const MAX_PRELOAD_PAGES: usize = 40;
+const MAX_PRELOAD_PAGES: usize = 12;
+const PREVIEW_SCALE: f32 = 0.5;
 const PRELOAD_BATCH: usize = 20;
 const CACHE_BYTE_CAP: usize = 192 * 1024 * 1024;
 const KEEP_RADIUS: usize = 24;
@@ -48,6 +49,25 @@ impl std::fmt::Debug for LoadedDoc {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct JumpTarget {
+    pub page: usize,
+    pub offset_within_page: f32,
+}
+
+#[derive(Clone)]
+pub struct CachedPdf {
+    pub doc_id: String,
+    pub handle: Arc<PdfHandle>,
+    pub tmp_dir: Arc<tempfile::TempDir>,
+    pub page_count: usize,
+    pub heights: Vec<Option<f32>>,
+    pub zoom: f32,
+    pub scroll_y: f32,
+    pub current_page: usize,
+    pub viewport_visible: f32,
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     Back,
@@ -79,7 +99,11 @@ pub struct State {
     render_limit: usize,
     zoom: f32,
     scroll_id: iced::widget::Id,
-    pending_jump: Option<usize>,
+    pending_jump: Option<JumpTarget>,
+    restore: Option<JumpTarget>,
+    current_page: usize,
+    last_scroll_y: f32,
+    last_persisted_page: usize,
     rendering: bool,
     measuring: bool,
     viewport_y: f32,
@@ -137,7 +161,7 @@ fn load_document(vault: &Vault, doc: &DocumentRow) -> Result<LoadedDoc, String> 
     if page_count <= 0 {
         return Err("This PDF has no pages".to_string());
     }
-    let first = render_page(&handle, 0, target_width(1.0))?;
+    let first = render_page(&handle, 0, target_width(PREVIEW_SCALE))?;
 
     Ok(LoadedDoc {
         handle,
@@ -147,9 +171,40 @@ fn load_document(vault: &Vault, doc: &DocumentRow) -> Result<LoadedDoc, String> 
     })
 }
 
+fn parse_restore(doc: &DocumentRow) -> (f32, Option<JumpTarget>) {
+    let page = doc.current_page.max(0) as usize;
+    let mut offset = 0.0f32;
+    let mut zoom = 1.0f32;
+    if let Some(pos) = doc.reading_position.as_deref() {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(pos) {
+            offset = v.get("offsetY").and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
+            zoom = v.get("zoom").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+        }
+    }
+    if zoom < ZOOM_STEPS[0] || zoom > ZOOM_STEPS[ZOOM_STEPS.len() - 1] {
+        zoom = 1.0;
+    }
+    let restore = if page > 0 || offset > 0.0 {
+        Some(JumpTarget {
+            page,
+            offset_within_page: offset,
+        })
+    } else {
+        None
+    };
+    (zoom, restore)
+}
+
 impl State {
     pub fn new(doc: DocumentRow, vault: Arc<Vault>) -> (Self, Task<crate::app::Message>) {
-        let state = Self {
+        let state = Self::base(doc, vault);
+        let task = state.load();
+        (state, task)
+    }
+
+    fn base(doc: DocumentRow, vault: Arc<Vault>) -> Self {
+        let (zoom, restore) = parse_restore(&doc);
+        Self {
             vault,
             doc,
             handle: None,
@@ -160,9 +215,13 @@ impl State {
             page_bytes: Vec::new(),
             render_cursor: 0,
             render_limit: 0,
-            zoom: 1.0,
+            zoom,
             scroll_id: iced::widget::Id::new(SCROLL_ID),
             pending_jump: None,
+            restore,
+            current_page: 0,
+            last_scroll_y: 0.0,
+            last_persisted_page: 0,
             rendering: false,
             measuring: false,
             viewport_y: 0.0,
@@ -174,9 +233,7 @@ impl State {
             search_index: 0,
             searching: false,
             search_status: None,
-        };
-        let task = state.load();
-        (state, task)
+        }
     }
 
     fn load(&self) -> Task<crate::app::Message> {
@@ -192,11 +249,82 @@ impl State {
         )
     }
 
+    pub fn from_cached(
+        doc: DocumentRow,
+        vault: Arc<Vault>,
+        cached: CachedPdf,
+    ) -> (Self, Task<crate::app::Message>) {
+        let mut state = Self::base(doc, vault);
+        state.handle = Some(cached.handle);
+        state.tmp_dir = Some(cached.tmp_dir);
+        state.page_count = cached.page_count;
+        state.heights = cached.heights;
+        state.page_bytes = vec![0; cached.page_count];
+        state.zoom = cached.zoom;
+        state.render_limit = cached.page_count.min(MAX_PRELOAD_PAGES);
+        state.render_cursor = 0;
+        state.loading = false;
+        state.current_page = cached.current_page.min(cached.page_count.saturating_sub(1));
+        state.last_scroll_y = cached.scroll_y;
+        state.last_persisted_page = state.current_page;
+        state.viewport_visible = cached.viewport_visible;
+        let page = state.current_page;
+        let offset = (cached.scroll_y - state.exact_offset_of(page)).max(0.0);
+        state.viewport_y = cached.scroll_y;
+        let task = state.jump_to(page, offset);
+        (state, task)
+    }
+
+    fn persist_position(&mut self) {
+        if self.loading || self.handle.is_none() || self.page_count == 0 {
+            return;
+        }
+        let page = self.current_page.min(self.page_count - 1);
+        let offset = (self.last_scroll_y - self.exact_offset_of(page)).max(0.0);
+        let json = serde_json::json!({
+            "page": page,
+            "offsetY": offset,
+            "zoom": self.zoom,
+        });
+        if let Err(e) = self
+            .vault
+            .db
+            .set_current_page(self.doc.id.clone(), page as i32)
+        {
+            tracing::warn!("Failed to persist current page: {e}");
+        }
+        if let Err(e) = self
+            .vault
+            .db
+            .set_reading_position(self.doc.id.clone(), json.to_string())
+        {
+            tracing::warn!("Failed to persist reading position: {e}");
+        }
+        self.last_persisted_page = page;
+    }
+
+    pub fn leaving(&mut self) -> Option<CachedPdf> {
+        self.persist_position();
+        let handle = self.handle.clone()?;
+        let tmp_dir = self.tmp_dir.clone()?;
+        Some(CachedPdf {
+            doc_id: self.doc.id.clone(),
+            handle,
+            tmp_dir,
+            page_count: self.page_count,
+            heights: self.heights.clone(),
+            zoom: self.zoom,
+            scroll_y: self.last_scroll_y,
+            current_page: self.current_page,
+            viewport_visible: self.viewport_visible,
+        })
+    }
+
     pub fn update(&mut self, message: Message) -> Task<crate::app::Message> {
         match message {
             Message::Back => {
                 let vault = self.vault.clone();
-                Task::done(crate::app::Message::Navigate(Navigation::Library(vault)))
+                Task::done(crate::app::Message::Navigate(Navigation::PdfExit(vault)))
             }
             Message::OpenExternally => {
                 let vault = self.vault.clone();
@@ -207,7 +335,7 @@ impl State {
                     }
                 });
                 let vault = self.vault.clone();
-                Task::done(crate::app::Message::Navigate(Navigation::Library(vault)))
+                Task::done(crate::app::Message::Navigate(Navigation::PdfExit(vault)))
             }
             Message::Loaded(Ok(loaded)) => {
                 let LoadedDoc {
@@ -224,8 +352,19 @@ impl State {
                 self.render_limit = page_count.min(MAX_PRELOAD_PAGES);
                 self.render_cursor = 1;
                 self.loading = false;
-                self.insert_rendered(first);
-                self.next_render_task().unwrap_or_else(Task::none)
+                self.insert_preview(first);
+                let mut tasks = vec![self.spawn_render(0)];
+                if let Some(jump) = self.restore.take() {
+                    let page = jump.page.min(self.page_count - 1);
+                    self.current_page = page;
+                    self.last_persisted_page = page;
+                    tasks.push(self.jump_to(page, jump.offset_within_page));
+                }
+                if tasks.len() == 1 {
+                    tasks.remove(0)
+                } else {
+                    Task::batch(tasks)
+                }
             }
             Message::Loaded(Err(e)) => {
                 self.loading = false;
@@ -237,8 +376,12 @@ impl State {
                 let page_index = page.index;
                 self.insert_rendered(page);
                 let mut tasks: Vec<Task<crate::app::Message>> = Vec::new();
-                if self.pending_jump == Some(page_index) && self.all_heights_up_to(page_index) {
-                    let y = self.exact_offset_of(page_index);
+                if let Some(jump) = self
+                    .pending_jump
+                    .as_ref()
+                    .filter(|j| j.page == page_index && self.all_heights_up_to(page_index))
+                {
+                    let y = self.exact_offset_of(page_index) + jump.offset_within_page;
                     self.pending_jump = None;
                     tasks.push(operation::scroll_to(
                         self.scroll_id.clone(),
@@ -262,6 +405,14 @@ impl State {
             Message::ViewportChanged(y, visible) => {
                 self.viewport_y = y;
                 self.viewport_visible = visible;
+                self.last_scroll_y = y;
+                let top = self.page_at_y(y);
+                if top != self.current_page {
+                    self.current_page = top;
+                    if top != self.last_persisted_page {
+                        self.persist_position();
+                    }
+                }
                 let bottom_page = self.page_at_y(y + visible);
                 let target_limit = bottom_page.saturating_add(PRELOAD_BATCH).min(self.page_count);
                 if target_limit > self.render_limit {
@@ -290,7 +441,7 @@ impl State {
                     None
                 };
                 if let Some(&page) = self.search_results.first() {
-                    self.jump_to(page)
+                    self.jump_to(page, 0.0)
                 } else {
                     Task::none()
                 }
@@ -302,15 +453,15 @@ impl State {
             }
             Message::MeasureDone(Ok(heights_base)) => {
                 self.measuring = false;
-                if let Some(page) = self.pending_jump.take() {
+                if let Some(jump) = self.pending_jump.take() {
                     let scale = self.zoom;
                     for (k, h) in heights_base.iter().enumerate() {
                         if k < self.page_count && self.heights[k].is_none() {
                             self.heights[k] = Some(h * scale);
                         }
                     }
-                    let page = page.min(self.page_count.saturating_sub(1));
-                    let y = self.exact_offset_of(page);
+                    let page = jump.page.min(self.page_count.saturating_sub(1));
+                    let y = self.exact_offset_of(page) + jump.offset_within_page;
                     let mut tasks = vec![operation::scroll_to(
                         self.scroll_id.clone(),
                         scrollable::AbsoluteOffset { x: 0.0, y },
@@ -342,6 +493,11 @@ impl State {
         let handle = image::Handle::from_rgba(page.width, page.height, page.data);
         self.pages.insert(i, handle);
         self.evict_pages();
+    }
+
+    fn insert_preview(&mut self, first: RenderedPage) {
+        let handle = image::Handle::from_rgba(first.width, first.height, first.data);
+        self.pages.insert(first.index, handle);
     }
 
     fn evict_pages(&mut self) {
@@ -412,14 +568,16 @@ impl State {
             return 0;
         }
         let mut acc = PAD_TOP;
+        let mut last_known = 0usize;
         for i in 0..self.page_count {
             let Some(h) = self.heights.get(i).copied().flatten() else {
-                break;
+                return last_known;
             };
             if y <= acc + h {
                 return i;
             }
             acc += h + PAGE_GAP;
+            last_known = i;
         }
         self.page_count - 1
     }
@@ -455,7 +613,7 @@ impl State {
         PAD_TOP + known_sum + missing as f32 * avg + i as f32 * PAGE_GAP
     }
 
-    fn jump_to(&mut self, page: usize) -> Task<crate::app::Message> {
+    fn jump_to(&mut self, page: usize, offset_within_page: f32) -> Task<crate::app::Message> {
         if self.page_count == 0 || self.handle.is_none() {
             return Task::none();
         }
@@ -469,7 +627,7 @@ impl State {
 
         let mut tasks: Vec<Task<crate::app::Message>> = Vec::new();
         if self.pages.contains_key(&page) && self.all_heights_up_to(page) {
-            let y = self.exact_offset_of(page);
+            let y = self.exact_offset_of(page) + offset_within_page;
             tasks.push(operation::scroll_to(
                 self.scroll_id.clone(),
                 scrollable::AbsoluteOffset { x: 0.0, y },
@@ -480,7 +638,10 @@ impl State {
                 .count();
             if missing_count <= MEASURE_LIMIT && !self.measuring {
                 self.measuring = true;
-                self.pending_jump = Some(page);
+                self.pending_jump = Some(JumpTarget {
+                    page,
+                    offset_within_page,
+                });
                 let handle = self.handle.clone().expect("handle present");
                 tasks.push(Task::perform(
                     async move {
@@ -493,7 +654,7 @@ impl State {
                     |res| crate::app::Message::Pdf(Message::MeasureDone(res)),
                 ));
             } else {
-                let y = self.estimated_offset_of(page);
+                let y = self.estimated_offset_of(page) + offset_within_page;
                 tasks.push(operation::scroll_to(
                     self.scroll_id.clone(),
                     scrollable::AbsoluteOffset { x: 0.0, y },
@@ -516,14 +677,19 @@ impl State {
         if (new_zoom - self.zoom).abs() < f32::EPSILON {
             return Task::none();
         }
+        let old_zoom = self.zoom;
         let anchor = self.page_at_y(self.viewport_y);
+        let offset_old = (self.viewport_y - self.exact_offset_of(anchor)).max(0.0);
         self.zoom = new_zoom;
         self.pages.clear();
         self.heights = vec![None; self.page_count];
         self.page_bytes = vec![0; self.page_count];
         self.render_cursor = 0;
         self.render_limit = self.page_count.min(MAX_PRELOAD_PAGES);
-        self.pending_jump = Some(anchor);
+        self.pending_jump = Some(JumpTarget {
+            page: anchor,
+            offset_within_page: offset_old * (new_zoom / old_zoom),
+        });
         self.next_render_task().unwrap_or_else(Task::none)
     }
 
@@ -584,7 +750,7 @@ impl State {
         let n = self.search_results.len() as i64;
         self.search_index = ((self.search_index as i64 + delta).rem_euclid(n)) as usize;
         let page = self.search_results[self.search_index];
-        self.jump_to(page)
+        self.jump_to(page, 0.0)
     }
 
     pub fn view(&self) -> Element<'_, Message> {
@@ -663,7 +829,12 @@ impl State {
         let scroll = Scrollable::new(
             container(self.pages_view())
                 .width(Length::Fill)
-                .center_x(Length::Fill),
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(iced::Background::Color(iced::Color::WHITE)),
+                    ..Default::default()
+                }),
         )
         .id(self.scroll_id.clone())
         .on_scroll(|vp| {
@@ -785,12 +956,12 @@ mod tests {
 
         assert_eq!(state.page_count, 3);
         assert_eq!(state.pages.len(), 1);
-        assert!(state.heights[0].is_some());
+        assert!(state.heights[0].is_none());
         assert_eq!(state.render_limit, 3);
 
         let handle = state.handle.clone().unwrap();
         let width = target_width(state.zoom);
-        for i in 1..state.page_count {
+        for i in 0..state.page_count {
             let page = render_page(&handle, i, width).unwrap();
             let _ = state.update(Message::PageRendered(Ok(page)));
         }
@@ -805,7 +976,7 @@ mod tests {
         let mut state = loaded_state(&vault, doc);
         let handle = state.handle.clone().unwrap();
         let width = target_width(state.zoom);
-        for i in 1..state.page_count {
+        for i in 0..state.page_count {
             let page = render_page(&handle, i, width).unwrap();
             let _ = state.update(Message::PageRendered(Ok(page)));
         }
@@ -829,7 +1000,13 @@ mod tests {
         assert!((state.zoom - 0.75).abs() < 1e-5);
         assert!(state.pages.is_empty());
         assert!(state.heights.iter().all(|h| h.is_none()));
-        assert_eq!(state.pending_jump, Some(0));
+        assert_eq!(
+            state.pending_jump,
+            Some(JumpTarget {
+                page: 0,
+                offset_within_page: 0.0,
+            })
+        );
 
         let handle = state.handle.clone().unwrap();
         let page = render_page(&handle, 0, target_width(state.zoom)).unwrap();
@@ -902,5 +1079,85 @@ mod tests {
         state.error = Some("boom".into());
         let mut ui = iced_test::simulator(state.view());
         assert!(ui.find("boom").is_ok());
+    }
+
+    #[test]
+    fn test_position_round_trip_via_db_and_restore() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "search_3page.pdf");
+        let mut state = loaded_state(&vault, doc.clone());
+        let handle = state.handle.clone().unwrap();
+        let width = target_width(state.zoom);
+        for i in 0..state.page_count {
+            let page = render_page(&handle, i, width).unwrap();
+            let _ = state.update(Message::PageRendered(Ok(page)));
+        }
+
+        let _ = state.update(Message::ZoomIn);
+        assert!((state.zoom - 1.25).abs() < 1e-5);
+        let handle = state.handle.clone().unwrap();
+        let width = target_width(state.zoom);
+        for i in 0..state.page_count {
+            let page = render_page(&handle, i, width).unwrap();
+            let _ = state.update(Message::PageRendered(Ok(page)));
+        }
+
+        let y2 = state.exact_offset_of(2);
+        let _ = state.update(Message::ViewportChanged(y2, 600.0));
+        assert_eq!(state.current_page, 2);
+
+        let cached = state.leaving().unwrap();
+        assert_eq!(cached.current_page, 2);
+        assert!((cached.zoom - 1.25).abs() < 1e-5);
+
+        let fresh_doc = vault
+            .list_documents()
+            .unwrap()
+            .into_iter()
+            .find(|d| d.id == doc.id)
+            .unwrap();
+        assert_eq!(fresh_doc.current_page, 2);
+        let pos = fresh_doc.reading_position.as_deref().unwrap();
+        assert!(pos.contains("\"page\":2"), "position was: {pos}");
+
+        let (state2, _task) = State::new(fresh_doc, vault.clone());
+        assert!((state2.zoom - 1.25).abs() < 1e-5);
+        let restore = state2.restore.expect("restore target set");
+        assert_eq!(restore.page, 2);
+        assert_eq!(restore.offset_within_page, 0.0);
+    }
+
+    #[test]
+    fn test_cached_reopen_keeps_position() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "search_3page.pdf");
+        let mut state = loaded_state(&vault, doc.clone());
+        let handle = state.handle.clone().unwrap();
+        let width = target_width(state.zoom);
+        for i in 0..state.page_count {
+            let page = render_page(&handle, i, width).unwrap();
+            let _ = state.update(Message::PageRendered(Ok(page)));
+        }
+
+        let y2 = state.exact_offset_of(2);
+        let _ = state.update(Message::ViewportChanged(y2, 600.0));
+        let cached = state.leaving().unwrap();
+
+        let (mut state2, _task) = State::from_cached(doc, vault, cached);
+        assert!(!state2.loading);
+        assert!(state2.handle.is_some());
+        assert!(state2.error.is_none());
+        assert_eq!(state2.page_count, 3);
+        assert_eq!(state2.current_page, 2);
+        assert_eq!(state2.restore, None);
+        assert_eq!(state2.zoom, 1.0);
+        assert!(state2.heights.iter().all(|h| h.is_some()));
+        assert_eq!(
+            state2.pending_jump,
+            Some(JumpTarget {
+                page: 2,
+                offset_within_page: 0.0,
+            })
+        );
     }
 }

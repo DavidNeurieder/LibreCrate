@@ -20,4 +20,5 @@ pub enum Navigation {
     ExportDocs(Arc<Vault>),
     OpenDocument(DocumentRow, Arc<Vault>),
     OpenPdf(DocumentRow, Arc<Vault>),
+    PdfExit(Arc<Vault>),
 }
