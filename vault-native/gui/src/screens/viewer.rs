@@ -22,7 +22,7 @@ const KEEP_RADIUS: usize = 24;
 const HOLE_WINDOW: usize = 5;
 const MEASURE_WIDTH: i32 = 8;
 const MEASURE_LIMIT: usize = 600;
-const SCROLL_ID: &str = "pdf-scroll";
+const SCROLL_ID: &str = "viewer-scroll";
 
 #[derive(Debug, Clone)]
 pub struct RenderedPage {
@@ -56,7 +56,7 @@ pub struct JumpTarget {
 }
 
 #[derive(Clone)]
-pub struct CachedPdf {
+pub struct CachedViewer {
     pub doc_id: String,
     pub handle: Arc<PdfHandle>,
     pub tmp_dir: Arc<tempfile::TempDir>,
@@ -245,14 +245,14 @@ impl State {
                     .await
                     .map_err(|e| e.to_string())?
             },
-            |res| crate::app::Message::Pdf(Message::Loaded(res)),
+            |res| crate::app::Message::Viewer(Message::Loaded(res)),
         )
     }
 
     pub fn from_cached(
         doc: DocumentRow,
         vault: Arc<Vault>,
-        cached: CachedPdf,
+        cached: CachedViewer,
     ) -> (Self, Task<crate::app::Message>) {
         let mut state = Self::base(doc, vault);
         state.handle = Some(cached.handle);
@@ -303,11 +303,11 @@ impl State {
         self.last_persisted_page = page;
     }
 
-    pub fn leaving(&mut self) -> Option<CachedPdf> {
+    pub fn leaving(&mut self) -> Option<CachedViewer> {
         self.persist_position();
         let handle = self.handle.clone()?;
         let tmp_dir = self.tmp_dir.clone()?;
-        Some(CachedPdf {
+        Some(CachedViewer {
             doc_id: self.doc.id.clone(),
             handle,
             tmp_dir,
@@ -324,7 +324,7 @@ impl State {
         match message {
             Message::Back => {
                 let vault = self.vault.clone();
-                Task::done(crate::app::Message::Navigate(Navigation::PdfExit(vault)))
+                Task::done(crate::app::Message::Navigate(Navigation::ViewerExit(vault)))
             }
             Message::OpenExternally => {
                 let vault = self.vault.clone();
@@ -335,7 +335,7 @@ impl State {
                     }
                 });
                 let vault = self.vault.clone();
-                Task::done(crate::app::Message::Navigate(Navigation::PdfExit(vault)))
+                Task::done(crate::app::Message::Navigate(Navigation::ViewerExit(vault)))
             }
             Message::Loaded(Ok(loaded)) => {
                 let LoadedDoc {
@@ -559,7 +559,7 @@ impl State {
                     .await
                     .map_err(|e| e.to_string())?
             },
-            |res| crate::app::Message::Pdf(Message::PageRendered(res)),
+            |res| crate::app::Message::Viewer(Message::PageRendered(res)),
         )
     }
 
@@ -651,7 +651,7 @@ impl State {
                         .await
                         .map_err(|e| e.to_string())?
                     },
-                    |res| crate::app::Message::Pdf(Message::MeasureDone(res)),
+                    |res| crate::app::Message::Viewer(Message::MeasureDone(res)),
                 ));
             } else {
                 let y = self.estimated_offset_of(page) + offset_within_page;
@@ -739,7 +739,7 @@ impl State {
                 .await
                 .map_err(|e| e.to_string())?
             },
-            |res| crate::app::Message::Pdf(Message::SearchDone(res)),
+            |res| crate::app::Message::Viewer(Message::SearchDone(res)),
         )
     }
 
@@ -946,6 +946,52 @@ mod tests {
             .find(|d| d.id == id)
             .unwrap();
         assert!(load_document(&vault, &doc).is_err());
+    }
+
+    #[test]
+    fn test_load_document_opens_epub() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "mini.epub");
+        assert_eq!(doc.mime_type, "application/epub+zip");
+        let loaded = load_document(&vault, &doc).unwrap();
+        assert!(loaded.page_count > 0);
+        assert_eq!(loaded.first.index, 0);
+        assert!(!loaded.first.data.is_empty());
+        assert!(loaded.first.width > 0 && loaded.first.height > 0);
+
+        let text = loaded.handle.extract_text(0).unwrap();
+        assert!(text.contains("LibreCrateMiniEpub"), "epub text was: {text:?}");
+
+        let non_white = loaded
+            .first
+            .data
+            .chunks(4)
+            .filter(|p| **p != [255, 255, 255, 255])
+            .count();
+        assert!(non_white > 0, "epub page rendered blank (font source issue?)");
+    }
+
+    #[test]
+    fn test_load_document_opens_cbz() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "mini.cbz");
+        assert_eq!(doc.mime_type, "application/x-cbr");
+        let loaded = load_document(&vault, &doc).unwrap();
+        assert_eq!(loaded.page_count, 2);
+        let p0 = render_page(&loaded.handle, 0, target_width(1.0)).unwrap();
+        assert!(p0.width > 0 && p0.height > 0 && !p0.data.is_empty());
+        let p1 = render_page(&loaded.handle, 1, target_width(1.0)).unwrap();
+        assert!(p1.width > 0 && p1.height > 0 && !p1.data.is_empty());
+    }
+
+    #[test]
+    fn test_load_document_opens_fb2() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "mini.fb2");
+        let loaded = load_document(&vault, &doc).unwrap();
+        assert!(loaded.page_count > 0);
+        let text = loaded.handle.extract_text(0).unwrap();
+        assert!(text.contains("LibreCrateMiniEpub"), "fb2 text was: {text:?}");
     }
 
     #[test]

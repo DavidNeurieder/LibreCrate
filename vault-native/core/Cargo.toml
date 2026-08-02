@@ -26,7 +26,7 @@ uniffi = "0.28"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
 tempfile = "3"
 toml = "0.8"
-mupdf = { version = "0.8", default-features = false }
+mupdf = { version = "0.8", default-features = false, features = ["epub", "cbz", "system-fonts"] }
 
 [build-dependencies]
 uniffi = { version = "0.28", features = ["build"] }

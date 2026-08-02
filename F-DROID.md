@@ -171,7 +171,7 @@ Common causes:
 - Different NDK version (check `ndk:` field)
 - Different Rust toolchain version
 - `codegen-units` not set to 1 (check `vault-native/Cargo.toml`)
-- `mupdf` crate features differ (check `default-features` in `vault-native/core/Cargo.toml`)
+- `mupdf` crate features differ (check `default-features` and `features` in `vault-native/core/Cargo.toml`)
 - Embedded build paths (F-Droid uses `/builds/fdroid/fdroiddata/build/...`)
 - ZIP ordering differences (use `./gradlew assembleRelease`, not Android Studio)
 

@@ -68,8 +68,10 @@ impl TypeFilter {
         match self {
             TypeFilter::All => true,
             TypeFilter::Pdf => mime.contains("pdf"),
-            TypeFilter::Epub => mime.contains("epub"),
-            TypeFilter::Comic => mime.contains("comicbook") || mime.contains("cbz"),
+            TypeFilter::Epub => {
+                mime.contains("epub") || mime.contains("mobipocket") || mime.contains("fictionbook")
+            }
+            TypeFilter::Comic => mime.contains("comicbook") || mime.contains("cbr"),
             TypeFilter::Image => mime.starts_with("image/"),
             TypeFilter::Note => mime.contains("markdown") || mime.contains("text/plain"),
             TypeFilter::Pass => mime.contains("pkpass") || mime.contains("apple.pkpass"),
@@ -809,8 +811,15 @@ fn format_timestamp(ts: i64) -> String {
 }
 
 fn open_navigation(doc: &DocumentRow, vault: Arc<Vault>) -> Navigation {
-    if doc.mime_type.contains("pdf") {
-        Navigation::OpenPdf(doc.clone(), vault)
+    let mime = doc.mime_type.as_str();
+    let viewer_mime = mime.contains("pdf")
+        || mime.contains("epub")
+        || mime.contains("mobipocket")
+        || mime.contains("fictionbook")
+        || mime.contains("x-cbr")
+        || mime.contains("comicbook");
+    if viewer_mime {
+        Navigation::OpenViewer(doc.clone(), vault)
     } else {
         Navigation::OpenDocument(doc.clone(), vault)
     }
@@ -826,6 +835,30 @@ mod tests {
         let (mut state, _task) = State::new(vault);
         let _ = state.update(Message::SearchChanged("hello".into()));
         assert_eq!(state.search_query, "hello");
+    }
+
+    #[test]
+    fn test_open_navigation_routes_viewer_documents() {
+        let vault = make_test_vault();
+        for (mime, expect_viewer) in [
+            ("application/pdf", true),
+            ("application/epub+zip", true),
+            ("application/x-mobipocket-ebook", true),
+            ("application/x-fictionbook+xml", true),
+            ("application/x-cbr", true),
+            ("application/vnd.comicbook+zip", true),
+            ("image/png", false),
+            ("text/plain", false),
+            ("application/vnd.apple.pkpass", false),
+        ] {
+            let doc = DocumentRow {
+                mime_type: mime.to_string(),
+                ..DocumentRow::default()
+            };
+            let nav = open_navigation(&doc, vault.clone());
+            let is_viewer = matches!(nav, Navigation::OpenViewer(..));
+            assert_eq!(is_viewer, expect_viewer, "mime: {mime}");
+        }
     }
 
     #[test]

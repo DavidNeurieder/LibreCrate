@@ -165,9 +165,14 @@ impl Vault {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         let title = file_name.clone();
-        let mime = mime_guess2::from_path(&path)
+        let mut mime = mime_guess2::from_path(&path)
             .first_or_octet_stream()
             .to_string();
+        if mime == "application/octet-stream"
+            && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("fb2"))
+        {
+            mime = "application/x-fictionbook+xml".to_string();
+        }
         let id = uuid::Uuid::new_v4().to_string();
 
         let id = self.db.import_document(

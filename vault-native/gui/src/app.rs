@@ -29,7 +29,7 @@ pub enum Screen {
     Settings(screens::settings::State),
     Export(screens::export::State),
     ExportDocs(screens::export_docs::State),
-    Pdf(screens::pdf::State),
+    Viewer(screens::viewer::State),
 }
 
 #[derive(Debug)]
@@ -40,7 +40,7 @@ pub enum Message {
     Settings(screens::settings::Message),
     Export(screens::export::Message),
     ExportDocs(screens::export_docs::Message),
-    Pdf(screens::pdf::Message),
+    Viewer(screens::viewer::Message),
     Navigate(Navigation),
     FileDropped(PathBuf),
     WindowReady(Option<u32>),
@@ -50,10 +50,10 @@ pub struct App {
     pub screen: Screen,
     pub dnd: dnd::Dnd,
     pub dnd_pending: Arc<Mutex<VecDeque<PathBuf>>>,
-    pub pdf_cache: VecDeque<screens::pdf::CachedPdf>,
+    pub viewer_cache: VecDeque<screens::viewer::CachedViewer>,
 }
 
-const PDF_CACHE_MAX: usize = 2;
+const VIEWER_CACHE_MAX: usize = 2;
 
 pub fn boot() -> (App, Task<Message>) {
     let config = Config::load();
@@ -98,7 +98,7 @@ pub fn boot() -> (App, Task<Message>) {
                 screen: Screen::Unlock(unlock),
                 dnd,
                 dnd_pending,
-                pdf_cache: VecDeque::new(),
+                viewer_cache: VecDeque::new(),
             },
             xid_task.map(Message::WindowReady),
         )
@@ -109,7 +109,7 @@ pub fn boot() -> (App, Task<Message>) {
                 screen: Screen::FirstRun(first_run),
                 dnd,
                 dnd_pending,
-                pdf_cache: VecDeque::new(),
+                viewer_cache: VecDeque::new(),
             },
             xid_task.map(Message::WindowReady),
         )
@@ -160,8 +160,8 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::Pdf(msg) => {
-            if let Screen::Pdf(ref mut state) = app.screen {
+        Message::Viewer(msg) => {
+            if let Screen::Viewer(ref mut state) = app.screen {
                 let task = state.update(msg);
                 return task;
             }
@@ -241,25 +241,25 @@ fn handle_navigation(app: &mut App, nav: Navigation) -> Task<Message> {
             }
             Task::none()
         }
-        Navigation::OpenPdf(doc, vault) => {
-            if let Some(cached) = app.pdf_cache.iter().position(|c| c.doc_id == doc.id) {
-                let cached = app.pdf_cache.remove(cached).expect("just located");
-                let (state, task) = screens::pdf::State::from_cached(doc, vault, cached);
-                app.screen = Screen::Pdf(state);
+        Navigation::OpenViewer(doc, vault) => {
+            if let Some(cached) = app.viewer_cache.iter().position(|c| c.doc_id == doc.id) {
+                let cached = app.viewer_cache.remove(cached).expect("just located");
+                let (state, task) = screens::viewer::State::from_cached(doc, vault, cached);
+                app.screen = Screen::Viewer(state);
                 task
             } else {
-                let (state, task) = screens::pdf::State::new(doc, vault);
-                app.screen = Screen::Pdf(state);
+                let (state, task) = screens::viewer::State::new(doc, vault);
+                app.screen = Screen::Viewer(state);
                 task
             }
         }
-        Navigation::PdfExit(vault) => {
-            if let Screen::Pdf(state) = &mut app.screen {
+        Navigation::ViewerExit(vault) => {
+            if let Screen::Viewer(state) = &mut app.screen {
                 if let Some(cached) = state.leaving() {
-                    app.pdf_cache.retain(|c| c.doc_id != cached.doc_id);
-                    app.pdf_cache.push_back(cached);
-                    while app.pdf_cache.len() > PDF_CACHE_MAX {
-                        app.pdf_cache.pop_front();
+                    app.viewer_cache.retain(|c| c.doc_id != cached.doc_id);
+                    app.viewer_cache.push_back(cached);
+                    while app.viewer_cache.len() > VIEWER_CACHE_MAX {
+                        app.viewer_cache.pop_front();
                     }
                 }
             }
@@ -278,7 +278,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
         Screen::Settings(state) => state.view().map(Message::Settings),
         Screen::Export(state) => state.view().map(Message::Export),
         Screen::ExportDocs(state) => state.view().map(Message::ExportDocs),
-        Screen::Pdf(state) => state.view().map(Message::Pdf),
+        Screen::Viewer(state) => state.view().map(Message::Viewer),
     }
 }
 

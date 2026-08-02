@@ -2,9 +2,9 @@ pub mod export;
 pub mod export_docs;
 pub mod first_run;
 pub mod library;
-pub mod pdf;
 pub mod settings;
 pub mod unlock;
+pub mod viewer;
 
 use std::sync::Arc;
 
@@ -19,6 +19,6 @@ pub enum Navigation {
     Export(Arc<Vault>),
     ExportDocs(Arc<Vault>),
     OpenDocument(DocumentRow, Arc<Vault>),
-    OpenPdf(DocumentRow, Arc<Vault>),
-    PdfExit(Arc<Vault>),
+    OpenViewer(DocumentRow, Arc<Vault>),
+    ViewerExit(Arc<Vault>),
 }
