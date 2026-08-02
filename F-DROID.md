@@ -44,12 +44,14 @@ Builds:
     subdir: app
     sudo:
       - apt-get update
-      - apt-get install -y build-essential clang libclang-dev perl curl
+      - apt-get install -y build-essential clang libclang-dev perl rustup
     ndk: r28c
     prebuild:
-      # Rust: install Rustup (rust-toolchain.toml pins channel 1.94.0 + targets)
-      # MuPDF is compiled from source by Cargo via the mupdf crate (no Java/srclib needed)
-      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      # Rust: Debian trixie ships rustup (apt); pin the exact Rust toolchain
+      # (vault-native/rust-toolchain.toml pins channel 1.94.0 + targets).
+      # MuPDF is compiled from source by Cargo via the mupdf crate (no Java/srclib needed).
+      - rustup default 1.94.0
+      - rustup target add aarch64-linux-android
       - test -x "$HOME/.cargo/bin/cargo"
     gradle:
       - yes
@@ -66,7 +68,7 @@ CurrentVersionCode: 7
 ### Build flow
 
 1. F-Droid clones the repo at the specified `commit` tag
-2. `prebuild` installs Rustup
+2. `sudo` installs `rustup` from Debian (trixie); `prebuild` pins the Rust toolchain (1.94.0 + Android target) via rustup
 3. Gradle's `assembleRelease` triggers:
    - Rust host build → UniFFI Kotlin bindings → Rust Android cross-compile → copy .so
    - APK compilation and minification
@@ -80,7 +82,7 @@ CurrentVersionCode: 7
 |------|-------|
 | PDF rendering | Rust `mupdf` crate (compiles MuPDF from source via Cargo) |
 | NDK version | r28c |
-| Rust version | Pinned to 1.94.0 via `vault-native/rust-toolchain.toml` |
+| Rust version | Pinned to 1.94.0 via `vault-native/rust-toolchain.toml`; installed by Debian's `rustup` (`apt-get install rustup`) |
 | UniFFI version | 0.28 (library mode, no `.udl` file) |
 | Android target | `aarch64-linux-android` |
 | Min API | 26 |
@@ -97,8 +99,11 @@ CurrentVersionCode: 7
 
 ### Build fails on Rust
 
-Ensure `rust-toolchain.toml` is present at the repo root. Rustup reads it
-automatically and installs the correct channel + Android target.
+Ensure `rustup` is installed (the recipe's `sudo` block runs
+`apt-get install -y rustup` — available on Debian trixie, F-Droid's build
+box; it is not in bookworm) and that `rust-toolchain.toml` is present at the
+repo root. The `prebuild` `rustup default 1.94.0` step downloads the exact
+channel and the Android target from rust-lang.org.
 
 ### `command 'cargo'` not found
 
@@ -112,9 +117,10 @@ resolves the absolute `cargo` path itself and injects it into the task's
 `$HOME/.cargo/bin`, `${user.home}/.cargo/bin`, `/root/.cargo/bin`,
 `/home/vagrant/.cargo/bin`, `/home/fdroid/.cargo/bin`, `/usr/local/cargo/bin`.
 If none exist it fails with a `GradleException` listing the probed paths and
-`HOME`/`user.home`/`CARGO_HOME`. Make sure the `prebuild` rustup install
-actually succeeded (the `test -x "$HOME/.cargo/bin/cargo"` line fails fast if
-not).
+`HOME`/`user.home`/`CARGO_HOME`. Make sure the `prebuild` `rustup default`
+step actually succeeded (the `test -x "$HOME/.cargo/bin/cargo"` line fails
+fast if not). `rustup default` creates the `~/.cargo/bin` shims that Gradle
+probes.
 
 ### Build fails on MuPDF
 

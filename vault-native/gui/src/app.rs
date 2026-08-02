@@ -29,6 +29,7 @@ pub enum Screen {
     Settings(screens::settings::State),
     Export(screens::export::State),
     ExportDocs(screens::export_docs::State),
+    Pdf(screens::pdf::State),
 }
 
 #[derive(Debug)]
@@ -39,6 +40,7 @@ pub enum Message {
     Settings(screens::settings::Message),
     Export(screens::export::Message),
     ExportDocs(screens::export_docs::Message),
+    Pdf(screens::pdf::Message),
     Navigate(Navigation),
     FileDropped(PathBuf),
     WindowReady(Option<u32>),
@@ -153,6 +155,13 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::Pdf(msg) => {
+            if let Screen::Pdf(ref mut state) = app.screen {
+                let task = state.update(msg);
+                return task;
+            }
+            Task::none()
+        }
         Message::Navigate(nav) => handle_navigation(app, nav),
         Message::WindowReady(Some(xid)) => {
             app.dnd.start(xid);
@@ -227,6 +236,11 @@ fn handle_navigation(app: &mut App, nav: Navigation) -> Task<Message> {
             }
             Task::none()
         }
+        Navigation::OpenPdf(doc, vault) => {
+            let (state, task) = screens::pdf::State::new(doc, vault);
+            app.screen = Screen::Pdf(state);
+            task
+        }
     }
 }
 
@@ -238,6 +252,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
         Screen::Settings(state) => state.view().map(Message::Settings),
         Screen::Export(state) => state.view().map(Message::Export),
         Screen::ExportDocs(state) => state.view().map(Message::ExportDocs),
+        Screen::Pdf(state) => state.view().map(Message::Pdf),
     }
 }
 

@@ -290,8 +290,8 @@ impl State {
             }
             Message::OpenDocument(id) => {
                 if let Some(doc) = self.documents.iter().find(|d| d.id == id) {
-                    return Task::done(crate::app::Message::Navigate(Navigation::OpenDocument(
-                        doc.clone(),
+                    return Task::done(crate::app::Message::Navigate(open_navigation(
+                        &doc,
                         self.vault.clone(),
                     )));
                 }
@@ -308,7 +308,7 @@ impl State {
                     },
                     move |maybe_doc| {
                         if let Some(doc) = maybe_doc {
-                            crate::app::Message::Navigate(Navigation::OpenDocument(doc, vault2))
+                            crate::app::Message::Navigate(open_navigation(&doc, vault2))
                         } else {
                             crate::app::Message::Library(Message::SearchChanged(String::new()))
                         }
@@ -808,11 +808,18 @@ fn format_timestamp(ts: i64) -> String {
     }
 }
 
+fn open_navigation(doc: &DocumentRow, vault: Arc<Vault>) -> Navigation {
+    if doc.mime_type.contains("pdf") {
+        Navigation::OpenPdf(doc.clone(), vault)
+    } else {
+        Navigation::OpenDocument(doc.clone(), vault)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::vault::tests::make_test_vault;
-
     #[test]
     fn test_search_changed() {
         let vault = make_test_vault();

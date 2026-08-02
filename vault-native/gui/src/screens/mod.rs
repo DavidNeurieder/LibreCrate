@@ -2,6 +2,7 @@ pub mod export;
 pub mod export_docs;
 pub mod first_run;
 pub mod library;
+pub mod pdf;
 pub mod settings;
 pub mod unlock;
 
@@ -18,4 +19,5 @@ pub enum Navigation {
     Export(Arc<Vault>),
     ExportDocs(Arc<Vault>),
     OpenDocument(DocumentRow, Arc<Vault>),
+    OpenPdf(DocumentRow, Arc<Vault>),
 }
