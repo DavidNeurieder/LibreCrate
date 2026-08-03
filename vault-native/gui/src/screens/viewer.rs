@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, image, operation, row, rule, scrollable, text, text_input, Column, Row, Scrollable, Space};
+use iced::widget::{button, column, container, image, operation, row, scrollable, text, text_input, Column, Row, Scrollable, Space};
 use iced::{Background, Border, Color, Element, Length, Task};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -853,7 +853,7 @@ impl State {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let navbar = common::navbar(&self.doc.title, self.header_subtitle.as_deref(), Some(Message::Back));
+        let navbar = common::navbar(&self.doc.title, self.header_subtitle.clone(), Some(Message::Back));
 
         let body: Element<'_, Message> = if self.loading {
             container(text("Opening document…").size(16))
@@ -933,23 +933,9 @@ impl State {
             .align_y(iced::Alignment::Center)
             .width(Length::Fill);
 
-        let toolbar_bar = column![
-            container(toolbar)
-                .padding(iced::Padding::new(8.0).left(16.0).right(16.0))
-                .width(Length::Fill)
-                .style(|_| container::Style {
-                    background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
-                    ..Default::default()
-                }),
-            rule::horizontal(1.0).style(|_| rule::Style {
-                color: Color::from_rgb(0.24, 0.24, 0.28),
-                radius: 0.0.into(),
-                fill_mode: rule::FillMode::Full,
-                snap: false,
-            }),
-        ]
-        .width(Length::Fill)
-        .spacing(0);
+        let toolbar_bar = common::elevated_bar(
+            toolbar.padding(iced::Padding::new(8.0).left(16.0).right(16.0)),
+        );
 
         let muted = Color::from_rgb(0.6, 0.6, 0.65);
         let status: Element<'_, Message> = if self.searching {

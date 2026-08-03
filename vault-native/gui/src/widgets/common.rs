@@ -52,10 +52,33 @@ pub fn card_style() -> impl Fn(&iced::Theme) -> container::Style {
     }
 }
 
+/// Elevated dark bar with a 1px bottom rule, matching the navbar's look.
+pub fn elevated_bar<'a, Message: Clone + 'a>(
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    column![
+        container(content.into())
+            .width(Length::Fill)
+            .style(|_| container::Style {
+                background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
+                ..Default::default()
+            }),
+        rule::horizontal(1.0).style(|_| rule::Style {
+            color: Color::from_rgb(0.24, 0.24, 0.28),
+            radius: 0.0.into(),
+            fill_mode: rule::FillMode::Full,
+            snap: false,
+        }),
+    ]
+    .width(Length::Fill)
+    .spacing(0)
+    .into()
+}
+
 /// Navigation bar with optional back button, screen title, and subtitle.
 pub fn navbar<'a, Message: 'a + Clone>(
     title: &'a str,
-    subtitle: Option<&'a str>,
+    subtitle: Option<String>,
     on_back: Option<Message>,
 ) -> Element<'a, Message> {
     let back: iced::Element<'a, Message> = if let Some(msg) = on_back {

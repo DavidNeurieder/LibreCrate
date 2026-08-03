@@ -470,39 +470,35 @@ impl State {
             },
         );
 
-        let filter_bar = container(
-            row![sort_picker, text("").width(Length::Fill), filter_row]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-        )
-        .padding(iced::Padding::new(0.0).top(0.0).bottom(8.0).left(16.0).right(16.0))
-        .width(Length::Fill);
+        let subtitle = match self.documents.len() {
+            0 => "No documents".to_string(),
+            1 => "1 document".to_string(),
+            n => format!("{n} documents"),
+        };
+        let title_bar = crate::widgets::common::navbar("LibreCrate", Some(subtitle), None);
 
-        let toolbar = container(
+        let toolbar = crate::widgets::common::elevated_bar(
             row![
-                text("LibreCrate").size(20),
                 text_input("Search documents...", &self.search_query)
                     .on_input(Message::SearchChanged)
                     .on_submit(Message::Search)
                     .width(Length::Fill),
-                button("⚙").on_press(Message::NavigateToSettings),
-                button("+").on_press(Message::Import),
-                button("⬇").on_press(Message::NavigateToExport),
-                button("ZIP").on_press(Message::NavigateToExportDocs),
+                crate::widgets::common::subtle_button("⚙").on_press(Message::NavigateToSettings),
+                crate::widgets::common::subtle_button("+").on_press(Message::Import),
+                crate::widgets::common::subtle_button("⬇").on_press(Message::NavigateToExport),
+                crate::widgets::common::subtle_button("ZIP").on_press(Message::NavigateToExportDocs),
             ]
             .spacing(10)
-            .padding(12)
+            .padding(iced::Padding::new(8.0).left(16.0).right(16.0))
             .align_y(iced::Alignment::Center),
-        )
-        .width(Length::Fill)
-        .style(|_| container::Style {
-            border: iced::Border {
-                color: iced::Color::from_rgb(0.2, 0.2, 0.22),
-                width: 0.0,
-                radius: 0.0.into(),
-            },
-            ..Default::default()
-        });
+        );
+
+        let filter_bar = crate::widgets::common::elevated_bar(
+            row![sort_picker, text("").width(Length::Fill), filter_row]
+                .spacing(10)
+                .padding(iced::Padding::new(8.0).left(16.0).right(16.0))
+                .align_y(iced::Alignment::Center),
+        );
 
         let body: Element<'_, Message> = if self.loading {
             container(text("Loading documents...").size(16))
@@ -600,7 +596,7 @@ impl State {
             }
         };
 
-        let mut content = column![toolbar, filter_bar, body];
+        let mut content = column![title_bar, toolbar, filter_bar, body];
 
         if let Some(ref doc_id) = self.info_doc_id {
             if let Some(doc) = self.documents.iter().find(|d| d.id == *doc_id) {
@@ -724,19 +720,7 @@ impl State {
             text("This action cannot be undone.").size(11)
                 .color(iced::Color::from_rgb(0.7, 0.5, 0.5)),
             row![
-                button(text("Cancel").size(13))
-                    .on_press(Message::CancelDelete)
-                    .style(|_theme, _status| button::Style {
-                        text_color: iced::Color::from_rgb(0.7, 0.7, 0.7),
-                        background: Some(iced::Background::Color(iced::Color::from_rgb(0.2, 0.2, 0.22))),
-                        border: iced::Border {
-                            color: iced::Color::from_rgb(0.3, 0.3, 0.35),
-                            width: 1.0,
-                            radius: 6.0.into(),
-                        },
-                        ..Default::default()
-                    })
-                    .padding(iced::Padding::new(6.0).left(16.0).right(16.0)),
+                crate::widgets::common::subtle_button("Cancel").on_press(Message::CancelDelete),
                 button(text("Delete").size(13).color(iced::Color::WHITE))
                     .on_press(Message::ConfirmDelete(doc_id))
                     .style(|_theme, _status| button::Style {
@@ -1015,6 +999,15 @@ mod tests {
         let (state, _task) = State::new(vault);
         let mut ui = iced_test::simulator(state.view());
         assert!(ui.find("+").is_ok());
+    }
+
+    #[test]
+    fn test_ui_library_header_subtitle() {
+        let vault = make_test_vault();
+        let (state, _task) = State::new(vault);
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui.find("LibreCrate").is_ok());
+        assert!(ui.find("No documents").is_ok());
     }
 
     #[test]
