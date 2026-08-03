@@ -194,6 +194,7 @@ impl State {
                     self.show_password,
                     Message::PasswordChanged,
                     Message::ToggleShowPassword,
+                    Some(Message::Create),
                 ),
                 common::secure_field(
                     "Confirm password",
@@ -201,6 +202,7 @@ impl State {
                     self.show_password,
                     Message::ConfirmChanged,
                     Message::ToggleShowPassword,
+                    Some(Message::Create),
                 ),
                 if let Some(ref err) = self.error {
                     text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
@@ -498,5 +500,16 @@ mod tests {
         ui.click("Show").unwrap();
         let msgs: Vec<Message> = ui.into_messages().collect();
         assert!(msgs.contains(&Message::ToggleShowPassword));
+    }
+
+    #[test]
+    fn test_ui_enter_in_password_field_creates() {
+        let mut state = State::new();
+        state.step = Step::SetPassword;
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Password").unwrap();
+        ui.tap_key(iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter));
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::Create));
     }
 }

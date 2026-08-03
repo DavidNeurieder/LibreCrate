@@ -116,6 +116,7 @@ impl State {
                         self.show_password,
                         Message::PasswordChanged,
                         Message::ToggleShowPassword,
+                        Some(Message::Submit),
                     ),
                     if let Some(ref err) = self.error {
                         text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
@@ -266,5 +267,16 @@ mod tests {
         ui.click("Show").unwrap();
         let msgs: Vec<Message> = ui.into_messages().collect();
         assert!(msgs.contains(&Message::ToggleShowPassword));
+    }
+
+    #[test]
+    fn test_ui_enter_in_password_field_submits() {
+        let mut state = State::new();
+        state.vault_exists = true;
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Master password").unwrap();
+        ui.tap_key(iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter));
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::Submit));
     }
 }

@@ -91,6 +91,7 @@ impl State {
                         self.show_password,
                         Message::CurrentPasswordChanged,
                         Message::ToggleShowPassword,
+                        Some(Message::ChangePassword),
                     ),
                     common::secure_field(
                         "New password",
@@ -98,6 +99,7 @@ impl State {
                         self.show_password,
                         Message::NewPasswordChanged,
                         Message::ToggleShowPassword,
+                        Some(Message::ChangePassword),
                     ),
                     common::secure_field(
                         "Confirm new password",
@@ -105,6 +107,7 @@ impl State {
                         self.show_password,
                         Message::ConfirmChanged,
                         Message::ToggleShowPassword,
+                        Some(Message::ChangePassword),
                     ),
                     if let Some(ref err) = self.error {
                         text(err).color(iced::Color::from_rgb(1.0, 0.3, 0.3)).size(13)
@@ -306,5 +309,16 @@ mod tests {
         ui.click("Show").unwrap();
         let msgs: Vec<Message> = ui.into_messages().collect();
         assert!(msgs.contains(&Message::ToggleShowPassword));
+    }
+
+    #[test]
+    fn test_ui_enter_in_password_field_changes() {
+        let vault = make_test_vault();
+        let state = State::new(vault);
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Confirm new password").unwrap();
+        ui.tap_key(iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter));
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::ChangePassword));
     }
 }

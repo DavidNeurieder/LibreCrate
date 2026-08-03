@@ -40,12 +40,14 @@ pub fn secure_field<'a, Message: Clone + 'a>(
     show: bool,
     on_input: impl Fn(String) -> Message + 'a,
     on_toggle: Message,
+    on_submit: Option<Message>,
 ) -> Element<'a, Message> {
     let label = if show { "Hide" } else { "Show" };
     row![
         text_input(placeholder, value)
             .secure(!show)
             .on_input(on_input)
+            .on_submit_maybe(on_submit)
             .width(Length::Fill),
         button(text(label).size(12))
             .on_press(on_toggle)

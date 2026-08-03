@@ -242,6 +242,11 @@ impl State {
                     self.show_password,
                     Message::BackupPasswordChanged,
                     Message::ToggleShowPassword,
+                    Some(match self.pending_op {
+                        Some(PendingOp::Export) => Message::ConfirmExport,
+                        Some(PendingOp::Import) => Message::ConfirmImport,
+                        _ => Message::CancelPending,
+                    }),
                 ),
                 row![
                     button("Cancel").on_press(Message::CancelPending),
@@ -526,6 +531,32 @@ mod tests {
         state.pending_op = Some(PendingOp::Import);
         let mut ui = iced_test::simulator(state.view());
         assert!(ui.find("Decrypt Backup").is_ok());
+    }
+
+    #[test]
+    fn test_ui_enter_in_password_submits_export() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.pending_path = Some(PathBuf::from("/tmp/test.librecrate-backup"));
+        state.pending_op = Some(PendingOp::Export);
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Enter vault password").unwrap();
+        ui.tap_key(iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter));
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::ConfirmExport));
+    }
+
+    #[test]
+    fn test_ui_enter_in_password_submits_import() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.pending_path = Some(PathBuf::from("/tmp/test.librecrate-backup"));
+        state.pending_op = Some(PendingOp::Import);
+        let mut ui = iced_test::simulator(state.view());
+        ui.click("Enter vault password").unwrap();
+        ui.tap_key(iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter));
+        let msgs: Vec<Message> = ui.into_messages().collect();
+        assert!(msgs.contains(&Message::ConfirmImport));
     }
 
     // -----------------------------------------------------------------------
