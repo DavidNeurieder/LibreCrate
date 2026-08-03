@@ -567,21 +567,33 @@ impl State {
         )
     }
 
+    fn avg_page_height(&self) -> f32 {
+        let mut sum = 0.0f32;
+        let mut n = 0usize;
+        for h in self.heights.iter().copied().flatten() {
+            sum += h;
+            n += 1;
+        }
+        if n > 0 {
+            sum / n as f32
+        } else {
+            (BASE_WIDTH * self.zoom) * 1.4
+        }
+    }
+
     fn page_at_y(&self, y: f32) -> usize {
         if self.page_count == 0 {
             return 0;
         }
-        let mut acc = PAD_TOP;
-        let mut last_known = 0usize;
+        let avg = self.avg_page_height();
+        let gap = PAGE_GAP * self.zoom;
+        let mut acc = PAD_TOP * self.zoom;
         for i in 0..self.page_count {
-            let Some(h) = self.heights.get(i).copied().flatten() else {
-                return last_known;
-            };
+            let h = self.heights.get(i).copied().flatten().unwrap_or(avg);
             if y <= acc + h {
                 return i;
             }
-            acc += h + PAGE_GAP;
-            last_known = i;
+            acc += h + gap;
         }
         self.page_count - 1
     }
@@ -592,29 +604,17 @@ impl State {
     }
 
     fn exact_offset_of(&self, i: usize) -> f32 {
-        let mut acc = PAD_TOP;
+        let avg = self.avg_page_height();
+        let gap = PAGE_GAP * self.zoom;
+        let mut acc = PAD_TOP * self.zoom;
         for k in 0..i {
-            acc += self.heights.get(k).copied().flatten().unwrap_or(0.0) + PAGE_GAP;
+            acc += self.heights.get(k).copied().flatten().unwrap_or(avg) + gap;
         }
         acc
     }
 
     fn estimated_offset_of(&self, i: usize) -> f32 {
-        let mut known_sum = 0.0;
-        let mut known = 0usize;
-        for k in 0..i {
-            if let Some(h) = self.heights.get(k).copied().flatten() {
-                known_sum += h;
-                known += 1;
-            }
-        }
-        let missing = i - known;
-        let avg = if known > 0 {
-            known_sum / known as f32
-        } else {
-            (BASE_WIDTH * self.zoom) * 1.4
-        };
-        PAD_TOP + known_sum + missing as f32 * avg + i as f32 * PAGE_GAP
+        self.exact_offset_of(i)
     }
 
     fn jump_to(&mut self, page: usize, offset_within_page: f32) -> Task<crate::app::Message> {
@@ -694,6 +694,9 @@ impl State {
         self.page_bytes = vec![0; self.page_count];
         self.render_cursor = 0;
         self.render_limit = self.page_count.min(MAX_PRELOAD_PAGES);
+        if self.viewport_visible <= 0.0 {
+            return self.next_render_task().unwrap_or_else(Task::none);
+        }
         let target = zoom_center_target(
             self.exact_offset_of(anchor),
             offset_old,
@@ -846,28 +849,29 @@ impl State {
             text("").size(12).into()
         };
 
-        let scroll = Scrollable::new(
-            container(self.pages_view())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .style(|_| container::Style {
-                    background: Some(iced::Background::Color(iced::Color::WHITE)),
-                    ..Default::default()
-                }),
-        )
-        .id(self.scroll_id.clone())
-        .on_scroll(|vp| {
-            let abs = vp.absolute_offset();
-            Message::ViewportChanged(abs.y, vp.bounds().height)
-        })
-        .width(Length::Fill)
-        .height(Length::Fill);
+        let scroll = Scrollable::new(self.pages_view())
+            .id(self.scroll_id.clone())
+            .on_scroll(|vp| {
+                let abs = vp.absolute_offset();
+                Message::ViewportChanged(abs.y, vp.bounds().height)
+            })
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .direction(scrollable::Direction::Both {
+                vertical: scrollable::Scrollbar::default(),
+                horizontal: scrollable::Scrollbar::default(),
+            });
 
         column![
             toolbar,
             row![status].padding(iced::Padding::new(0.0).left(16.0).right(16.0)),
-            scroll,
+            container(scroll)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(iced::Background::Color(iced::Color::WHITE)),
+                    ..Default::default()
+                }),
         ]
         .width(Length::Fill)
         .height(Length::Fill)
@@ -879,20 +883,21 @@ impl State {
         let current = self.search_results.get(self.search_index).copied();
 
         let mut col = Column::new()
-            .spacing(PAGE_GAP)
-            .padding(iced::Padding::new(0.0).top(PAD_TOP).bottom(PAD_BOTTOM))
+            .spacing(PAGE_GAP * self.zoom)
+            .padding(iced::Padding::new(0.0).top(PAD_TOP * self.zoom).bottom(PAD_BOTTOM * self.zoom))
             .width(Length::Fixed(page_width));
+
+        let avg_h = self.avg_page_height();
 
         for i in 0..self.page_count {
             let page_width = Length::Fixed(page_width);
             let Some(handle) = self.pages.get(&i) else {
-                if let Some(h) = self.heights.get(i).copied().flatten() {
-                    col = col.push(
-                        container(Column::new())
-                            .width(page_width)
-                            .height(Length::Fixed(h)),
-                    );
-                }
+                let h = self.heights.get(i).copied().flatten().unwrap_or(avg_h);
+                col = col.push(
+                    container(Column::new())
+                        .width(page_width)
+                        .height(Length::Fixed(h)),
+                );
                 continue;
             };
             let img = image::Image::new(handle.clone())
@@ -1173,6 +1178,83 @@ mod tests {
     }
 
     #[test]
+    fn test_sparse_heights_are_estimated() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "search_3page.pdf");
+        let mut state = loaded_state(&vault, doc);
+        let handle = state.handle.clone().unwrap();
+        let width = target_width(state.zoom);
+        for i in 0..state.page_count {
+            let page = render_page(&handle, i, width).unwrap();
+            let _ = state.update(Message::PageRendered(Ok(page)));
+        }
+
+        let h1 = state.heights[1].unwrap();
+        state.heights[1] = None;
+
+        let avg = (state.heights[0].unwrap() + state.heights[2].unwrap()) / 2.0;
+        assert!((state.avg_page_height() - avg).abs() < 0.5);
+
+        let y2 = state.exact_offset_of(2);
+        let expected_y2 = PAD_TOP + state.heights[0].unwrap() + PAGE_GAP + avg + PAGE_GAP;
+        assert!((y2 - expected_y2).abs() < 0.5, "gap height must be estimated, not zero");
+
+        let y1_mid = PAD_TOP + state.heights[0].unwrap() + PAGE_GAP + avg * 0.5;
+        assert_eq!(state.page_at_y(y1_mid), 1, "page_at_y must locate pages across gaps");
+        assert_eq!(state.page_at_y(y2), 2);
+        assert_eq!(state.page_at_y(0.0), 0);
+
+        let _ = state.pages_view();
+    }
+
+    #[test]
+    fn test_zoom_with_sparse_heights_keeps_viewport_center() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "search_3page.pdf");
+        let mut state = loaded_state(&vault, doc);
+        let handle = state.handle.clone().unwrap();
+        let width = target_width(state.zoom);
+        for i in 0..state.page_count {
+            let page = render_page(&handle, i, width).unwrap();
+            let _ = state.update(Message::PageRendered(Ok(page)));
+        }
+
+        state.heights[1] = None;
+        let y2 = state.exact_offset_of(2);
+        let _ = state.update(Message::ViewportChanged(y2, 600.0));
+        assert_eq!(state.current_page, 2, "current page must be found across gaps");
+
+        let center_old = y2 + 300.0;
+        let anchor = state.page_at_y(center_old);
+        let offset_within_anchor = center_old - state.exact_offset_of(anchor);
+        assert_eq!(anchor, 2);
+
+        let heights_before: Vec<f32> = state
+            .heights
+            .iter()
+            .enumerate()
+            .filter(|(i, h)| *i != 1 && h.is_some())
+            .map(|(_, h)| h.unwrap())
+            .collect();
+        let _ = state.update(Message::ZoomOut);
+        let ratio = state.zoom / 1.0;
+        assert!((ratio - 0.75).abs() < 1e-5);
+        assert!(state.pages.is_empty());
+        assert!(state.heights[0].is_some() && state.heights[1].is_none() && state.heights[2].is_some());
+        assert_eq!(state.pending_jump, None);
+        assert!((state.heights[0].unwrap() - heights_before[0] * ratio).abs() < 0.5);
+        assert!((state.heights[2].unwrap() - heights_before[1] * ratio).abs() < 0.5);
+
+        let new_exact = state.exact_offset_of(anchor);
+        let target = zoom_center_target(new_exact, offset_within_anchor, ratio, 600.0);
+        let new_center = target + 600.0 / 2.0;
+        assert!(
+            (new_center - (new_exact + offset_within_anchor * ratio)).abs() < 1e-4,
+            "zoom must keep viewport center fixed even with sparse heights"
+        );
+    }
+
+    #[test]
     fn test_search_finds_real_text_and_wraps() {
         let (vault, _dir) = make_test_vault_with_dir();
         let doc = import_sample(&vault, "search_3page.pdf");
@@ -1313,5 +1395,266 @@ mod tests {
                 offset_within_page: 0.0,
             })
         );
+    }
+
+    #[test]
+    fn test_iced_runtime_applies_zoom_in_offset() {
+        use iced_test::core::renderer::Headless;
+        use iced_test::core::widget::operation;
+        use iced_test::core::{mouse, renderer, window, Event, Size};
+        use iced_test::runtime::user_interface;
+        use iced_test::runtime::UserInterface;
+
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "search_3page.pdf");
+        let mut state = loaded_state(&vault, doc);
+
+        let handle = state.handle.clone().unwrap();
+        let width = target_width(state.zoom);
+        for i in 0..state.page_count {
+            let page = render_page(&handle, i, width).unwrap();
+            let _ = state.update(Message::PageRendered(Ok(page)));
+        }
+        assert!(state.heights.iter().all(|h| h.is_some()));
+
+        let size = Size::new(800.0, 600.0);
+        let mut renderer = iced_test::futures::futures::executor::block_on(
+            iced_test::renderer::Renderer::new(iced::Font::DEFAULT, iced::Pixels(16.0), None),
+        )
+        .expect("renderer");
+
+        let y2 = state.exact_offset_of(2);
+        let _ = state.update(Message::ViewportChanged(y2, 600.0));
+        assert_eq!(state.viewport_y, y2);
+        assert_eq!(state.viewport_visible, 600.0);
+
+        let center = state.viewport_y + state.viewport_visible / 2.0;
+        let anchor = state.page_at_y(center);
+        let offset_old = (center - state.exact_offset_of(anchor)).max(0.0);
+        assert_eq!(anchor, 2);
+        assert!(offset_old > 0.0);
+
+        let ui = UserInterface::build(
+            state.view(),
+            size,
+            user_interface::Cache::default(),
+            &mut renderer,
+        );
+        let cache = ui.into_cache();
+
+        let task = state.update(Message::ZoomIn);
+        assert!((state.zoom - 1.25).abs() < 1e-5);
+        let ratio = state.zoom / 1.0;
+        let target = zoom_center_target(
+            state.exact_offset_of(anchor),
+            offset_old,
+            ratio,
+            state.viewport_visible,
+        );
+        drop(task);
+
+        let content_after = PAD_TOP * state.zoom
+            + state.heights.iter().flatten().sum::<f32>()
+            + PAGE_GAP * state.zoom * (state.page_count as f32 - 1.0)
+            + PAD_BOTTOM * state.zoom;
+        let max_scroll_after = content_after - 600.0;
+        assert!(
+            target <= max_scroll_after,
+            "target {target} exceeds max scroll {max_scroll_after}"
+        );
+
+        let mut ui2 = UserInterface::build(state.view(), size, cache, &mut renderer);
+        let mut op = operation::scrollable::scroll_to::<()>(
+            state.scroll_id.clone(),
+            scrollable::AbsoluteOffset {
+                x: None,
+                y: Some(target),
+            },
+        );
+        ui2.operate(&mut renderer, &mut op);
+
+        let mut messages: Vec<Message> = Vec::new();
+        ui2.update(
+            &[Event::Window(window::Event::RedrawRequested(
+                iced_test::core::time::Instant::now(),
+            ))],
+            mouse::Cursor::Unavailable,
+            &mut renderer,
+            &mut iced_test::core::clipboard::Null,
+            &mut messages,
+        );
+        ui2.draw(
+            &mut renderer,
+            &iced::Theme::Dark,
+            &renderer::Style {
+                text_color: iced::Color::BLACK,
+            },
+            mouse::Cursor::Unavailable,
+        );
+
+        let applied = messages
+            .iter()
+            .find_map(|m| match m {
+                Message::ViewportChanged(y, _) => Some(*y),
+                _ => None,
+            })
+            .expect("viewport message emitted after zoom scroll_to");
+        assert!(
+            (applied - target).abs() < 1.0,
+            "iced applied scroll offset {applied}, expected {target}; drift {}",
+            applied - target
+        );
+    }
+
+    #[test]
+    fn test_iced_runtime_scroll_then_zoom_sequence_keeps_center() {
+        use iced_test::core::renderer::Headless;
+        use iced_test::core::widget::operation;
+        use iced_test::core::{mouse, renderer, window, Event, Size};
+        use iced_test::runtime::user_interface;
+        use iced_test::runtime::UserInterface;
+
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "search_3page.pdf");
+        let mut state = loaded_state(&vault, doc);
+
+        let mut renderer = iced_test::futures::futures::executor::block_on(
+            iced_test::renderer::Renderer::new(iced::Font::DEFAULT, iced::Pixels(16.0), None),
+        )
+        .expect("renderer");
+        let size = Size::new(800.0, 600.0);
+        let mut cache = user_interface::Cache::default();
+
+        fn render_all(state: &mut State) {
+            let handle = state.handle.clone().unwrap();
+            let width = target_width(state.zoom);
+            for i in 0..state.page_count {
+                let page = render_page(&handle, i, width).unwrap();
+                let _ = state.update(Message::PageRendered(Ok(page)));
+            }
+        }
+
+        fn drive(
+            state: &mut State,
+            renderer: &mut iced_test::renderer::Renderer,
+            size: Size,
+            cache: user_interface::Cache,
+            target: Option<f32>,
+        ) -> (f32, f32, user_interface::Cache) {
+            let mut ui = UserInterface::build(state.view(), size, cache, renderer);
+            if let Some(y) = target {
+                let mut op = operation::scrollable::scroll_to::<()>(
+                    state.scroll_id.clone(),
+                    scrollable::AbsoluteOffset { x: None, y: Some(y) },
+                );
+                ui.operate(renderer, &mut op);
+            }
+            let mut msgs: Vec<Message> = Vec::new();
+            ui.update(
+                &[Event::Window(window::Event::RedrawRequested(
+                    iced_test::core::time::Instant::now(),
+                ))],
+                mouse::Cursor::Unavailable,
+                renderer,
+                &mut iced_test::core::clipboard::Null,
+                &mut msgs,
+            );
+            ui.draw(
+                renderer,
+                &iced::Theme::Dark,
+                &renderer::Style {
+                    text_color: iced::Color::BLACK,
+                },
+                mouse::Cursor::Unavailable,
+            );
+            let cache = ui.into_cache();
+            let (mut applied, mut visible) = (0.0f32, 0.0f32);
+            for m in msgs {
+                if let Message::ViewportChanged(y, v) = m {
+                    applied = y;
+                    visible = v;
+                }
+            }
+            let _ = state.update(Message::ViewportChanged(applied, visible));
+            (applied, visible, cache)
+        }
+
+        render_all(&mut state);
+        let y2 = state.exact_offset_of(2);
+        let (_, _, cache_kept) = drive(&mut state, &mut renderer, size, cache, Some(y2));
+        cache = cache_kept;
+        assert!(
+            (state.viewport_y - y2).abs() < 1.0,
+            "real scroll must land at page 2: viewport_y {} vs {y2}",
+            state.viewport_y
+        );
+
+        let seq = [3usize, 4, 5, 2, 0];
+        let mut prev_zoom = state.zoom;
+        for idx in seq {
+            let target_zoom = ZOOM_STEPS[idx];
+            let ratio = target_zoom / prev_zoom;
+            let center_before = state.viewport_y + state.viewport_visible / 2.0;
+            let anchor = state.page_at_y(center_before);
+            let offset_old = (center_before - state.exact_offset_of(anchor)).max(0.0);
+
+            let task = state.set_zoom(idx);
+            drop(task);
+            assert!((state.zoom - target_zoom).abs() < 1e-5);
+
+            let target = zoom_center_target(
+                state.exact_offset_of(anchor),
+                offset_old,
+                ratio,
+                state.viewport_visible,
+            );
+            render_all(&mut state);
+
+            let (applied, visible, cache_kept) = drive(&mut state, &mut renderer, size, cache, Some(target));
+            cache = cache_kept;
+            let expected_center = center_before * ratio;
+            let actual_center = applied + visible / 2.0;
+            assert!(
+                (actual_center - expected_center).abs() < 1.5,
+                "zoom {target_zoom}: center drifted by {} (expected {expected_center}, actual {actual_center}, anchor {anchor}, offset_old {offset_old}, applied {applied})",
+                actual_center - expected_center
+            );
+            prev_zoom = target_zoom;
+        }
+    }
+
+    #[test]
+    fn diag_height_drift() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "search_3page.pdf");
+        let mut state = loaded_state(&vault, doc);
+        let handle = state.handle.clone().unwrap();
+        let h100: Vec<f32> = (0..state.page_count)
+            .map(|i| render_page(&handle, i, target_width(1.0)).unwrap().height as f32)
+            .collect();
+        eprintln!("h100 = {h100:?}");
+        let scaled: Vec<f32> = h100.iter().map(|h| h * 1.25).collect();
+        eprintln!("scaled@1.25 = {scaled:?}");
+        let actual: Vec<f32> = (0..state.page_count)
+            .map(|i| render_page(&handle, i, target_width(1.25)).unwrap().height as f32)
+            .collect();
+        eprintln!("actual@1.25 = {actual:?}");
+        let deltas: Vec<f32> = actual.iter().zip(scaled.iter()).map(|(a, s)| a - s).collect();
+        eprintln!("delta = {deltas:?}");
+        eprintln!(
+            "cumulative below page 2 = {}",
+            deltas.iter().sum::<f32>()
+        );
+
+        let scaled_out: Vec<f32> = h100.iter().map(|h| h * 0.75).collect();
+        let actual_out: Vec<f32> = (0..state.page_count)
+            .map(|i| render_page(&handle, i, target_width(0.75)).unwrap().height as f32)
+            .collect();
+        let deltas_out: Vec<f32> = actual_out
+            .iter()
+            .zip(scaled_out.iter())
+            .map(|(a, s)| a - s)
+            .collect();
+        eprintln!("delta_out(0.75) = {deltas_out:?}");
     }
 }
