@@ -515,4 +515,179 @@ pub(crate) mod tests {
         let result = vault.delete_document("nonexistent_id");
         assert!(result.is_ok());
     }
+
+    // -----------------------------------------------------------------------
+    // Phone <-> GUI backup compatibility, exercised through the REAL GUI code
+    // (Vault::open / Vault::export_backup) against phone-produced data.
+    // -----------------------------------------------------------------------
+
+    const PHONE_MEMORY_COST: u32 = 16_384;
+    const PHONE_ITERATIONS: u32 = 3;
+    const PHONE_PARALLELISM: u32 = 2;
+    const PHONE_PASSWORD: &str = "phone-vault-pass";
+
+    fn phone_params() -> vault_native::crypto::argon2::Argon2Params {
+        vault_native::crypto::argon2::Argon2Params::new(
+            PHONE_MEMORY_COST,
+            PHONE_ITERATIONS,
+            PHONE_PARALLELISM,
+            32,
+        )
+    }
+
+    /// The exact `params.toml` written by `buildParamsToml()` on the phone.
+    fn phone_params_toml() -> &'static str {
+        "memory_cost = 16384\niterations = 3\nparallelism = 2\nhash_length = 32\n"
+    }
+
+    /// Build the phone-style vault layout exactly as `RustKeyManager` +
+    /// `VaultRepository` produce it. Returns the master key.
+    fn build_phone_vault(root: &Path, password: &str) -> Vec<u8> {
+        use vault_native::crypto::aes_kw;
+        use vault_native::crypto::argon2;
+        use vault_native::db::schema::create_encrypted_db;
+        use vault_native::db::storage::import_document;
+
+        let enc_dir = root.join("encryption");
+        let db_dir = root.join("databases");
+        let files_dir = root.join("files");
+        std::fs::create_dir_all(&enc_dir).unwrap();
+        std::fs::create_dir_all(&db_dir).unwrap();
+        std::fs::create_dir_all(&files_dir).unwrap();
+
+        let salt = argon2::generate_salt();
+        let master_key = aes_kw::generate_master_key();
+        let kek = argon2::derive_key(password, &salt, &phone_params()).unwrap();
+        let wrapped = aes_kw::wrap(&kek, &master_key).unwrap();
+
+        std::fs::write(enc_dir.join("salt"), &salt).unwrap();
+        std::fs::write(enc_dir.join("wrapped_master_key"), &wrapped).unwrap();
+        std::fs::write(enc_dir.join("params.toml"), phone_params_toml()).unwrap();
+
+        let db_path = db_dir.join("librecrate.db");
+        let conn = create_encrypted_db(db_path.to_str().unwrap(), &master_key).unwrap();
+        for (id, title, content) in [
+            ("phone-doc-1", "Phone Doc One", &b"phone file one"[..]),
+            ("phone-doc-2", "Phone Doc Two", &b"phone file two"[..]),
+        ] {
+            import_document(
+                &conn,
+                root,
+                id,
+                title,
+                content,
+                "text/plain",
+                "",
+                "",
+                None,
+                Some(&master_key),
+            )
+            .unwrap();
+        }
+        drop(conn);
+
+        master_key
+    }
+
+    #[test]
+    fn test_phone_vault_unlocks_in_real_gui() {
+        let dir = tempfile::tempdir().unwrap();
+        let _master_key = build_phone_vault(dir.path(), PHONE_PASSWORD);
+
+        // The phone vault (params.toml 16384/3/2) must unlock through the real
+        // GUI code path — this is what failed with "key unwrap failed" before.
+        let vault = Vault::open(dir.path(), PHONE_PASSWORD).unwrap();
+
+        let docs = vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 2);
+        assert_eq!(docs[0].id, "phone-doc-1");
+        assert_eq!(docs[0].title, "Phone Doc One");
+        assert_eq!(docs[1].id, "phone-doc-2");
+        assert_eq!(docs[1].title, "Phone Doc Two");
+
+        let file = vault
+            .db
+            .export_document_file(vault.base_dir.to_string_lossy().to_string(), "phone-doc-1".into())
+            .unwrap()
+            .expect("stored file must be present");
+        assert_eq!(file, b"phone file one");
+    }
+
+    #[test]
+    fn test_phone_vault_wrong_password_fails_to_open() {
+        let dir = tempfile::tempdir().unwrap();
+        build_phone_vault(dir.path(), PHONE_PASSWORD);
+        assert!(Vault::open(dir.path(), "wrong").is_err());
+    }
+
+    #[test]
+    fn test_phone_vault_with_stale_desktop_params_fails_to_open() {
+        // Regression guard for the original bug: a leftover desktop
+        // `params.toml` (19456/2/2) next to phone-wrapped keys must NOT
+        // silently unlock.
+        let dir = tempfile::tempdir().unwrap();
+        build_phone_vault(dir.path(), PHONE_PASSWORD);
+        std::fs::write(
+            dir.path().join("encryption").join("params.toml"),
+            "memory_cost = 19456\niterations = 2\nparallelism = 2\nhash_length = 32\n",
+        )
+        .unwrap();
+        assert!(Vault::open(dir.path(), PHONE_PASSWORD).is_err());
+    }
+
+    #[test]
+    fn test_gui_backup_restores_into_phone_layout_and_unlocks() {
+        let tv = create_test_vault_with_dir();
+        let file_path = tv._dir.path().join("desktop-doc.txt");
+        std::fs::write(&file_path, b"desktop file content").unwrap();
+        tv.vault.import_file(&file_path).unwrap();
+
+        let backup = tv.vault.export_backup("backuppass").unwrap();
+
+        // Restore into a phone-style layout via the shared function the app calls.
+        let phone_dir = tempfile::tempdir().unwrap();
+        let enc = phone_dir.path().join("encryption");
+        let db = phone_dir.path().join("databases");
+        let files = phone_dir.path().join("files");
+        std::fs::create_dir_all(&enc).unwrap();
+        std::fs::create_dir_all(&db).unwrap();
+        std::fs::create_dir_all(&files).unwrap();
+        vault_native::vault_ops::restore_backup_to_dirs(&backup, "backuppass", &enc, &db, &files)
+            .unwrap();
+
+        // The restore is self-describing: it carries desktop defaults.
+        let params = vault_native::vault_ops::parse_kdf_params_from_toml(
+            &std::fs::read_to_string(enc.join("params.toml")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(params.memory_cost, 19_456);
+        assert_eq!(params.iterations, 2);
+        assert_eq!(params.parallelism, 2);
+
+        // Real GUI unlock of the restored phone-layout vault. The backup keeps
+        // the original wrapped master key, so the vault opens with the ORIGINAL
+        // vault password ("testpass"), not the backup password.
+        let opened = Vault::open(phone_dir.path(), "testpass").unwrap();
+        let docs = opened.list_documents().unwrap();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].title, "desktop-doc.txt");
+        let file = opened
+            .db
+            .export_document_file(
+                opened.base_dir.to_string_lossy().to_string(),
+                docs[0].id.clone(),
+            )
+            .unwrap()
+            .expect("stored file must be present");
+        assert_eq!(file, b"desktop file content");
+
+        // The backup password is only used to decrypt the manifest, not to lock
+        // the restored vault.
+        assert!(Vault::open(phone_dir.path(), "backuppass").is_err());
+
+        // Regression guard: pretending this is an OLD phone vault (hardcoded
+        // 16384/3/2 params.toml) must fail to unlock the desktop-wrapped key.
+        std::fs::write(enc.join("params.toml"), phone_params_toml()).unwrap();
+        assert!(Vault::open(phone_dir.path(), "testpass").is_err());
+    }
 }
