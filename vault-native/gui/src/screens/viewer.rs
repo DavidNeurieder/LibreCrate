@@ -121,6 +121,10 @@ fn target_width(zoom: f32) -> i32 {
     ((BASE_WIDTH * zoom).round() as i32).max(8)
 }
 
+fn zoom_center_target(anchor_exact: f32, offset_within_anchor: f32, ratio: f32, viewport_visible: f32) -> f32 {
+    anchor_exact + offset_within_anchor * ratio - viewport_visible / 2.0
+}
+
 fn render_page(handle: &PdfHandle, index: usize, width: i32) -> Result<RenderedPage, String> {
     let PdfPageRender {
         data,
@@ -678,19 +682,35 @@ impl State {
             return Task::none();
         }
         let old_zoom = self.zoom;
-        let anchor = self.page_at_y(self.viewport_y);
-        let offset_old = (self.viewport_y - self.exact_offset_of(anchor)).max(0.0);
+        let ratio = new_zoom / old_zoom;
+        let center = self.viewport_y + self.viewport_visible / 2.0;
+        let anchor = self.page_at_y(center);
+        let offset_old = (center - self.exact_offset_of(anchor)).max(0.0);
         self.zoom = new_zoom;
+        for h in self.heights.iter_mut().flatten() {
+            *h *= ratio;
+        }
         self.pages.clear();
-        self.heights = vec![None; self.page_count];
         self.page_bytes = vec![0; self.page_count];
         self.render_cursor = 0;
         self.render_limit = self.page_count.min(MAX_PRELOAD_PAGES);
-        self.pending_jump = Some(JumpTarget {
-            page: anchor,
-            offset_within_page: offset_old * (new_zoom / old_zoom),
-        });
-        self.next_render_task().unwrap_or_else(Task::none)
+        let target = zoom_center_target(
+            self.exact_offset_of(anchor),
+            offset_old,
+            ratio,
+            self.viewport_visible,
+        );
+        let mut tasks = vec![operation::scroll_to(
+            self.scroll_id.clone(),
+            scrollable::AbsoluteOffset {
+                x: 0.0,
+                y: target.max(0.0),
+            },
+        )];
+        if let Some(t) = self.next_render_task() {
+            tasks.push(t);
+        }
+        Task::batch(tasks)
     }
 
     fn zoom_index(&self) -> usize {
@@ -864,11 +884,19 @@ impl State {
             .width(Length::Fixed(page_width));
 
         for i in 0..self.page_count {
+            let page_width = Length::Fixed(page_width);
             let Some(handle) = self.pages.get(&i) else {
+                if let Some(h) = self.heights.get(i).copied().flatten() {
+                    col = col.push(
+                        container(Column::new())
+                            .width(page_width)
+                            .height(Length::Fixed(h)),
+                    );
+                }
                 continue;
             };
             let img = image::Image::new(handle.clone())
-                .width(Length::Fixed(page_width));
+                .width(page_width);
             col = col.push(if current == Some(i) {
                 container(img)
                     .style(|_| container::Style {
@@ -1056,19 +1084,21 @@ mod tests {
         let mut state = loaded_state(&vault, doc);
         assert_eq!(state.zoom, 1.0);
 
+        let handle = state.handle.clone().unwrap();
+        let width = target_width(state.zoom);
+        for i in 0..state.page_count {
+            let page = render_page(&handle, i, width).unwrap();
+            let _ = state.update(Message::PageRendered(Ok(page)));
+        }
+        let h0 = state.heights[0].unwrap();
+
         let _ = state.update(Message::ZoomOut);
         assert!((state.zoom - 0.75).abs() < 1e-5);
         assert!(state.pages.is_empty());
-        assert!(state.heights.iter().all(|h| h.is_none()));
-        assert_eq!(
-            state.pending_jump,
-            Some(JumpTarget {
-                page: 0,
-                offset_within_page: 0.0,
-            })
-        );
+        assert!(state.heights.iter().all(|h| h.is_some()));
+        assert!((state.heights[0].unwrap() - h0 * 0.75).abs() < 0.5);
+        assert_eq!(state.pending_jump, None);
 
-        let handle = state.handle.clone().unwrap();
         let page = render_page(&handle, 0, target_width(state.zoom)).unwrap();
         let _ = state.update(Message::PageRendered(Ok(page)));
         assert!(state.pages.contains_key(&0));
@@ -1076,6 +1106,70 @@ mod tests {
 
         let _ = state.update(Message::ResetZoom);
         assert_eq!(state.zoom, 1.0);
+        assert!(state.heights.iter().all(|h| h.is_some()));
+        assert!((state.heights[0].unwrap() - h0).abs() < 0.5);
+    }
+
+    #[test]
+    fn test_zoom_center_target_keeps_center_fixed() {
+        let anchor_exact = 100.0;
+        let offset_within_anchor = 250.0;
+        let ratio = 2.0;
+        let visible = 600.0;
+        let center_old = anchor_exact + offset_within_anchor;
+        let target = zoom_center_target(anchor_exact, offset_within_anchor, ratio, visible);
+        let center_new = target + visible / 2.0;
+        assert!((center_new - (anchor_exact + offset_within_anchor * ratio)).abs() < 1e-4);
+        assert_eq!(center_old, 350.0);
+        assert!((target - 300.0).abs() < 1e-4);
+
+        let shrink = zoom_center_target(100.0, 250.0, 0.5, 600.0);
+        assert!((shrink + 75.0).abs() < 1e-4);
+        let center_shrink = shrink + 600.0 / 2.0;
+        assert!((center_shrink - (100.0 + 250.0 * 0.5)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_zoom_preserves_vertical_anchor() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "search_3page.pdf");
+        let mut state = loaded_state(&vault, doc);
+        let handle = state.handle.clone().unwrap();
+        let width = target_width(state.zoom);
+        for i in 0..state.page_count {
+            let page = render_page(&handle, i, width).unwrap();
+            let _ = state.update(Message::PageRendered(Ok(page)));
+        }
+
+        let y2 = state.exact_offset_of(2);
+        let _ = state.update(Message::ViewportChanged(y2, 600.0));
+        assert_eq!(state.current_page, 2);
+        assert_eq!(state.page_at_y(y2 + 300.0), 2);
+
+        let center_old = y2 + 300.0;
+        let anchor = state.page_at_y(center_old);
+        let offset_within_anchor = center_old - state.exact_offset_of(anchor);
+        assert_eq!(anchor, 2);
+        assert!(offset_within_anchor > 0.0 && offset_within_anchor < 600.0);
+
+        let heights_before: Vec<f32> = state.heights.iter().map(|h| h.unwrap()).collect();
+        let _ = state.update(Message::ZoomOut);
+        let ratio = state.zoom / 1.0;
+        assert!((ratio - 0.75).abs() < 1e-5);
+        assert!(state.pages.is_empty());
+        assert!(state.heights.iter().all(|h| h.is_some()));
+        assert_eq!(state.pending_jump, None);
+        for (before, after) in heights_before.iter().zip(state.heights.iter()) {
+            let after = after.unwrap();
+            assert!((after - before * ratio).abs() < 0.5, "heights should scale with zoom");
+        }
+        let new_exact = state.exact_offset_of(anchor);
+        let target = zoom_center_target(new_exact, offset_within_anchor, ratio, 600.0);
+        let new_center = target + 600.0 / 2.0;
+        assert!(
+            (new_center - (new_exact + offset_within_anchor * ratio)).abs() < 1e-4,
+            "viewport center must stay on the same content point"
+        );
     }
 
     #[test]
