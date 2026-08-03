@@ -179,7 +179,7 @@ impl State {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let navbar = crate::widgets::common::navbar("Export Documents", Some(Message::Back));
+        let navbar = crate::widgets::common::navbar("Export Documents", None, Some(Message::Back));
 
         let body: Element<'_, Message> = if self.loading {
             container(text("Loading documents...").size(16))

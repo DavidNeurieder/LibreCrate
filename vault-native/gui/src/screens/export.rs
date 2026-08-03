@@ -273,7 +273,7 @@ impl State {
         };
 
         let content = column![
-            common::navbar("Backup", Some(Message::Back)),
+            common::navbar("Backup", None, Some(Message::Back)),
             container(
                 column![
                     body,

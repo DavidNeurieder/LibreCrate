@@ -81,7 +81,7 @@ impl State {
 
     pub fn view(&self) -> Element<'_, Message> {
         let content = column![
-            common::navbar("Settings", Some(Message::Back)),
+            common::navbar("Settings", None, Some(Message::Back)),
             container(
                 column![
                     text("Change Master Password").size(18),

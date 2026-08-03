@@ -1,5 +1,5 @@
-use iced::widget::{button, column, container, image, operation, row, scrollable, text, text_input, Column, Row, Scrollable};
-use iced::{Element, Length, Task};
+use iced::widget::{button, column, container, image, operation, row, rule, scrollable, text, text_input, Column, Row, Scrollable, Space};
+use iced::{Background, Border, Color, Element, Length, Task};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -91,6 +91,7 @@ pub enum Message {
 pub struct State {
     vault: Arc<Vault>,
     doc: DocumentRow,
+    header_subtitle: Option<String>,
     handle: Option<Arc<PdfHandle>>,
     tmp_dir: Option<Arc<tempfile::TempDir>>,
     page_count: usize,
@@ -121,6 +122,50 @@ pub struct State {
 
 fn target_width(zoom: f32) -> i32 {
     ((BASE_WIDTH * zoom).round() as i32).max(8)
+}
+
+fn format_size(bytes: i64) -> String {
+    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
+    let mut value = bytes.max(0) as f64;
+    let mut unit = 0usize;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{} {}", bytes.max(0), UNITS[unit])
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+fn type_label(mime: &str) -> String {
+    let m = mime.to_lowercase();
+    if m.contains("pdf") {
+        "PDF".into()
+    } else if m.contains("epub") {
+        "EPUB".into()
+    } else if m.starts_with("image/") {
+        "Image".into()
+    } else if m.contains("html") {
+        "HTML".into()
+    } else if m.contains("word") {
+        "DOCX".into()
+    } else if m.contains("rtf") {
+        "RTF".into()
+    } else if m.starts_with("text/") {
+        "Text".into()
+    } else {
+        "Document".into()
+    }
+}
+
+fn subtitle_for(doc: &DocumentRow, page_count: usize) -> String {
+    format!(
+        "{page_count} pages · {} · {}",
+        format_size(doc.file_size),
+        type_label(&doc.mime_type)
+    )
 }
 
 fn zoom_center_target(anchor_exact: f32, offset_within_anchor: f32, ratio: f32, viewport_visible: f32) -> f32 {
@@ -213,6 +258,7 @@ impl State {
         Self {
             vault,
             doc,
+            header_subtitle: None,
             handle: None,
             tmp_dir: None,
             page_count: 0,
@@ -261,6 +307,7 @@ impl State {
         cached: CachedViewer,
     ) -> (Self, Task<crate::app::Message>) {
         let mut state = Self::base(doc, vault);
+        state.header_subtitle = Some(subtitle_for(&state.doc, cached.page_count));
         state.handle = Some(cached.handle);
         state.tmp_dir = Some(cached.tmp_dir);
         state.page_count = cached.page_count;
@@ -353,6 +400,7 @@ impl State {
                 self.handle = Some(handle);
                 self.tmp_dir = Some(tmp_dir);
                 self.page_count = page_count;
+                self.header_subtitle = Some(subtitle_for(&self.doc, page_count));
                 self.heights = vec![None; page_count];
                 self.page_bytes = vec![0; page_count];
                 self.render_limit = page_count.min(MAX_PRELOAD_PAGES);
@@ -805,7 +853,7 @@ impl State {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let navbar = common::navbar(&self.doc.title, Some(Message::Back));
+        let navbar = common::navbar(&self.doc.title, self.header_subtitle.as_deref(), Some(Message::Back));
 
         let body: Element<'_, Message> = if self.loading {
             container(text("Opening document…").size(16))
@@ -840,31 +888,74 @@ impl State {
     fn viewer(&self) -> Element<'_, Message> {
         let zoom_pct = (self.zoom * 100.0).round() as i64;
         let top_page = (self.page_at_y(self.viewport_y) + 1).min(self.page_count);
+        let has_results = !self.search_results.is_empty();
+
+        let zoom_pill = container(text(format!("{zoom_pct}%")).size(13))
+            .padding(iced::Padding::new(6.0).horizontal(12.0))
+            .style(|_| container::Style {
+                background: Some(Background::Color(Color::from_rgb(0.14, 0.14, 0.16))),
+                border: Border {
+                    color: Color::from_rgb(0.28, 0.28, 0.32),
+                    width: 1.0,
+                    radius: 5.0.into(),
+                },
+                ..Default::default()
+            });
 
         let toolbar = Row::new()
-            .push(button("-").on_press(Message::ZoomOut))
-            .push(text(format!("{zoom_pct}%")).size(12).width(Length::Fixed(52.0)))
-            .push(button("+").on_press(Message::ZoomIn))
-            .push(button("Reset").on_press(Message::ResetZoom))
-            .push(text(format!("Page {top_page}/{count}", count = self.page_count)).size(12))
+            .push(common::subtle_button("-").on_press(Message::ZoomOut))
+            .push(zoom_pill)
+            .push(common::subtle_button("+").on_press(Message::ZoomIn))
+            .push(common::subtle_button("Reset").on_press(Message::ResetZoom))
+            .push(
+                text(format!("Page {top_page}/{count}", count = self.page_count))
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.65)),
+            )
+            .push(Space::new().width(Length::Fill))
             .push(
                 text_input("Search in this document…", &self.search_query)
                     .on_input(Message::SearchChanged)
                     .on_submit(Message::SearchSubmit)
                     .width(Length::Fixed(220.0)),
             )
-            .push(button("Search").on_press(Message::SearchSubmit))
-            .push(button("↑").on_press(Message::SearchPrev))
-            .push(button("↓").on_press(Message::SearchNext))
-            .push(button("Open externally").on_press(Message::OpenExternally))
-            .spacing(6)
+            .push(common::subtle_button("Search").on_press(Message::SearchSubmit))
+            .push(
+                common::subtle_button("↑")
+                    .on_press_maybe(has_results.then_some(Message::SearchPrev)),
+            )
+            .push(
+                common::subtle_button("↓")
+                    .on_press_maybe(has_results.then_some(Message::SearchNext)),
+            )
+            .push(common::subtle_button("Open externally").on_press(Message::OpenExternally))
+            .spacing(8)
             .align_y(iced::Alignment::Center)
             .width(Length::Fill);
 
+        let toolbar_bar = column![
+            container(toolbar)
+                .padding(iced::Padding::new(8.0).left(16.0).right(16.0))
+                .width(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
+                    ..Default::default()
+                }),
+            rule::horizontal(1.0).style(|_| rule::Style {
+                color: Color::from_rgb(0.24, 0.24, 0.28),
+                radius: 0.0.into(),
+                fill_mode: rule::FillMode::Full,
+                snap: false,
+            }),
+        ]
+        .width(Length::Fill)
+        .spacing(0);
+
+        let muted = Color::from_rgb(0.6, 0.6, 0.65);
         let status: Element<'_, Message> = if self.searching {
-            text("Searching…").size(12).into()
+            text("Searching…").size(12).color(muted).into()
         } else if let Some(s) = &self.search_status {
-            text(s).size(12).into()
+            text(s).size(12).color(muted).into()
         } else if !self.search_results.is_empty() {
             text(format!(
                 "Result {}/{}",
@@ -872,6 +963,7 @@ impl State {
                 self.search_results.len()
             ))
             .size(12)
+            .color(muted)
             .into()
         } else {
             text("").size(12).into()
@@ -891,7 +983,7 @@ impl State {
             });
 
         column![
-            toolbar,
+            toolbar_bar,
             row![status].padding(iced::Padding::new(0.0).left(16.0).right(16.0)),
             container(scroll)
                 .width(Length::Fill)
@@ -1323,11 +1415,16 @@ mod tests {
     fn test_view_toolbar_when_loaded() {
         let (vault, _dir) = make_test_vault_with_dir();
         let doc = import_sample(&vault, "search_3page.pdf");
-        let mut state = loaded_state(&vault, doc);
+        let state = loaded_state(&vault, doc);
         let mut ui = iced_test::simulator(state.view());
         assert!(ui.find("Open externally").is_ok());
         assert!(ui.find("Reset").is_ok());
         assert!(ui.find("Search in this document…").is_ok());
+        let subtitle = subtitle_for(&state.doc, state.page_count);
+        assert!(ui.find(subtitle.as_str()).is_ok());
+        assert!(ui.find("100%").is_ok());
+        assert!(ui.find("←").is_ok());
+        assert!(ui.find("Back").is_ok());
     }
 
     #[test]
