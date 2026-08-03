@@ -201,10 +201,16 @@ impl State {
                 self.progress = None;
                 self.backup_password.clear();
                 match result {
-                    Ok(()) => self.progress = Some("Import complete".into()),
-                    Err(e) => self.error = Some(e),
+                    Ok(()) => {
+                        // The vault on disk now belongs to the backup creator;
+                        // drop the stale open vault and require a fresh unlock.
+                        Task::done(crate::app::Message::Navigate(Navigation::Unlock))
+                    }
+                    Err(e) => {
+                        self.error = Some(e);
+                        Task::none()
+                    }
                 }
-                Task::none()
             }
         }
     }
@@ -410,13 +416,15 @@ mod tests {
     }
 
     #[test]
-    fn test_import_done_ok() {
+    fn test_import_done_ok_schedules_unlock_navigation() {
         let vault = make_test_vault();
         let mut state = State::new(vault);
         state.progress = Some("Importing...".into());
-        let _ = state.update(Message::ImportDone(Ok(())));
-        assert_eq!(state.progress, Some("Import complete".into()));
+        let task = state.update(Message::ImportDone(Ok(())));
+        assert!(state.progress.is_none());
         assert!(state.error.is_none());
+        assert!(state.backup_password.is_empty());
+        assert!(task.units() > 0, "successful import must emit a navigation task");
     }
 
     #[test]

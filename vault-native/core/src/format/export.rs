@@ -102,6 +102,13 @@ pub fn create_vault_layout(dir: &std::path::Path, password: &str) -> Result<Vec<
     std::fs::create_dir_all(&enc_dir)?;
     std::fs::write(enc_dir.join("wrapped_master_key"), &wrapped_master_key)?;
     std::fs::write(enc_dir.join("salt"), &salt)?;
+    std::fs::write(
+        enc_dir.join("params.toml"),
+        format!(
+            "memory_cost = {}\niterations = {}\nparallelism = {}\nhash_length = 32\n",
+            params.memory_cost, params.iterations, params.parallelism,
+        ),
+    )?;
 
     let db_dir = dir.join("databases");
     let db_path = db_dir.join("librecrate.db");
@@ -167,5 +174,26 @@ mod tests {
         let unwrapped =
             crate::crypto::aes_kw::unwrap(&imported_wmk, &user_key).unwrap();
         assert_eq!(unwrapped, master_key);
+    }
+
+    #[test]
+    fn test_create_vault_layout_writes_params_toml() {
+        let dir = tempfile::TempDir::new().unwrap();
+        create_vault_layout(dir.path(), "testpass").unwrap();
+
+        let enc_dir = dir.path().join("encryption");
+        assert!(enc_dir.join("wrapped_master_key").exists());
+        assert!(enc_dir.join("salt").exists());
+        assert!(enc_dir.join("params.toml").exists());
+
+        // The params must match the default the GUI/CLI use so both platforms
+        // unlock with the same derivation.
+        let params = crate::vault_ops::parse_kdf_params_from_toml(
+            &std::fs::read_to_string(enc_dir.join("params.toml")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(params.memory_cost, Argon2Params::default().memory_cost);
+        assert_eq!(params.iterations, Argon2Params::default().iterations);
+        assert_eq!(params.parallelism, Argon2Params::default().parallelism);
     }
 }

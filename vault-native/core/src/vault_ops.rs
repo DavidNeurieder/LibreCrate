@@ -39,34 +39,45 @@ pub fn parse_kdf_params_from_toml(toml_str: &str) -> Result<Argon2Params> {
     })
 }
 
-/// Read all files in a directory into `Vec<KeyValue>`.
-fn read_dir_kv(dir: &Path) -> Result<Vec<KeyValue>> {
+/// Read all files under a directory tree into `Vec<KeyValue>`, keyed by the
+/// path relative to `root` (like the Android `files` walk). Handles nesting.
+fn read_dir_kv(root: &Path) -> Result<Vec<KeyValue>> {
     let mut entries = Vec::new();
-    if dir.exists() {
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_file() {
-                let name = path.file_name().unwrap().to_string_lossy().to_string();
-                let data = std::fs::read(&path)?;
-                entries.push(KeyValue { key: name, value: data });
+    if root.exists() {
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_file() {
+                    let name = path
+                        .strip_prefix(root)
+                        .map_err(|e| Error::Io(e.to_string()))?
+                        .to_string_lossy()
+                        .to_string();
+                    let data = std::fs::read(&path)?;
+                    entries.push(KeyValue { key: name, value: data });
+                } else if path.is_dir() {
+                    stack.push(path);
+                }
             }
         }
     }
     Ok(entries)
 }
 
-/// Read a vault directory and return everything needed for export or merge.
+/// Read key/database/files directories and return everything needed for export or merge.
 ///
 /// Handles both `wrapped_master_key` and `master_key` file names in `encryption/`.
-pub fn serialize_vault_from_disk(vault_dir: &Path) -> Result<VaultSnapshot> {
-    let encryption_dir = vault_dir.join("encryption");
-    let database_dir = vault_dir.join("databases");
-    let files_dir = vault_dir.join("files");
+/// Used by both the GUI and the Android app so backup/import share one code path.
+pub fn serialize_vault_from_dirs(
+    encryption_dir: &Path,
+    database_dir: &Path,
+    files_dir: &Path,
+) -> Result<VaultSnapshot> {
+    let keys = read_dir_kv(encryption_dir)?;
 
-    let keys = read_dir_kv(&encryption_dir)?;
-
-    let files = read_dir_kv(&files_dir)?;
+    let files = read_dir_kv(files_dir)?;
 
     let db_path = database_dir.join("librecrate.db");
     let db_data = if db_path.exists() {
@@ -89,6 +100,16 @@ pub fn serialize_vault_from_disk(vault_dir: &Path) -> Result<VaultSnapshot> {
         db_data,
         kdf_params,
     })
+}
+
+/// Read a vault directory (GUI/CLI layout: `encryption/`, `databases/`, `files/`)
+/// and return everything needed for export or merge.
+pub fn serialize_vault_from_disk(vault_dir: &Path) -> Result<VaultSnapshot> {
+    serialize_vault_from_dirs(
+        &vault_dir.join("encryption"),
+        &vault_dir.join("databases"),
+        &vault_dir.join("files"),
+    )
 }
 
 /// Extract crypto material from an `ImportedContents` and derive the master key.
@@ -125,11 +146,16 @@ pub fn derive_master_key_from_contents(
     kdf::derive_backup_master_key(wrapped_key, password, salt, &kdf_params)
 }
 
-/// Read a vault directory from disk and export it as an encrypted backup file.
+/// Read key/database/files directories and export them as an encrypted backup file.
 ///
-/// Returns the raw bytes of a `.librecrate-backup` / `.vault` file.
-pub fn export_vault_dir(vault_dir: &Path, password: &str) -> Result<Vec<u8>> {
-    let snapshot = serialize_vault_from_disk(vault_dir)?;
+/// Shared by the GUI and the Android app — a single implementation of the backup format.
+pub fn export_vault_dirs(
+    encryption_dir: &Path,
+    database_dir: &Path,
+    files_dir: &Path,
+    password: &str,
+) -> Result<Vec<u8>> {
+    let snapshot = serialize_vault_from_dirs(encryption_dir, database_dir, files_dir)?;
     let exported = crate::format::export::export(
         &snapshot.files,
         Some(&snapshot.db_data),
@@ -138,6 +164,18 @@ pub fn export_vault_dir(vault_dir: &Path, password: &str) -> Result<Vec<u8>> {
         &snapshot.kdf_params,
     )?;
     Ok(exported.data)
+}
+
+/// Read a vault directory from disk and export it as an encrypted backup file.
+///
+/// Returns the raw bytes of a `.librecrate-backup` / `.vault` file.
+pub fn export_vault_dir(vault_dir: &Path, password: &str) -> Result<Vec<u8>> {
+    export_vault_dirs(
+        &vault_dir.join("encryption"),
+        &vault_dir.join("databases"),
+        &vault_dir.join("files"),
+        password,
+    )
 }
 
 /// Merge a backup into an existing vault directory (Branch A).
@@ -223,11 +261,15 @@ pub fn merge_vault_dir(
     Ok(stats)
 }
 
-/// Import a backup and restore it to a target directory (Branch B — full replace).
-pub fn restore_backup_to_dir(
+/// Import a backup and restore it to target directories (Branch B — full replace).
+///
+/// Shared by the GUI and the Android app — a single implementation of the import path.
+pub fn restore_backup_to_dirs(
     backup_data: &[u8],
     password: &str,
-    target_dir: &Path,
+    encryption_dir: &Path,
+    database_dir: &Path,
+    files_dir: &Path,
 ) -> Result<()> {
     let contents = crate::ffi::import_vault(
         backup_data.to_vec(),
@@ -239,17 +281,28 @@ pub fn restore_backup_to_dir(
         .clone()
         .ok_or_else(|| Error::InvalidData("backup has no database file".into()))?;
 
-    let encryption_dir = target_dir.join("encryption");
-    let database_dir = target_dir.join("databases");
-    let files_dir = target_dir.join("files");
-
     crate::merge::branch_b_fresh_install(
         &contents,
         "",
         &db_data,
-        &encryption_dir,
-        &database_dir,
-        &files_dir,
+        encryption_dir,
+        database_dir,
+        files_dir,
+    )
+}
+
+/// Import a backup and restore it to a target directory (Branch B — full replace).
+pub fn restore_backup_to_dir(
+    backup_data: &[u8],
+    password: &str,
+    target_dir: &Path,
+) -> Result<()> {
+    restore_backup_to_dirs(
+        backup_data,
+        password,
+        &target_dir.join("encryption"),
+        &target_dir.join("databases"),
+        &target_dir.join("files"),
     )
 }
 

@@ -29,40 +29,21 @@ class BackupManager(
         onProgress: (BackupProgress) -> Unit = {},
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            val filesDir = vaultRepository.filesDir
-            val encryptionDir = vaultRepository.encryptionDir
+            onProgress(BackupProgress("Preparing keys", 0.0f))
+            encryptionManager.ensureParamsToml()
 
-            onProgress(BackupProgress("Reading key files", 0.0f))
-            val keyEntries = mutableListOf<KeyValue>()
-            val wrappedKeyFile = File(encryptionDir, "wrapped_master_key")
-            if (wrappedKeyFile.exists()) keyEntries.add(KeyValue("wrapped_master_key", wrappedKeyFile.readBytes()))
-            onProgress(BackupProgress("Reading key files", 0.05f))
-            val saltFile = File(encryptionDir, "salt")
-            if (saltFile.exists()) keyEntries.add(KeyValue("salt", saltFile.readBytes()))
-            onProgress(BackupProgress("Reading key files", 0.1f))
-
-            val dbFile = context.getDatabasePath("librecrate.db")
-            val dbData = if (dbFile.exists()) dbFile.readBytes() else null
-            onProgress(BackupProgress("Reading database", 0.15f))
-
-            val allFiles = if (filesDir.exists()) filesDir.walkTopDown().filter { it.isFile }.toList() else emptyList()
-            val total = allFiles.size.coerceAtLeast(1)
-            val files = mutableListOf<KeyValue>()
-            allFiles.forEachIndexed { i, file ->
-                files.add(KeyValue(file.relativeTo(filesDir).path, file.readBytes()))
-                onProgress(BackupProgress("Reading files", 0.15f + 0.45f * ((i + 1).toFloat() / total), detail = "$i of $total"))
-            }
-
-            onProgress(BackupProgress("Encrypting backup", 0.6f))
-            val vaultBytes = exportVault(
-                files, dbData, vaultPassword, keyEntries,
-                Argon2Params(MEMORY_COST, ITERATIONS, PARALLELISM, HASH_LENGTH),
+            onProgress(BackupProgress("Encrypting backup", 0.2f))
+            val vaultBytes = exportVaultDir(
+                vaultRepository.encryptionDir.absolutePath,
+                vaultRepository.databaseDir.absolutePath,
+                vaultRepository.filesDir.absolutePath,
+                vaultPassword,
             )
-            onProgress(BackupProgress("Encrypting backup", 0.8f))
+            onProgress(BackupProgress("Writing output", 0.8f))
 
             destination.writeBytes(vaultBytes)
-            onProgress(BackupProgress("Writing output", 1.0f))
-            Log.d(TAG, "Export complete: ${vaultBytes.size} bytes, ${files.size} documents")
+            onProgress(BackupProgress("Export complete", 1.0f))
+            Log.d(TAG, "Export complete: ${vaultBytes.size} bytes")
             true
         } catch (e: Exception) {
             ErrorLogger.logException(context, TAG, "exportBackup failed", e); false
@@ -77,14 +58,11 @@ class BackupManager(
         try {
             onProgress(BackupProgress("Decrypting backup", 0.10f))
             val vaultBytes = source.readBytes()
-            val contents = importVault(vaultBytes, vaultPassword)
-            onProgress(BackupProgress("Decrypting backup", 0.30f))
 
-            val dbData = contents.dbFile ?: return@withContext false
-            onProgress(BackupProgress("Restoring database", 0.40f))
-
-            restoreToLayout(
-                contents, dbData,
+            onProgress(BackupProgress("Restoring vault", 0.30f))
+            restoreBackupToDir(
+                vaultBytes,
+                vaultPassword,
                 vaultRepository.encryptionDir.absolutePath,
                 vaultRepository.databaseDir.absolutePath,
                 vaultRepository.filesDir.absolutePath,
@@ -134,9 +112,5 @@ class BackupManager(
 
     companion object {
         private const val TAG = "BackupManager"
-        private const val MEMORY_COST: UInt = 16_384u
-        private const val ITERATIONS: UInt = 3u
-        private const val PARALLELISM: UInt = 2u
-        private const val HASH_LENGTH: Int = 32
     }
 }

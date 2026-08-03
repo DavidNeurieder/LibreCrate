@@ -11,4 +11,7 @@ interface KeyManager {
     fun changePassword(oldPassword: String, newPassword: String): Boolean
     fun disablePassword(): Boolean
     fun lock()
+
+    /** Ensure the vault's KDF params are recorded on disk (`params.toml`). */
+    fun ensureParamsToml() {}
 }

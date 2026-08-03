@@ -21,6 +21,7 @@ class EncryptionManager(context: Context) : KeyManager {
         inner.changePassword(oldPassword, newPassword)
     override fun disablePassword(): Boolean = inner.disablePassword()
     override fun lock() = inner.lock()
+    override fun ensureParamsToml() = inner.ensureParamsToml()
 
     fun setupDeviceKeyForDailyUnlock(): Boolean = inner.setupDeviceKeyForDailyUnlock()
     fun resolveDeviceKeyForBackup(): ByteArray? = inner.resolveDeviceKeyForBackup()

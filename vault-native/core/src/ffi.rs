@@ -785,6 +785,46 @@ pub fn import_vault(
     crate::format::import::import(&vault_data, &vault_password, &default_params)
 }
 
+/// Export a vault from explicit key/database/files directories.
+///
+/// The same implementation the desktop GUI uses (`vault_ops::export_vault_dir`),
+/// so Android backups are byte-for-byte the same format.
+#[uniffi::export]
+pub fn export_vault_dir(
+    encryption_dir: String,
+    database_dir: String,
+    files_dir: String,
+    vault_password: String,
+) -> Result<Vec<u8>, crate::error::Error> {
+    crate::vault_ops::export_vault_dirs(
+        std::path::Path::new(&encryption_dir),
+        std::path::Path::new(&database_dir),
+        std::path::Path::new(&files_dir),
+        &vault_password,
+    )
+}
+
+/// Import a backup and restore it to explicit key/database/files directories.
+///
+/// The same implementation the desktop GUI uses (`vault_ops::restore_backup_to_dir`),
+/// so Android restore matches the GUI import path exactly.
+#[uniffi::export]
+pub fn restore_backup_to_dir(
+    backup_data: Vec<u8>,
+    vault_password: String,
+    encryption_dir: String,
+    database_dir: String,
+    files_dir: String,
+) -> Result<(), crate::error::Error> {
+    crate::vault_ops::restore_backup_to_dirs(
+        &backup_data,
+        &vault_password,
+        std::path::Path::new(&encryption_dir),
+        std::path::Path::new(&database_dir),
+        std::path::Path::new(&files_dir),
+    )
+}
+
 #[uniffi::export]
 pub fn create_vault_layout(
     dir: String,
