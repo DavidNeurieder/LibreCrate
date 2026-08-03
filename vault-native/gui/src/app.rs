@@ -334,6 +334,7 @@ fn viewer_keyboard_handler(
 ) -> Option<Message> {
     let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
         key,
+        modified_key,
         physical_key,
         modifiers,
         ..
@@ -342,18 +343,33 @@ fn viewer_keyboard_handler(
         return None;
     };
 
-    use iced::keyboard::key;
+    use iced::keyboard::{key, Key};
 
     let viewer_msg = if modifiers.control() {
-        match physical_key {
-            key::Physical::Code(key::Code::Equal) | key::Physical::Code(key::Code::NumpadAdd) => {
-                screens::viewer::Message::ZoomIn
-            }
-            key::Physical::Code(key::Code::Minus)
-            | key::Physical::Code(key::Code::NumpadSubtract) => {
-                screens::viewer::Message::ZoomOut
-            }
-            _ => return None,
+        let key_char = match key.as_ref() {
+            Key::Character(c) => Some(c.as_ref()),
+            _ => None,
+        };
+        let mod_char = match modified_key.as_ref() {
+            Key::Character(c) => Some(c.as_ref()),
+            _ => None,
+        };
+        let is_plus = matches!(
+            physical_key,
+            key::Physical::Code(key::Code::Equal) | key::Physical::Code(key::Code::NumpadAdd)
+        ) || matches!(key_char, Some("+") | Some("="))
+            || matches!(mod_char, Some("+") | Some("="));
+        let is_minus = matches!(
+            physical_key,
+            key::Physical::Code(key::Code::Minus) | key::Physical::Code(key::Code::NumpadSubtract)
+        ) || matches!(key_char, Some("-"))
+            || matches!(mod_char, Some("-"));
+        if is_plus {
+            screens::viewer::Message::ZoomIn
+        } else if is_minus {
+            screens::viewer::Message::ZoomOut
+        } else {
+            return None;
         }
     } else {
         match key.as_ref() {
@@ -393,9 +409,18 @@ mod tests {
         code: iced::keyboard::key::Code,
         modifiers: iced::keyboard::Modifiers,
     ) -> iced::Event {
+        key_event_with(key.clone(), key, code, modifiers)
+    }
+
+    fn key_event_with(
+        key: iced::keyboard::Key,
+        modified_key: iced::keyboard::Key,
+        code: iced::keyboard::key::Code,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> iced::Event {
         iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
-            key: key.clone(),
-            modified_key: key,
+            key,
+            modified_key,
             physical_key: iced::keyboard::key::Physical::Code(code),
             location: iced::keyboard::Location::Standard,
             modifiers,
@@ -458,6 +483,53 @@ mod tests {
         );
         assert!(matches!(
             viewer_keyboard_handler(numpad_minus, iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ZoomOut))
+        ));
+    }
+
+    #[test]
+    fn zoom_keys_match_characters_regardless_of_physical_code() {
+        use iced::keyboard::{key, Modifiers};
+        let ctrl = Modifiers::CTRL;
+        let arbitrary = key::Code::KeyA;
+
+        let plus_char = key_event(key::Key::Character("+".into()), arbitrary, ctrl);
+        assert!(matches!(
+            viewer_keyboard_handler(plus_char, iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ZoomIn))
+        ));
+
+        let equal_char = key_event(key::Key::Character("=".into()), arbitrary, ctrl);
+        assert!(matches!(
+            viewer_keyboard_handler(equal_char, iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ZoomIn))
+        ));
+
+        let minus_char = key_event(key::Key::Character("-".into()), arbitrary, ctrl);
+        assert!(matches!(
+            viewer_keyboard_handler(minus_char, iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ZoomOut))
+        ));
+
+        let mod_key_plus = key_event_with(
+            key::Key::Unidentified,
+            key::Key::Character("+".into()),
+            arbitrary,
+            ctrl,
+        );
+        assert!(matches!(
+            viewer_keyboard_handler(mod_key_plus, iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ZoomIn))
+        ));
+
+        let mod_key_minus = key_event_with(
+            key::Key::Unidentified,
+            key::Key::Character("-".into()),
+            arbitrary,
+            ctrl,
+        );
+        assert!(matches!(
+            viewer_keyboard_handler(mod_key_minus, iced::event::Status::Ignored, wid()),
             Some(Message::Viewer(screens::viewer::Message::ZoomOut))
         ));
     }
