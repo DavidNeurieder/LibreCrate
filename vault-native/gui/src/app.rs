@@ -54,6 +54,7 @@ pub struct App {
 }
 
 const VIEWER_CACHE_MAX: usize = 2;
+const VIEWER_SCROLL_STEP: f32 = 50.0;
 
 pub fn boot() -> (App, Task<Message>) {
     let config = Config::load();
@@ -286,6 +287,10 @@ pub fn subscription(state: &App) -> Subscription<Message> {
     let mut subs: Vec<Subscription<Message>> = Vec::new();
     subs.push(iced::event::listen_with(drop_event_handler));
 
+    if matches!(&state.screen, Screen::Viewer(_)) {
+        subs.push(iced::event::listen_with(viewer_keyboard_handler));
+    }
+
     #[cfg(target_os = "linux")]
     {
         use iced::futures::stream::unfold;
@@ -322,6 +327,188 @@ fn drop_event_handler(
     }
 }
 
+fn viewer_keyboard_handler(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+        key,
+        physical_key,
+        modifiers,
+        ..
+    }) = event
+    else {
+        return None;
+    };
+
+    use iced::keyboard::key;
+
+    let viewer_msg = if modifiers.control() {
+        match physical_key {
+            key::Physical::Code(key::Code::Equal) | key::Physical::Code(key::Code::NumpadAdd) => {
+                screens::viewer::Message::ZoomIn
+            }
+            key::Physical::Code(key::Code::Minus)
+            | key::Physical::Code(key::Code::NumpadSubtract) => {
+                screens::viewer::Message::ZoomOut
+            }
+            _ => return None,
+        }
+    } else {
+        match key.as_ref() {
+            iced::keyboard::Key::Named(key::Named::ArrowDown) => {
+                screens::viewer::Message::ScrollBy(VIEWER_SCROLL_STEP)
+            }
+            iced::keyboard::Key::Named(key::Named::ArrowUp) => {
+                screens::viewer::Message::ScrollBy(-VIEWER_SCROLL_STEP)
+            }
+            iced::keyboard::Key::Named(key::Named::PageDown) => {
+                screens::viewer::Message::ScrollPage(1)
+            }
+            iced::keyboard::Key::Named(key::Named::PageUp) => {
+                screens::viewer::Message::ScrollPage(-1)
+            }
+            _ => return None,
+        }
+    };
+
+    Some(Message::Viewer(viewer_msg))
+}
+
 pub fn theme(_app: &App) -> Theme {
     Theme::Dark
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn wid() -> iced::window::Id {
+        iced::window::Id::unique()
+    }
+
+    fn key_event(
+        key: iced::keyboard::Key,
+        code: iced::keyboard::key::Code,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> iced::Event {
+        iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+            key: key.clone(),
+            modified_key: key,
+            physical_key: iced::keyboard::key::Physical::Code(code),
+            location: iced::keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat: false,
+        })
+    }
+
+    fn named(
+        named: iced::keyboard::key::Named,
+    ) -> iced::Event {
+        key_event(
+            iced::keyboard::Key::Named(named),
+            iced::keyboard::key::Code::KeyA,
+            iced::keyboard::Modifiers::NONE,
+        )
+    }
+
+    #[test]
+    fn zoom_keys_map_to_zoom_messages() {
+        use iced::keyboard::{key, Modifiers};
+        let ctrl = Modifiers::CTRL;
+
+        let plus = key_event(key::Key::Character("=".into()), key::Code::Equal, ctrl);
+        assert!(matches!(
+            viewer_keyboard_handler(plus, iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ZoomIn))
+        ));
+
+        let shift_plus = key_event(
+            key::Key::Character("+".into()),
+            key::Code::Equal,
+            ctrl | Modifiers::SHIFT,
+        );
+        assert!(matches!(
+            viewer_keyboard_handler(shift_plus, iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ZoomIn))
+        ));
+
+        let numpad_plus = key_event(
+            key::Key::Character("+".into()),
+            key::Code::NumpadAdd,
+            ctrl,
+        );
+        assert!(matches!(
+            viewer_keyboard_handler(numpad_plus, iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ZoomIn))
+        ));
+
+        let minus = key_event(key::Key::Character("-".into()), key::Code::Minus, ctrl);
+        assert!(matches!(
+            viewer_keyboard_handler(minus, iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ZoomOut))
+        ));
+
+        let numpad_minus = key_event(
+            key::Key::Character("-".into()),
+            key::Code::NumpadSubtract,
+            ctrl,
+        );
+        assert!(matches!(
+            viewer_keyboard_handler(numpad_minus, iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ZoomOut))
+        ));
+    }
+
+    #[test]
+    fn navigation_keys_map_to_scroll_messages() {
+        use iced::keyboard::key;
+
+        assert!(matches!(
+            viewer_keyboard_handler(named(key::Named::ArrowDown), iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ScrollBy(d))) if d == VIEWER_SCROLL_STEP
+        ));
+        assert!(matches!(
+            viewer_keyboard_handler(named(key::Named::ArrowUp), iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ScrollBy(d))) if d == -VIEWER_SCROLL_STEP
+        ));
+        assert!(matches!(
+            viewer_keyboard_handler(named(key::Named::PageDown), iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ScrollPage(1)))
+        ));
+        assert!(matches!(
+            viewer_keyboard_handler(named(key::Named::PageUp), iced::event::Status::Ignored, wid()),
+            Some(Message::Viewer(screens::viewer::Message::ScrollPage(-1)))
+        ));
+    }
+
+    #[test]
+    fn unrelated_keys_are_ignored() {
+        use iced::keyboard::{key, Modifiers};
+
+        let ctrl_0 = key_event(
+            key::Key::Character("0".into()),
+            key::Code::Digit0,
+            Modifiers::CTRL,
+        );
+        assert!(viewer_keyboard_handler(ctrl_0, iced::event::Status::Ignored, wid()).is_none());
+
+        assert!(viewer_keyboard_handler(
+            named(key::Named::Escape),
+            iced::event::Status::Ignored,
+            wid()
+        )
+        .is_none());
+
+        let release = iced::Event::Keyboard(iced::keyboard::Event::KeyReleased {
+            key: iced::keyboard::Key::Named(key::Named::ArrowDown),
+            modified_key: iced::keyboard::Key::Named(key::Named::ArrowDown),
+            physical_key: key::Physical::Code(key::Code::ArrowDown),
+            location: iced::keyboard::Location::Standard,
+            modifiers: iced::keyboard::Modifiers::NONE,
+        });
+        assert!(viewer_keyboard_handler(release, iced::event::Status::Ignored, wid()).is_none());
+    }
 }

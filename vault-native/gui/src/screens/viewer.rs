@@ -75,6 +75,8 @@ pub enum Message {
     Loaded(Result<LoadedDoc, String>),
     PageRendered(Result<RenderedPage, String>),
     ViewportChanged(f32, f32),
+    ScrollBy(f32),
+    ScrollPage(i8),
     ZoomIn,
     ZoomOut,
     ResetZoom,
@@ -424,6 +426,12 @@ impl State {
                 }
                 self.next_render_task().unwrap_or_else(Task::none)
             }
+            Message::ScrollBy(delta) => self
+                .scroll_to_y(self.viewport_y + delta)
+                .unwrap_or_else(Task::none),
+            Message::ScrollPage(dir) => self
+                .scroll_to_y(self.viewport_y + dir as f32 * self.viewport_visible)
+                .unwrap_or_else(Task::none),
             Message::ZoomIn => self.set_zoom(self.zoom_index().saturating_add(1)),
             Message::ZoomOut => self.set_zoom(self.zoom_index().saturating_sub(1)),
             Message::ResetZoom => self.set_zoom(self.default_zoom_index()),
@@ -615,6 +623,26 @@ impl State {
 
     fn estimated_offset_of(&self, i: usize) -> f32 {
         self.exact_offset_of(i)
+    }
+
+    fn content_height(&self) -> f32 {
+        self.exact_offset_of(self.page_count) + PAD_BOTTOM * self.zoom
+    }
+
+    fn scroll_target(&self, y: f32) -> Option<f32> {
+        if self.handle.is_none() || self.page_count == 0 || self.viewport_visible <= 0.0 {
+            return None;
+        }
+        let max = (self.content_height() - self.viewport_visible).max(0.0);
+        Some(y.clamp(0.0, max))
+    }
+
+    fn scroll_to_y(&self, y: f32) -> Option<Task<crate::app::Message>> {
+        let y = self.scroll_target(y)?;
+        Some(operation::scroll_to(
+            self.scroll_id.clone(),
+            scrollable::AbsoluteOffset { x: 0.0, y },
+        ))
     }
 
     fn jump_to(&mut self, page: usize, offset_within_page: f32) -> Task<crate::app::Message> {
@@ -1621,6 +1649,136 @@ mod tests {
             );
             prev_zoom = target_zoom;
         }
+    }
+
+    #[test]
+    fn test_scroll_target_clamps_and_guards() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "search_3page.pdf");
+        let mut state = loaded_state(&vault, doc);
+
+        assert_eq!(state.scroll_target(100.0), None, "no viewport yet");
+
+        let handle = state.handle.clone().unwrap();
+        for i in 0..state.page_count {
+            let page = render_page(&handle, i, target_width(state.zoom)).unwrap();
+            let _ = state.update(Message::PageRendered(Ok(page)));
+        }
+        let _ = state.update(Message::ViewportChanged(100.0, 600.0));
+
+        assert_eq!(state.scroll_target(150.0), Some(150.0));
+        assert_eq!(state.scroll_target(-1000.0), Some(0.0));
+        let max = (state.content_height() - 600.0).max(0.0);
+        assert_eq!(state.scroll_target(f32::MAX), Some(max));
+        assert_eq!(state.scroll_target(max + 500.0), Some(max));
+    }
+
+    #[test]
+    fn test_iced_runtime_scroll_keys_scroll_document() {
+        use iced_test::core::renderer::Headless;
+        use iced_test::core::widget::operation;
+        use iced_test::core::{mouse, renderer, window, Event, Size};
+        use iced_test::runtime::user_interface;
+        use iced_test::runtime::UserInterface;
+
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "search_3page.pdf");
+        let mut state = loaded_state(&vault, doc);
+
+        let mut renderer = iced_test::futures::futures::executor::block_on(
+            iced_test::renderer::Renderer::new(iced::Font::DEFAULT, iced::Pixels(16.0), None),
+        )
+        .expect("renderer");
+        let size = Size::new(800.0, 600.0);
+        let mut cache = user_interface::Cache::default();
+
+        fn render_all(state: &mut State) {
+            let handle = state.handle.clone().unwrap();
+            let width = target_width(state.zoom);
+            for i in 0..state.page_count {
+                let page = render_page(&handle, i, width).unwrap();
+                let _ = state.update(Message::PageRendered(Ok(page)));
+            }
+        }
+
+        fn drive(
+            state: &mut State,
+            renderer: &mut iced_test::renderer::Renderer,
+            size: Size,
+            cache: user_interface::Cache,
+            target: Option<f32>,
+        ) -> (f32, f32, user_interface::Cache) {
+            let mut ui = UserInterface::build(state.view(), size, cache, renderer);
+            if let Some(y) = target {
+                let mut op = operation::scrollable::scroll_to::<()>(
+                    state.scroll_id.clone(),
+                    scrollable::AbsoluteOffset { x: None, y: Some(y) },
+                );
+                ui.operate(renderer, &mut op);
+            }
+            let mut msgs: Vec<Message> = Vec::new();
+            ui.update(
+                &[Event::Window(window::Event::RedrawRequested(
+                    iced_test::core::time::Instant::now(),
+                ))],
+                mouse::Cursor::Unavailable,
+                renderer,
+                &mut iced_test::core::clipboard::Null,
+                &mut msgs,
+            );
+            ui.draw(
+                renderer,
+                &iced::Theme::Dark,
+                &renderer::Style {
+                    text_color: iced::Color::BLACK,
+                },
+                mouse::Cursor::Unavailable,
+            );
+            let cache = ui.into_cache();
+            let (mut applied, mut visible) = (0.0f32, 0.0f32);
+            for m in msgs {
+                if let Message::ViewportChanged(y, v) = m {
+                    applied = y;
+                    visible = v;
+                }
+            }
+            let _ = state.update(Message::ViewportChanged(applied, visible));
+            (applied, visible, cache)
+        }
+
+        render_all(&mut state);
+        let y2 = state.exact_offset_of(2);
+        let (_, _, cache_kept) = drive(&mut state, &mut renderer, size, cache, Some(y2));
+        cache = cache_kept;
+        assert!(state.viewport_visible > 0.0);
+
+        let down = state.scroll_target(state.viewport_y + 50.0).unwrap();
+        let _ = state.update(Message::ScrollBy(50.0));
+        let (applied, _, cache_kept) = drive(&mut state, &mut renderer, size, cache, Some(down));
+        cache = cache_kept;
+        assert!(
+            (applied - down).abs() < 1.0,
+            "arrow down: expected {down}, got {applied}"
+        );
+
+        let page_down = state.scroll_target(state.viewport_y + state.viewport_visible).unwrap();
+        let _ = state.update(Message::ScrollPage(1));
+        let (applied, _, cache_kept) = drive(&mut state, &mut renderer, size, cache, Some(page_down));
+        cache = cache_kept;
+        assert!(
+            (applied - page_down).abs() < 1.0,
+            "page down: expected {page_down}, got {applied}"
+        );
+        assert_eq!(state.current_page, state.page_at_y(state.viewport_y));
+
+        let page_up = state.scroll_target(state.viewport_y - state.viewport_visible).unwrap();
+        let _ = state.update(Message::ScrollPage(-1));
+        let (applied, _, cache_kept) = drive(&mut state, &mut renderer, size, cache, Some(page_up));
+        cache = cache_kept;
+        assert!(
+            (applied - page_up).abs() < 1.0,
+            "page up: expected {page_up}, got {applied}"
+        );
     }
 
     #[test]
