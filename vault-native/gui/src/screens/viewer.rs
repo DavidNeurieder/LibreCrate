@@ -972,6 +972,20 @@ mod tests {
     }
 
     #[test]
+    fn test_load_document_opens_script_epub() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "mini_scripts.epub");
+        let loaded = load_document(&vault, &doc).unwrap();
+        assert!(loaded.page_count > 0);
+        assert_eq!(loaded.first.index, 0);
+        assert!(!loaded.first.data.is_empty());
+        assert!(loaded.first.width > 0 && loaded.first.height > 0);
+
+        let text = loaded.handle.extract_text(0).unwrap();
+        assert!(text.contains("LibreCrateMiniEpub"), "epub text was: {text:?}");
+    }
+
+    #[test]
     fn test_load_document_opens_cbz() {
         let (vault, _dir) = make_test_vault_with_dir();
         let doc = import_sample(&vault, "mini.cbz");
