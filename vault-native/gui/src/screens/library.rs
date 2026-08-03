@@ -436,7 +436,7 @@ impl State {
 
     pub fn view(&self) -> Element<'_, Message> {
         let sort_picker = pick_list(SortOption::ALL, Some(self.sort_option), Message::SortChanged)
-            .width(Length::Fixed(140.0));
+            .width(Length::Shrink);
 
         let filter_row = TypeFilter::ALL.iter().fold(
             Row::new().spacing(6),
