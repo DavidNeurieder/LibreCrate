@@ -305,20 +305,23 @@ class VaultRepository(private val context: Context) {
         handle?.setSchemaVersion(version)
     }
     // -----------------------------------------------------------------------
-    suspend fun mergeBranchA(
-        backupDbPath: String,
-        backupMasterKey: ByteArray,
-        files: List<KeyValue>,
-        backupKey: ByteArray?,
-        localKey: ByteArray?,
-        filesDir: String,
-    ): MergeStats? = withContext(Dispatchers.IO) {
-        try {
-            handle?.mergeBranchA(backupDbPath, backupMasterKey, files, backupKey, localKey, filesDir)
-        } catch (e: Exception) {
-            ErrorLogger.logException(context, TAG, "mergeBranchA failed", e); null
+    // Import
+    // -----------------------------------------------------------------------
+    fun isOpen(): Boolean = handle != null
+    suspend fun mergeBackup(backupData: ByteArray, backupPassword: String): MergeStats? =
+        withContext(Dispatchers.IO) {
+            try {
+                val stats = handle?.mergeBackup(
+                    context.filesDir.absolutePath,
+                    backupData,
+                    backupPassword,
+                )
+                if (stats != null) refreshAll()
+                stats
+            } catch (e: Exception) {
+                ErrorLogger.logException(context, TAG, "mergeBackup failed", e); null
+            }
         }
-    }
     // -----------------------------------------------------------------------
     // Internal helpers
     // -----------------------------------------------------------------------

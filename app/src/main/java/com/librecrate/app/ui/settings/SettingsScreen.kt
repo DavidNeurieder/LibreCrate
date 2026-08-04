@@ -160,7 +160,7 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        text = "The passkey of the vault that created this backup is needed to decrypt it.",
+                        text = "The passkey of the vault that created this backup is needed to decrypt it. Documents are merged into your current library.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

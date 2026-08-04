@@ -290,54 +290,69 @@ pub fn merge_backup_to_vault(
     // Derive the backup's own master key (from its password, not the local one)
     let backup_master_key = derive_master_key_from_contents(&contents, backup_password)?;
 
-    // Write backup DB to a temp file so branch_a_merge can open it
-    let tmp_dir = tempfile::tempdir().map_err(|e| Error::Io(e.to_string()))?;
-    let backup_db_path = tmp_dir.path().join("backup.db");
-    std::fs::write(&backup_db_path, db_data)?;
-
-    let files_dir = vault_dir.join("files");
-
-    match local_master_key {
-        Some(local_key) => {
-            // Re-encrypt file blobs from the backup key to the local key.
-            // branch_a_merge writes the files and updates encryption_iv/file_path,
-            // so no unconditional blob copy afterwards (it would clobber them).
-            crate::merge::branch_a_merge(
-                backup_db_path
-                    .to_str()
-                    .ok_or_else(|| Error::InvalidData("invalid backup db path".into()))?,
-                &backup_master_key,
-                current_conn,
-                &contents.files,
-                Some(&backup_master_key),
-                Some(local_key),
-                &files_dir,
-            )
-        }
-        None => {
-            // Plaintext vault: no re-encryption available, so merge without keys
-            // and copy backup blobs over verbatim (matches the CLI path).
-            let stats = crate::merge::branch_a_merge(
-                backup_db_path
-                    .to_str()
-                    .ok_or_else(|| Error::InvalidData("invalid backup db path".into()))?,
-                &backup_master_key,
-                current_conn,
-                &contents.files,
-                None,
-                None,
-                &files_dir,
-            )?;
-            for kv in &contents.files {
-                let target = files_dir.join(&kv.key);
-                if let Some(parent) = target.parent() {
-                    std::fs::create_dir_all(parent)?;
+    // Write the backup DB to a temp file so branch_a_merge can open it.
+    // tempfile::tempdir() resolves to /data/local/tmp on Android, which the app
+    // cannot write to, so place the temp file inside vault_dir instead (that is
+    // the app's filesDir on Android and the vault directory on the GUI).
+    std::fs::create_dir_all(vault_dir)?;
+    let backup_db_path = vault_dir.join(format!(
+        ".backup_merge_{}_{}.db",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0),
+    ));
+    let result = std::fs::write(&backup_db_path, db_data)
+        .map_err(|e| Error::Io(e.to_string()))
+        .and_then(|_| {
+            let files_dir = vault_dir.join("files");
+            match local_master_key {
+                Some(local_key) => {
+                    // Re-encrypt file blobs from the backup key to the local key.
+                    // branch_a_merge writes the files and updates
+                    // encryption_iv/file_path, so no unconditional blob copy
+                    // afterwards (it would clobber them).
+                    crate::merge::branch_a_merge(
+                        backup_db_path
+                            .to_str()
+                            .ok_or_else(|| Error::InvalidData("invalid backup db path".into()))?,
+                        &backup_master_key,
+                        current_conn,
+                        &contents.files,
+                        Some(&backup_master_key),
+                        Some(local_key),
+                        &files_dir,
+                    )
                 }
-                std::fs::write(&target, &kv.value)?;
+                None => {
+                    // Plaintext vault: no re-encryption available, so merge
+                    // without keys and copy backup blobs over verbatim (matches
+                    // the CLI path).
+                    let stats = crate::merge::branch_a_merge(
+                        backup_db_path
+                            .to_str()
+                            .ok_or_else(|| Error::InvalidData("invalid backup db path".into()))?,
+                        &backup_master_key,
+                        current_conn,
+                        &contents.files,
+                        None,
+                        None,
+                        &files_dir,
+                    )?;
+                    for kv in &contents.files {
+                        let target = files_dir.join(&kv.key);
+                        if let Some(parent) = target.parent() {
+                            std::fs::create_dir_all(parent)?;
+                        }
+                        std::fs::write(&target, &kv.value)?;
+                    }
+                    Ok(stats)
+                }
             }
-            Ok(stats)
-        }
-    }
+        });
+    let _ = std::fs::remove_file(&backup_db_path);
+    result
 }
 
 /// Import a backup and restore it to target directories (Branch B — full replace).

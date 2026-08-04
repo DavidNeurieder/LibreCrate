@@ -5,7 +5,6 @@ import android.content.Intent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
@@ -143,11 +142,13 @@ class ImportOpenAllTypesInstrumentedTest {
         composeTestRule.onNodeWithText("test_import.cbz", useUnmergedTree = true).assertExists()
         composeTestRule.onNodeWithText("test_import.png", useUnmergedTree = true).assertExists()
 
-        composeTestRule.onNodeWithContentDescription("PDF").assertExists()
-        composeTestRule.onNodeWithContentDescription("EPUB").assertExists()
-        composeTestRule.onNodeWithContentDescription("PKPASS").assertExists()
-        composeTestRule.onNodeWithContentDescription("CBZ").assertExists()
-        composeTestRule.onNodeWithContentDescription("IMAGE").assertExists()
+        // Type badges (contentDescription) are only rendered for docs without a
+        // thumbnail, so assert the type name in each card's metadata line instead.
+        composeTestRule.onNodeWithText("PDF", substring = true, useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("EPUB", substring = true, useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("PKPASS", substring = true, useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("CBZ", substring = true, useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("IMAGE", substring = true, useUnmergedTree = true).assertExists()
 
         composeTestRule.onNodeWithText("All").performClick()
         composeTestRule.onNodeWithText("PDFs").assertExists()

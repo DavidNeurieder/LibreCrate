@@ -92,7 +92,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val ok = app.backupManager.importBackupFromUri(uri, password) { progress ->
                     _backupProgress.value = progress
                 }
-                if (ok) { app.encryptionManager.verifyPassword(password); app.openVault() } else false
+                if (ok) {
+                    app.encryptionManager.verifyPassword(password)
+                    // A merge keeps the open vault (and its password) intact; a full
+                    // restore (fresh install) needs the vault opened afterwards.
+                    if (!app.vaultRepository.isOpen()) { app.openVault() }
+                    true
+                } else false
             }
             _backupProgress.value = null
             if (success) { importVaultPassword.value = ""; pendingImportUri.value = null }

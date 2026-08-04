@@ -59,15 +59,28 @@ class BackupManager(
             onProgress(BackupProgress("Decrypting backup", 0.10f))
             val vaultBytes = source.readBytes()
 
-            onProgress(BackupProgress("Restoring vault", 0.30f))
-            restoreBackupToDir(
-                vaultBytes,
-                vaultPassword,
-                vaultRepository.encryptionDir.absolutePath,
-                vaultRepository.databaseDir.absolutePath,
-                vaultRepository.filesDir.absolutePath,
-            )
-            onProgress(BackupProgress("Restore complete", 1.0f))
+            if (vaultRepository.isOpen()) {
+                // Merge into the open library (Branch A) — existing documents are kept.
+                val stats = vaultRepository.mergeBackup(vaultBytes, vaultPassword)
+                    ?: return@withContext false
+                onProgress(BackupProgress("Import complete", 1.0f))
+                Log.d(
+                    TAG,
+                    "Import merged: ${stats.documentsAdded} added, " +
+                        "${stats.documentsUpdated} updated, ${stats.documentsConflicted} conflicts",
+                )
+            } else {
+                // No open local vault (fresh install / reinstall) — restore wholesale.
+                onProgress(BackupProgress("Restoring vault", 0.30f))
+                restoreBackupToDir(
+                    vaultBytes,
+                    vaultPassword,
+                    vaultRepository.encryptionDir.absolutePath,
+                    vaultRepository.databaseDir.absolutePath,
+                    vaultRepository.filesDir.absolutePath,
+                )
+                onProgress(BackupProgress("Restore complete", 1.0f))
+            }
             true
         } catch (e: Exception) {
             ErrorLogger.logException(context, TAG, "importBackup failed", e); false

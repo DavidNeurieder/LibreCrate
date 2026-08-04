@@ -118,25 +118,30 @@ class BackupManagerTest {
     }
 
     @Test
-    fun importBackupWithDifferentPasswordIntoExistingContent() = runTest {
-        val masterKeyA = app.encryptionManager.getMasterKeyForSession()!!
+    fun importMergesBackupIntoExistingOpenVault() = runTest {
+        // Seed the vault and capture a backup of this state with the vault password.
         vault.addDocumentFull(
-            Document(id = "cross-doc-1", title = "Existing Doc", fileName = "existing.txt", mimeType = "text/plain"),
-            textContent = "Existing document",
+            Document(id = "merge-doc-1", title = "Backup Doc", fileName = "backup.txt", mimeType = "text/plain"),
+            textContent = "Document from backup",
         )
+        val backupFile = File(app.cacheDir, "test_backup_merge.vault")
+        assertTrue("Export should succeed", backupManager.exportBackup(backupFile, testPassword))
 
-        val exportPassword = "export_password"
-        val backupFile = File(app.cacheDir, "test_backup_cross.vault")
-        assertTrue("Export should succeed", backupManager.exportBackup(backupFile, exportPassword))
+        // The library changes after the backup was made: the backed-up doc is gone
+        // and a new local doc exists. Importing must NOT wipe the local doc.
+        vault.deleteDocument("merge-doc-1")
+        vault.addDocumentFull(
+            Document(id = "merge-doc-2", title = "Local Doc", fileName = "local.txt", mimeType = "text/plain"),
+            textContent = "Document created locally after backup",
+        )
+        assertEquals("One local doc before import", 1, vault.listDocuments().size)
 
-        vault.listDocuments().forEach { vault.deleteDocumentFull(it.id) }
-        vault.close()
+        assertTrue("Import into open vault should succeed", backupManager.importBackup(backupFile, testPassword))
 
-        assertTrue("Import with correct password should succeed", backupManager.importBackup(backupFile, exportPassword))
-
-        vault.open(masterKeyA)
         val docs = vault.listDocuments()
-        assertEquals("Document should be restored", 1, docs.size)
+        assertEquals("Backup content merges into the existing library", 2, docs.size)
+        assertNotNull("Backed-up document restored", docs.find { it.id == "merge-doc-1" })
+        assertNotNull("Local document survives", docs.find { it.id == "merge-doc-2" })
     }
 
     @Test
