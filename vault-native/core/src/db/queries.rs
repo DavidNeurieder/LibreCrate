@@ -282,6 +282,20 @@ pub fn update_document_full(
     Ok(affected > 0)
 }
 
+/// Update only the indexed text for a document. The `fts_after_update` trigger
+/// keeps the FTS index in sync, so search finds the new content immediately.
+pub fn update_document_text_content(
+    conn: &Connection,
+    id: &str,
+    text_content: Option<&str>,
+) -> Result<bool> {
+    let affected = conn.execute(
+        "UPDATE documents SET text_content = ?1 WHERE id = ?2",
+        params![text_content.unwrap_or(""), id],
+    )?;
+    Ok(affected > 0)
+}
+
 pub fn set_reading_position(conn: &Connection, id: &str, position: &str) -> Result<bool> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -545,6 +559,32 @@ mod tests {
         assert!(delete_document(&conn, "del1").unwrap());
         assert!(!delete_document(&conn, "nonexistent").unwrap());
         assert_eq!(list_documents(&conn).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_update_document_text_content_reindexes_fts() {
+        let conn = setup_db();
+        let doc = DocumentRow {
+            id: "fts1".into(),
+            title: "Reindex Me".into(),
+            file_name: "book.txt".into(),
+            mime_type: "text/plain".into(),
+            file_path: "files/book.txt".into(),
+            imported_at: 0,
+            last_opened_at: 0,
+            modified_at: 0,
+            ..Default::default()
+        };
+        add_document(&conn, &doc).unwrap();
+
+        assert!(crate::db::fts::search(&conn, "blahblah").unwrap().is_empty());
+
+        update_document_text_content(&conn, "fts1", Some("now with a blahblah marker")).unwrap();
+        let results = crate::db::fts::search(&conn, "blahblah").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "fts1");
+
+        assert!(!update_document_text_content(&conn, "nonexistent", None).unwrap());
     }
 
     #[test]

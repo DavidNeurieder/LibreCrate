@@ -117,3 +117,79 @@ impl PdfHandle {
             .map_err(|e| PdfError::ExtractFailed { msg: e.to_string() })
     }
 }
+
+/// Best-effort full-text extraction for import-time FTS indexing.
+/// Returns `None` when the mime type has no extractable text, or extraction
+/// fails (in which case importing should still succeed).
+pub fn extract_document_text(path: &str, mime: &str) -> Option<String> {
+    if mime.starts_with("text/") || mime.contains("markdown") {
+        return std::fs::read_to_string(path).ok();
+    }
+    let is_mupdf = mime.contains("pdf")
+        || mime.contains("epub")
+        || mime.contains("mobipocket")
+        || mime.contains("fictionbook");
+    if !is_mupdf {
+        return None;
+    }
+    let handle = PdfHandle::open(path.to_string()).ok()?;
+    let page_count = handle.page_count().ok()?;
+    if page_count <= 0 {
+        return None;
+    }
+    let mut out = String::new();
+    for page in 0..page_count {
+        if let Ok(text) = handle.extract_text(page) {
+            if !text.trim().is_empty() {
+                out.push_str(&text);
+                out.push('\n');
+            }
+        }
+        // Matches Android's PdfDocumentProcessor: a `[PAGE=N]` marker after each
+        // page lets search_with_all_matches enumerate per-page matches.
+        out.push_str(&format!("[PAGE={}]\n", page + 1));
+    }
+    if out.trim().is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_text_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("note.txt");
+        std::fs::write(&path, "alpha beta gamma").unwrap();
+        let text = extract_document_text(&path.to_string_lossy(), "text/plain").unwrap();
+        assert!(text.contains("beta"));
+    }
+
+    #[test]
+    fn test_extract_text_markdown_mime() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("note.md");
+        std::fs::write(&path, "# Heading\nbody word").unwrap();
+        let text = extract_document_text(&path.to_string_lossy(), "text/markdown").unwrap();
+        assert!(text.contains("body word"));
+    }
+
+    #[test]
+    fn test_extract_text_non_text_mime_returns_none() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("photo.png");
+        std::fs::write(&path, [0u8; 32]).unwrap();
+        assert!(extract_document_text(&path.to_string_lossy(), "image/png").is_none());
+        assert!(extract_document_text(&path.to_string_lossy(), "application/vnd.comicbook+zip").is_none());
+    }
+
+    #[test]
+    fn test_extract_text_missing_file_returns_none() {
+        assert!(extract_document_text("/nonexistent/file.pdf", "application/pdf").is_none());
+        assert!(extract_document_text("/nonexistent/file.txt", "text/plain").is_none());
+    }
+}

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use vault_native::db::fts::FtsSnippetResult;
+use vault_native::db::fts::MultiMatchResult;
 use vault_native::db::queries::DocumentRow;
 use vault_native::ffi::DbHandle;
 
@@ -105,8 +105,11 @@ impl Vault {
         Ok(self.db.list_documents()?)
     }
 
-    pub fn search_with_snippet(&self, query: &str) -> Result<Vec<FtsSnippetResult>> {
-        Ok(self.db.search_documents_with_snippet(query.to_string())?)
+    pub fn search_with_all_matches(
+        &self,
+        query: &str,
+    ) -> Result<Vec<MultiMatchResult>> {
+        Ok(self.db.search_documents_with_all_matches(query.to_string())?)
     }
 
     pub fn toggle_favorite(&self, id: String) -> Result<bool> {
@@ -175,16 +178,30 @@ impl Vault {
         }
         let id = uuid::Uuid::new_v4().to_string();
 
+        // Insert the document first (fast) so the library updates immediately;
+        // full-text extraction runs in the background afterwards.
         let id = self.db.import_document(
             self.base_dir.to_string_lossy().to_string(),
             id,
             title,
             file_data,
-            mime,
+            mime.clone(),
             String::new(),
             String::new(),
             None,
         )?;
+
+        let db = self.db.clone();
+        let path_buf = path.to_path_buf();
+        let id_clone = id.clone();
+        std::thread::spawn(move || {
+            if let Some(text) =
+                vault_native::pdf::extract_document_text(&path_buf.to_string_lossy(), &mime)
+            {
+                let _ = db.update_document_text_content(id_clone, Some(text));
+            }
+        });
+
         Ok(id)
     }
 
@@ -280,8 +297,29 @@ pub(crate) mod tests {
     #[test]
     fn test_search_empty() {
         let vault = create_test_vault();
-        let results = vault.search_with_snippet("nothing").unwrap();
+        let results = vault.search_with_all_matches("nothing").unwrap();
         assert!(results.is_empty());
+    }
+
+    fn fixture_path(name: &str) -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("test_resources")
+            .join(name)
+    }
+
+    /// Background extraction runs on a detached thread; poll until it lands.
+    fn wait_for<F>(mut check: F) -> bool
+    where
+        F: FnMut() -> bool,
+    {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
+            if check() {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        false
     }
 
     #[test]
@@ -299,6 +337,106 @@ pub(crate) mod tests {
         assert_eq!(docs[0].file_name, format!("{id}.txt"));
         assert!(docs[0].file_size > 0);
         assert_eq!(docs[0].mime_type, "text/plain");
+    }
+
+    #[test]
+    fn test_import_indexes_txt_content() {
+        let tv = create_test_vault_with_dir();
+        let file_path = tv._dir.path().join("note.txt");
+        std::fs::write(&file_path, b"alpha beta gamma").unwrap();
+
+        tv.vault.import_file(&file_path).unwrap();
+        assert!(
+            wait_for(|| {
+                tv.vault
+                    .search_with_all_matches("beta")
+                    .unwrap()
+                    .iter()
+                    .any(|r| r.title == "note.txt")
+            }),
+            "background extraction never indexed the txt content"
+        );
+
+        let results = tv.vault.search_with_all_matches("beta").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "note.txt");
+    }
+
+    #[test]
+    fn test_import_indexes_pdf_content() {
+        let tv = create_test_vault_with_dir();
+        let path = fixture_path("search_3page.pdf");
+        assert!(path.exists(), "fixture missing: {}", path.display());
+
+        tv.vault.import_file(&path).unwrap();
+        assert!(
+            wait_for(|| {
+                !tv.vault
+                    .search_with_all_matches("content")
+                    .unwrap()
+                    .is_empty()
+            }),
+            "background extraction never indexed the pdf content"
+        );
+
+        let results = tv.vault.search_with_all_matches("Page 2").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "search_3page.pdf");
+        assert!(
+            results[0].first_snippet.contains("<b>2</b>"),
+            "snippet should highlight the match, got: {:?}",
+            results[0].first_snippet
+        );
+
+        let results = tv.vault.search_with_all_matches("content").unwrap();
+        assert!(
+            results[0].additional_matches.len() >= 2,
+            "expected per-page matches across all pages, got: {:?}",
+            results[0]
+                .additional_matches
+                .iter()
+                .map(|m| (m.page_number, m.snippet.clone()))
+                .collect::<Vec<_>>()
+        );
+        let pages: Vec<i32> = results[0]
+            .additional_matches
+            .iter()
+            .map(|m| m.page_number)
+            .collect();
+        assert!(
+            pages.windows(2).all(|w| w[1] > w[0]),
+            "page matches should be ordered, got: {pages:?}"
+        );
+    }
+
+    #[test]
+    fn test_import_indexes_multiple_documents() {
+        let tv = create_test_vault_with_dir();
+        let epub = fixture_path("mini.epub");
+        let fb2 = fixture_path("mini.fb2");
+        assert!(epub.exists(), "fixture missing: {}", epub.display());
+        assert!(fb2.exists(), "fixture missing: {}", fb2.display());
+
+        tv.vault.import_file(&epub).unwrap();
+        tv.vault.import_file(&fb2).unwrap();
+        assert!(
+            wait_for(|| {
+                tv.vault
+                    .search_with_all_matches("LibreCrateMiniEpub")
+                    .unwrap()
+                    .len()
+                    == 2
+            }),
+            "background extraction never indexed both documents"
+        );
+
+        let results = tv.vault.search_with_all_matches("LibreCrateMiniEpub").unwrap();
+        assert_eq!(
+            results.len(),
+            2,
+            "expected both imported documents to match, got: {:?}",
+            results.iter().map(|r| r.title.clone()).collect::<Vec<_>>()
+        );
     }
 
     // Test using Vault::create directly, then import_document

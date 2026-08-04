@@ -39,6 +39,11 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.5.3" date="2026-08-03">
+      <description>
+        <p>Backup compatibility: the Android app and desktop GUI now share a single Rust backup/import implementation. Phone backups record their key-derivation parameters (params.toml), fixing phone → desktop import ("crypto error: key unwrap failed"); the desktop app now unlocks with the imported vault's password after a restore.</p>
+      </description>
+    </release>
     <release version="0.5.2" date="2026-08-01">
       <description>
         <p>Privacy: removed unused permissions (WAKE_LOCK, ACCESS_NETWORK_STATE, RECEIVE_BOOT_COMPLETED, FOREGROUND_SERVICE) and the unused WorkManager dependency — the app now requests no special permissions.</p>

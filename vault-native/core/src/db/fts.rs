@@ -29,13 +29,13 @@ pub struct FtsAllMatchesResult {
     pub highlighted: String,
 }
 
-#[derive(Debug, uniffi::Record)]
+#[derive(Debug, Clone, uniffi::Record)]
 pub struct PageMatch {
     pub snippet: String,
     pub page_number: i32,
 }
 
-#[derive(Debug, uniffi::Record)]
+#[derive(Debug, Clone, uniffi::Record)]
 pub struct MultiMatchResult {
     pub rank: f64,
     pub id: String,

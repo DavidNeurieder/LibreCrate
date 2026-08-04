@@ -21,5 +21,6 @@ pub enum Navigation {
     ExportDocs(Arc<Vault>),
     OpenDocument(DocumentRow, Arc<Vault>),
     OpenViewer(DocumentRow, Arc<Vault>),
+    OpenViewerAt(DocumentRow, Arc<Vault>, usize),
     ViewerExit(Arc<Vault>),
 }

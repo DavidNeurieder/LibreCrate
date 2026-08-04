@@ -259,6 +259,18 @@ fn handle_navigation(app: &mut App, nav: Navigation) -> Task<Message> {
                 task
             }
         }
+        Navigation::OpenViewerAt(doc, vault, page) => {
+            if let Some(cached) = app.viewer_cache.iter().position(|c| c.doc_id == doc.id) {
+                let cached = app.viewer_cache.remove(cached).expect("just located");
+                let (state, task) = screens::viewer::State::from_cached_at(doc, vault, cached, Some(page));
+                app.screen = Screen::Viewer(state);
+                task
+            } else {
+                let (state, task) = screens::viewer::State::new_at(doc, vault, page);
+                app.screen = Screen::Viewer(state);
+                task
+            }
+        }
         Navigation::ViewerExit(vault) => {
             if let Screen::Viewer(state) = &mut app.screen {
                 if let Some(cached) = state.leaving() {

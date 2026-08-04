@@ -8,7 +8,7 @@ use std::sync::Arc;
 use super::Navigation;
 use crate::vault::Vault;
 use crate::widgets::document_card;
-use vault_native::db::fts::FtsSnippetResult;
+use vault_native::db::fts::MultiMatchResult;
 use vault_native::db::queries::DocumentRow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,7 +115,9 @@ pub enum Message {
     Import,
     Imported(Result<usize, String>),
     DocumentsLoaded(Result<Vec<DocumentRow>, String>),
-    SearchResultsLoaded(Vec<FtsSnippetResult>),
+    SearchResultsLoaded(Vec<MultiMatchResult>),
+    ToggleMatchesExpanded(String),
+    OpenSearchMatch(String, usize),
     DropResult(Result<usize, String>),
     ThumbnailLoaded(String, image::Handle),
     Noop,
@@ -125,7 +127,8 @@ pub struct State {
     pub vault: Arc<Vault>,
     pub documents: Vec<DocumentRow>,
     pub search_query: String,
-    pub search_results: Option<Vec<FtsSnippetResult>>,
+    pub search_results: Option<Vec<MultiMatchResult>>,
+    pub expanded_search_id: Option<String>,
     pub loading: bool,
     pub error: Option<String>,
     pub thumbnails: HashMap<String, image::Handle>,
@@ -143,6 +146,7 @@ impl State {
             documents: Vec::new(),
             search_query: String::new(),
             search_results: None,
+            expanded_search_id: None,
             loading: true,
             error: None,
             thumbnails: HashMap::new(),
@@ -201,7 +205,7 @@ impl State {
                 Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
-                            vault.search_with_snippet(&query).map_err(|e| e.to_string())
+                            vault.search_with_all_matches(&query).map_err(|e| e.to_string())
                         })
                         .await
                         .map_err(|e| e.to_string())?
@@ -364,6 +368,46 @@ impl State {
             Message::SearchResultsLoaded(results) => {
                 self.search_results = Some(results);
                 Task::none()
+            }
+            Message::ToggleMatchesExpanded(id) => {
+                self.expanded_search_id = if self.expanded_search_id.as_deref() == Some(&id) {
+                    None
+                } else {
+                    Some(id)
+                };
+                Task::none()
+            }
+            Message::OpenSearchMatch(id, page) => {
+                if let Some(doc) = self.documents.iter().find(|d| d.id == id) {
+                    return Task::done(crate::app::Message::Navigate(open_navigation_at_page(
+                        &doc,
+                        self.vault.clone(),
+                        page,
+                    )));
+                }
+                let vault = self.vault.clone();
+                let vault2 = self.vault.clone();
+                Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            vault.db.get_document(id).ok().flatten()
+                        })
+                        .await
+                        .ok()
+                        .flatten()
+                    },
+                    move |maybe_doc| {
+                        if let Some(doc) = maybe_doc {
+                            crate::app::Message::Navigate(open_navigation_at_page(
+                                &doc,
+                                vault2,
+                                page,
+                            ))
+                        } else {
+                            crate::app::Message::Library(Message::SearchChanged(String::new()))
+                        }
+                    },
+                )
             }
             Message::ThumbnailLoaded(id, data) => {
                 self.thumbnails.insert(id, data);
@@ -533,21 +577,52 @@ impl State {
                 let list = results.iter().fold(
                     Column::new().spacing(6).padding(16),
                     |col, r| {
-                        let snippet = r.snippet.replace("<b>", "").replace("</b>", "");
-                        col.push(
-                            container(
-                                column![
-                                    text(&r.title).size(14).width(300),
-                                    text(snippet)
+                        let expanded = self.expanded_search_id.as_deref() == Some(&r.id);
+                        let mut card = column![
+                            text(&r.title).size(14).width(300),
+                            text(plain_snippet(&r.first_snippet))
+                                .size(11)
+                                .color(iced::Color::from_rgb(0.6, 0.64, 0.7)),
+                        ]
+                        .spacing(4);
+                        let more = r.additional_matches.len().saturating_sub(1);
+                        if more > 0 {
+                            card = card.push(
+                                button(
+                                    text(if expanded {
+                                        format!("Show less ({} match)", r.additional_matches.len())
+                                    } else {
+                                        format!("+{more} more")
+                                    })
+                                )
+                                .on_press(Message::ToggleMatchesExpanded(r.id.clone())),
+                            );
+                        }
+                        if expanded {
+                            for m in r.additional_matches.iter() {
+                                card = card.push(
+                                    button(
+                                        text(format!(
+                                            "Page {}: {}",
+                                            m.page_number + 1,
+                                            plain_snippet(&m.snippet),
+                                        ))
                                         .size(11)
                                         .color(iced::Color::from_rgb(0.6, 0.64, 0.7)),
-                                    button("Open")
-                                        .on_press(Message::OpenDocument(r.id.clone())),
-                                ]
-                                .spacing(4)
-                                .padding(12),
-                            )
-                            .style(crate::widgets::common::card_style()),
+                                    )
+                                    .on_press(Message::OpenSearchMatch(
+                                        r.id.clone(),
+                                        m.page_number.max(0) as usize,
+                                    )),
+                                );
+                            }
+                        }
+                        card = card.push(
+                            button("Open").on_press(Message::OpenDocument(r.id.clone())),
+                        );
+                        col.push(
+                            container(card.spacing(4).padding(12))
+                                .style(crate::widgets::common::card_style()),
                         )
                     },
                 );
@@ -807,6 +882,40 @@ fn open_navigation(doc: &DocumentRow, vault: Arc<Vault>) -> Navigation {
     } else {
         Navigation::OpenDocument(doc.clone(), vault)
     }
+}
+
+fn open_navigation_at_page(doc: &DocumentRow, vault: Arc<Vault>, page: usize) -> Navigation {
+    let mime = doc.mime_type.as_str();
+    let viewer_mime = mime.contains("pdf")
+        || mime.contains("epub")
+        || mime.contains("mobipocket")
+        || mime.contains("fictionbook")
+        || mime.contains("x-cbr")
+        || mime.contains("comicbook");
+    if viewer_mime {
+        Navigation::OpenViewerAt(doc.clone(), vault, page)
+    } else {
+        Navigation::OpenDocument(doc.clone(), vault)
+    }
+}
+
+/// Strip FTS highlight tags and page/section markers for plain display.
+fn plain_snippet(snippet: &str) -> String {
+    let no_tags = snippet.replace("<b>", "").replace("</b>", "");
+    let mut out = String::with_capacity(no_tags.len());
+    let mut i = 0;
+    while i < no_tags.len() {
+        if no_tags[i..].starts_with("[PAGE=") || no_tags[i..].starts_with("[SECTION=") {
+            if let Some(rel) = no_tags[i..].find(']') {
+                i += rel + 1;
+                continue;
+            }
+        }
+        let ch = no_tags[i..].chars().next().expect("valid char");
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out.trim().to_string()
 }
 
 #[cfg(test)]
@@ -1087,7 +1196,7 @@ mod tests {
 
         // Search by title
         state.search_query = "Rust".into();
-        let results = state.vault.search_with_snippet("Rust").unwrap();
+        let results = state.vault.search_with_all_matches("Rust").unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, "doc_search_1");
 
@@ -1096,13 +1205,16 @@ mod tests {
 
         // Search by content (FTS text_content match)
         state.search_query = "pizza".into();
-        let results = state.vault.search_with_snippet("pizza").unwrap();
+        let results = state.vault.search_with_all_matches("pizza").unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, "doc_search_2");
         assert!(
-            results[0].snippet.to_lowercase().contains("pizza"),
+            results[0]
+                .first_snippet
+                .to_lowercase()
+                .contains("pizza"),
             "snippet should contain 'pizza', got: {}",
-            results[0].snippet
+            results[0].first_snippet
         );
 
         let _ = state.update(Message::SearchResultsLoaded(results));
@@ -1110,7 +1222,7 @@ mod tests {
 
         // No matches for nonexistent term
         state.search_query = "nonexistent".into();
-        let results = state.vault.search_with_snippet("nonexistent").unwrap();
+        let results = state.vault.search_with_all_matches("nonexistent").unwrap();
         assert!(results.is_empty());
 
         let _ = state.update(Message::SearchResultsLoaded(results));

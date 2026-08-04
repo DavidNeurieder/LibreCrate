@@ -172,6 +172,24 @@ impl DbHandle {
         Ok(crate::db::queries::list_tags(&conn)?)
     }
 
+    /// Backfill/extend a document's indexed text after import. The FTS trigger
+    /// re-indexes text_content so later searches pick up the content.
+    pub fn update_document_text_content(
+        &self,
+        id: String,
+        text_content: Option<String>,
+    ) -> Result<bool, crate::error::Error> {
+        let conn = self
+            .inner
+            .lock()
+            .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        Ok(crate::db::queries::update_document_text_content(
+            &conn,
+            &id,
+            text_content.as_deref(),
+        )?)
+    }
+
     pub fn search_documents(
         &self,
         query: String,

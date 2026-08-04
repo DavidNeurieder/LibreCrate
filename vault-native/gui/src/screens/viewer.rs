@@ -253,6 +253,16 @@ impl State {
         (state, task)
     }
 
+    pub fn new_at(doc: DocumentRow, vault: Arc<Vault>, page: usize) -> (Self, Task<crate::app::Message>) {
+        let mut state = Self::base(doc, vault);
+        state.restore = Some(JumpTarget {
+            page,
+            offset_within_page: 0.0,
+        });
+        let task = state.load();
+        (state, task)
+    }
+
     fn base(doc: DocumentRow, vault: Arc<Vault>) -> Self {
         let (zoom, restore) = parse_restore(&doc);
         Self {
@@ -306,6 +316,15 @@ impl State {
         vault: Arc<Vault>,
         cached: CachedViewer,
     ) -> (Self, Task<crate::app::Message>) {
+        Self::from_cached_at(doc, vault, cached, None)
+    }
+
+    pub fn from_cached_at(
+        doc: DocumentRow,
+        vault: Arc<Vault>,
+        cached: CachedViewer,
+        jump_page: Option<usize>,
+    ) -> (Self, Task<crate::app::Message>) {
         let mut state = Self::base(doc, vault);
         state.header_subtitle = Some(subtitle_for(&state.doc, cached.page_count));
         state.handle = Some(cached.handle);
@@ -317,13 +336,17 @@ impl State {
         state.render_limit = cached.page_count.min(MAX_PRELOAD_PAGES);
         state.render_cursor = 0;
         state.loading = false;
-        state.current_page = cached.current_page.min(cached.page_count.saturating_sub(1));
         state.last_scroll_y = cached.scroll_y;
-        state.last_persisted_page = state.current_page;
         state.viewport_visible = cached.viewport_visible;
-        let page = state.current_page;
-        let offset = (cached.scroll_y - state.exact_offset_of(page)).max(0.0);
-        state.viewport_y = cached.scroll_y;
+        let page = jump_page
+            .map(|p| p.min(cached.page_count.saturating_sub(1)))
+            .unwrap_or(cached.current_page.min(cached.page_count.saturating_sub(1)));
+        let offset = jump_page
+            .map(|_| 0.0)
+            .unwrap_or_else(|| (cached.scroll_y - state.exact_offset_of(page)).max(0.0));
+        state.current_page = page;
+        state.last_persisted_page = page;
+        state.viewport_y = jump_page.map(|_| 0.0).unwrap_or(cached.scroll_y);
         let task = state.jump_to(page, offset);
         (state, task)
     }

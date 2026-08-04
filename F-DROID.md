@@ -38,9 +38,9 @@ Binaries: https://github.com/DavidNeurieder/LibreCrate/releases/download/v%v/Lib
 AllowedAPKSigningKeys: 11f860ee7ac19b8d992a52bf114a491f9b8b598091b7a5e94ce775b50e6e69fa
 
 Builds:
-  - versionName: 0.5.2
-    versionCode: 7
-    commit: v0.5.2
+  - versionName: 0.5.3
+    versionCode: 8
+    commit: v0.5.3
     subdir: app
     sudo:
       - apt-get update
@@ -59,8 +59,8 @@ Builds:
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: app/build.gradle.kts|versionCode\s=\s(\d+)|.|versionName\s=\s"(.*)"
-CurrentVersion: 0.5.2
-CurrentVersionCode: 7
+CurrentVersion: 0.5.3
+CurrentVersionCode: 8
 ```
 
 ## How it works
