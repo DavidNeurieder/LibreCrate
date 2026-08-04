@@ -28,7 +28,7 @@ pub enum Message {
     ConfirmImport,
     CancelPending,
     ExportDone(Result<(), String>),
-    ImportDone(Result<(), String>),
+    ImportDone(Result<vault_native::merge::MergeStats, String>),
 }
 
 pub struct State {
@@ -165,13 +165,12 @@ impl State {
                 self.error = None;
                 Task::perform(
                     async move {
-                        tokio::task::spawn_blocking(move || -> Result<(), String> {
+                        tokio::task::spawn_blocking(move || -> Result<vault_native::merge::MergeStats, String> {
                             let data =
                                 std::fs::read(&path).map_err(|e| e.to_string())?;
                             vault
-                                .restore_backup(&data, &password)
-                                .map_err(|e| e.to_string())?;
-                            Ok(())
+                                .merge_backup(&data, &password)
+                                .map_err(|e| e.to_string())
                         })
                         .await
                         .map_err(|e| e.to_string())?
@@ -201,10 +200,18 @@ impl State {
                 self.progress = None;
                 self.backup_password.clear();
                 match result {
-                    Ok(()) => {
-                        // The vault on disk now belongs to the backup creator;
-                        // drop the stale open vault and require a fresh unlock.
-                        Task::done(crate::app::Message::Navigate(Navigation::Unlock))
+                    Ok(stats) => {
+                        // The backup was merged into the open vault; the local
+                        // password is unchanged, so just return to the library.
+                        self.progress = Some(format!(
+                            "Import complete — {} added, {} updated, {} conflicts",
+                            stats.documents_added,
+                            stats.documents_updated,
+                            stats.documents_conflicted,
+                        ));
+                        Task::done(crate::app::Message::Navigate(Navigation::Library(
+                            self.vault.clone(),
+                        )))
                     }
                     Err(e) => {
                         self.error = Some(e);
@@ -225,7 +232,7 @@ impl State {
                 ),
                 Some(PendingOp::Import) => (
                     "Decrypt Backup",
-                    "The passkey of the vault that created this backup is needed to decrypt it.",
+                    "The passkey of the vault that created this backup is needed to decrypt it. Documents are merged into your current library.",
                     "Import",
                 ),
                 None => ("", "", ""),
@@ -269,7 +276,7 @@ impl State {
             .into()
         } else {
             column![
-                text("Export your vault to a backup file, or restore from a backup.").size(14),
+                text("Export your vault to a backup file, or import a backup into your library.").size(14),
                 button("Export Backup").on_press(Message::ExportBackup),
                 button("Import Backup").on_press(Message::ImportBackup),
             ]
@@ -416,12 +423,20 @@ mod tests {
     }
 
     #[test]
-    fn test_import_done_ok_schedules_unlock_navigation() {
+    fn test_import_done_ok_schedules_library_navigation() {
         let vault = make_test_vault();
         let mut state = State::new(vault);
         state.progress = Some("Importing...".into());
-        let task = state.update(Message::ImportDone(Ok(())));
-        assert!(state.progress.is_none());
+        let stats = vault_native::merge::MergeStats {
+            documents_added: 2,
+            documents_updated: 0,
+            documents_conflicted: 0,
+            documents_skipped: 0,
+            collections_added: 0,
+            tags_added: 0,
+        };
+        let task = state.update(Message::ImportDone(Ok(stats)));
+        assert_eq!(state.progress, Some("Import complete — 2 added, 0 updated, 0 conflicts".into()));
         assert!(state.error.is_none());
         assert!(state.backup_password.is_empty());
         assert!(task.units() > 0, "successful import must emit a navigation task");
@@ -446,7 +461,7 @@ mod tests {
         assert!(ui.find("Export Backup").is_ok());
         assert!(ui.find("Import Backup").is_ok());
         assert!(ui.find("Back").is_ok());
-        assert!(ui.find("Export your vault to a backup file, or restore from a backup.").is_ok());
+        assert!(ui.find("Export your vault to a backup file, or import a backup into your library.").is_ok());
     }
 
     #[test]
@@ -542,6 +557,18 @@ mod tests {
     }
 
     #[test]
+    fn test_view_import_pending_explains_merge() {
+        let vault = make_test_vault();
+        let mut state = State::new(vault);
+        state.pending_path = Some(PathBuf::from("/tmp/test.librecrate-backup"));
+        state.pending_op = Some(PendingOp::Import);
+        let mut ui = iced_test::simulator(state.view());
+        assert!(ui
+            .find("The passkey of the vault that created this backup is needed to decrypt it. Documents are merged into your current library.")
+            .is_ok());
+    }
+
+    #[test]
     fn test_ui_enter_in_password_submits_export() {
         let vault = make_test_vault();
         let mut state = State::new(vault);
@@ -585,18 +612,18 @@ mod tests {
 
         // Export to a temp file (same as GUI does)
         let backup_path = dir.path().join("backup.librecrate-backup");
-        let data = vault.export_backup("backuppass").unwrap();
+        let data = vault.export_backup("testpass").unwrap();
         std::fs::write(&backup_path, &data).unwrap();
 
         // Read it back (same as GUI does)
         let data_read = std::fs::read(&backup_path).unwrap();
         assert_eq!(data, data_read);
 
-        // Full restore into a fresh vault (Branch B, matching Android)
+        // Import into a fresh vault (same merge path as the GUI import)
         let (vault2, dir2) = make_test_vault_with_dir();
-        vault2.restore_backup(&data_read, "backuppass").unwrap();
+        vault2.merge_backup(&data_read, "testpass").unwrap();
 
-        // Re-open with the original vault password (matching Android unlock flow)
+        // Re-open with the original vault password (unchanged by a merge)
         let vault2 = Vault::open(dir2.path(), "testpass").unwrap();
 
         let docs_after = vault2.list_documents().unwrap();
@@ -619,16 +646,50 @@ mod tests {
 
         // Export to file
         let backup_path = dir.path().join("backup.librecrate-backup");
-        let data = vault.export_backup("backuppass").unwrap();
+        let data = vault.export_backup("testpass").unwrap();
         std::fs::write(&backup_path, &data).unwrap();
 
-        // Read back and restore
+        // Read back and import (merge)
         let data_read = std::fs::read(&backup_path).unwrap();
         let (vault2, dir2) = make_test_vault_with_dir();
-        vault2.restore_backup(&data_read, "backuppass").unwrap();
+        vault2.merge_backup(&data_read, "testpass").unwrap();
 
         let vault2 = Vault::open(dir2.path(), "testpass").unwrap();
         assert_eq!(vault2.list_documents().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_import_merges_backup_into_existing_library() {
+        let (vault_a, dir_a) = make_test_vault_with_dir();
+
+        // Vault A already holds a document
+        let a_path = dir_a.path().join("existing.txt");
+        std::fs::write(&a_path, b"existing content").unwrap();
+        vault_a.import_file(&a_path).unwrap();
+        assert_eq!(vault_a.list_documents().unwrap().len(), 1);
+
+        // A backup from a different vault (different password)
+        let dir_b = tempfile::tempdir().unwrap();
+        let vault_b = Vault::create(dir_b.path(), "otherpass").unwrap();
+        let b_path = dir_b.path().join("from_backup.txt");
+        std::fs::write(&b_path, b"backup content").unwrap();
+        vault_b.import_file(&b_path).unwrap();
+        let data = vault_b.export_backup("otherpass").unwrap();
+
+        // Import (merge) into the existing library
+        let stats = vault_a.merge_backup(&data, "otherpass").unwrap();
+        assert_eq!(stats.documents_added, 1);
+
+        // Both documents survive; the existing one is untouched
+        let docs = vault_a.list_documents().unwrap();
+        assert_eq!(docs.len(), 2);
+        let titles: Vec<&str> = docs.iter().map(|d| d.title.as_str()).collect();
+        assert!(titles.contains(&"existing.txt"));
+        assert!(titles.contains(&"from_backup.txt"));
+
+        // Re-open with the original vault password (unchanged by a merge)
+        let reopened = Vault::open(dir_a.path(), "testpass").unwrap();
+        assert_eq!(reopened.list_documents().unwrap().len(), 2);
     }
 
     #[test]
@@ -647,7 +708,7 @@ mod tests {
         // Try to import with wrong password
         let data_read = std::fs::read(&backup_path).unwrap();
         let (vault2, _dir2) = make_test_vault_with_dir();
-        let result = vault2.restore_backup(&data_read, "wrongpass");
+        let result = vault2.merge_backup(&data_read, "wrongpass");
         assert!(result.is_err());
     }
 
@@ -656,12 +717,12 @@ mod tests {
         let (vault, dir) = make_test_vault_with_dir();
 
         let backup_path = dir.path().join("backup.librecrate-backup");
-        let data = vault.export_backup("backuppass").unwrap();
+        let data = vault.export_backup("testpass").unwrap();
         std::fs::write(&backup_path, &data).unwrap();
 
         let data_read = std::fs::read(&backup_path).unwrap();
         let (vault2, dir2) = make_test_vault_with_dir();
-        vault2.restore_backup(&data_read, "backuppass").unwrap();
+        vault2.merge_backup(&data_read, "testpass").unwrap();
 
         let vault2 = Vault::open(dir2.path(), "testpass").unwrap();
         assert_eq!(vault2.list_documents().unwrap().len(), 0);
@@ -682,14 +743,14 @@ mod tests {
         let docs_before = vault.list_documents().unwrap();
         assert_eq!(docs_before.len(), 2);
 
-        // Export + read back + restore
+        // Export + read back + import (merge)
         let backup_path = dir.path().join("backup.librecrate-backup");
-        let data = vault.export_backup("backuppass").unwrap();
+        let data = vault.export_backup("testpass").unwrap();
         std::fs::write(&backup_path, &data).unwrap();
 
         let data_read = std::fs::read(&backup_path).unwrap();
         let (vault2, dir2) = make_test_vault_with_dir();
-        vault2.restore_backup(&data_read, "backuppass").unwrap();
+        vault2.merge_backup(&data_read, "testpass").unwrap();
 
         let vault2 = Vault::open(dir2.path(), "testpass").unwrap();
         let docs_after = vault2.list_documents().unwrap();

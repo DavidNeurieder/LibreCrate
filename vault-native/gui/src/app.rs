@@ -216,11 +216,6 @@ fn handle_navigation(app: &mut App, nav: Navigation) -> Task<Message> {
             app.screen = Screen::FirstRun(state);
             Task::none()
         }
-        Navigation::Unlock => {
-            let state = screens::unlock::State::new();
-            app.screen = Screen::Unlock(state);
-            Task::none()
-        }
         Navigation::Library(vault) => {
             let (state, task) = screens::library::State::new(Arc::clone(&vault));
             app.screen = Screen::Library(state);
@@ -457,7 +452,7 @@ mod tests {
     }
 
     #[test]
-    fn navigate_to_unlock_switches_to_unlock_screen() {
+    fn navigate_to_first_run_switches_to_first_run_screen() {
         let vault = crate::vault::tests::make_test_vault();
         let mut app = App {
             screen: Screen::Export(screens::export::State::new(vault)),
@@ -465,8 +460,8 @@ mod tests {
             dnd_pending: Arc::new(Mutex::new(VecDeque::new())),
             viewer_cache: VecDeque::new(),
         };
-        let task = update(&mut app, Message::Navigate(Navigation::Unlock));
-        assert!(matches!(&app.screen, Screen::Unlock(_)));
+        let task = update(&mut app, Message::Navigate(Navigation::FirstRun));
+        assert!(matches!(&app.screen, Screen::FirstRun(_)));
         assert_eq!(task.units(), 0);
     }
 

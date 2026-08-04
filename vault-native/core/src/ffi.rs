@@ -349,6 +349,28 @@ impl DbHandle {
         )
     }
 
+    /// Merge a backup into this open vault (Branch A), re-encrypting file blobs
+    /// with the local master key. The backup is decrypted with its own password,
+    /// so it may come from a vault with a different password.
+    pub fn merge_backup(
+        &self,
+        base_dir: String,
+        backup_data: Vec<u8>,
+        backup_password: String,
+    ) -> Result<crate::merge::MergeStats, crate::error::Error> {
+        let conn = self
+            .inner
+            .lock()
+            .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        crate::vault_ops::merge_backup_to_vault(
+            std::path::Path::new(&base_dir),
+            &conn,
+            self.encryption_key.as_deref(),
+            &backup_data,
+            &backup_password,
+        )
+    }
+
     pub fn list_documents_filtered(
         &self,
         limit: i64,

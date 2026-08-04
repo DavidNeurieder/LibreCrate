@@ -6,7 +6,7 @@ use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::Path;
 
-#[derive(Debug, Clone, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct MergeStats {
     pub documents_added: u32,
     pub documents_updated: u32,
@@ -145,6 +145,7 @@ pub fn branch_a_merge(
                     // No existing document — add backup doc
                     crate::db::queries::add_document(current_conn, doc)
                         .ok();
+                    copy_text_content(&backup_conn, current_conn, &doc.id);
                     stats.documents_added += 1;
                 }
                 Ok(existing) => {
@@ -170,6 +171,7 @@ pub fn branch_a_merge(
                         conflict_doc.conflict_with = Some(doc.id.clone());
                         crate::db::queries::add_document(current_conn, &conflict_doc)
                             .ok();
+                        copy_text_content(&backup_conn, current_conn, &conflict_doc.id);
                         stats.documents_conflicted += 1;
                     } else if doc.modified_at > 0 {
                         current_conn
@@ -209,6 +211,28 @@ pub fn branch_a_merge(
     }
 
     Ok(stats)
+}
+
+fn copy_text_content(
+    backup_conn: &Connection,
+    current_conn: &Connection,
+    doc_id: &str,
+) {
+    // DocumentRow omits text_content, so pull the indexed text straight from
+    // the backup DB. update_document_text_content fires fts_after_update, which
+    // repopulates the FTS row — without this, merged docs are not searchable.
+    let content: rusqlite::Result<Option<String>> = backup_conn.query_row(
+        "SELECT text_content FROM documents WHERE id = ?1",
+        rusqlite::params![doc_id],
+        |row| row.get(0),
+    );
+    if let Ok(Some(text)) = content {
+        let _ = crate::db::queries::update_document_text_content(
+            current_conn,
+            doc_id,
+            Some(&text),
+        );
+    }
 }
 
 fn reencrypt_files(

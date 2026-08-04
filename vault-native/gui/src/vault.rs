@@ -212,15 +212,22 @@ impl Vault {
         )?)
     }
 
-    /// Full restore from backup — replaces the vault entirely (Branch B).
-    /// Matches Android's `restore_to_layout` behavior.
-    /// After this call, the vault on disk belongs to whoever created the backup.
-    /// The caller must re-open the vault with the appropriate password.
-    pub fn restore_backup(&self, backup_data: &[u8], backup_password: &str) -> Result<()> {
-        Ok(vault_native::vault_ops::restore_backup_to_dir(
-            backup_data,
-            backup_password,
-            &self.base_dir,
+    /// Merge a backup into the current library (Branch A).
+    ///
+    /// Documents/collections/tags from the backup are added or updated in place;
+    /// existing documents are preserved. The backup is decrypted with its own
+    /// password and file blobs are re-encrypted with this vault's key, so the
+    /// backup may come from a vault with a different password. The local vault
+    /// password is unchanged.
+    pub fn merge_backup(
+        &self,
+        backup_data: &[u8],
+        backup_password: &str,
+    ) -> Result<vault_native::merge::MergeStats> {
+        Ok(self.db.merge_backup(
+            self.base_dir.to_string_lossy().to_string(),
+            backup_data.to_vec(),
+            backup_password.to_string(),
         )?)
     }
 }
@@ -827,5 +834,57 @@ pub(crate) mod tests {
         // 16384/3/2 params.toml) must fail to unlock the desktop-wrapped key.
         std::fs::write(enc.join("params.toml"), phone_params_toml()).unwrap();
         assert!(Vault::open(phone_dir.path(), "testpass").is_err());
+    }
+
+    #[test]
+    fn test_merge_backup_into_existing_library_cross_password() {
+        let tv = create_test_vault_with_dir();
+
+        // Existing document in vault A (password "testpass")
+        let a_path = tv._dir.path().join("existing.txt");
+        std::fs::write(&a_path, b"existing file content").unwrap();
+        tv.vault.import_file(&a_path).unwrap();
+        assert_eq!(tv.vault.list_documents().unwrap().len(), 1);
+
+        // Vault B with a different password exports its backup
+        let dir_b = tempfile::tempdir().unwrap();
+        let vault_b = Vault::create(dir_b.path(), "otherpass").unwrap();
+        let b_path = dir_b.path().join("merged.txt");
+        std::fs::write(&b_path, b"merged file content").unwrap();
+        vault_b.import_file(&b_path).unwrap();
+        let backup = vault_b.export_backup("otherpass").unwrap();
+
+        // Merge B's backup into A (backup password = B's vault password)
+        let stats = tv.vault.merge_backup(&backup, "otherpass").unwrap();
+        assert_eq!(stats.documents_added, 1);
+
+        // Both documents present; the existing one is untouched
+        let docs = tv.vault.list_documents().unwrap();
+        assert_eq!(docs.len(), 2);
+        let titles: Vec<&str> = docs.iter().map(|d| d.title.as_str()).collect();
+        assert!(titles.contains(&"existing.txt"));
+        assert!(titles.contains(&"merged.txt"));
+
+        // The merged file was re-encrypted with A's key and is readable
+        let merged_id = docs
+            .iter()
+            .find(|d| d.title == "merged.txt")
+            .unwrap()
+            .id
+            .clone();
+        let data = tv
+            .vault
+            .db
+            .export_document_file(
+                tv.vault.base_dir.to_string_lossy().to_string(),
+                merged_id,
+            )
+            .unwrap()
+            .expect("merged file must be present");
+        assert_eq!(data, b"merged file content");
+
+        // Vault A still opens with its own password
+        let reopened = Vault::open(tv._dir.path(), "testpass").unwrap();
+        assert_eq!(reopened.list_documents().unwrap().len(), 2);
     }
 }

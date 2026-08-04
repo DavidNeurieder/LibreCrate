@@ -14,7 +14,6 @@ use vault_native::db::queries::DocumentRow;
 #[derive(Debug, Clone)]
 pub enum Navigation {
     FirstRun,
-    Unlock,
     Library(Arc<Vault>),
     Settings(Arc<Vault>),
     Export(Arc<Vault>),

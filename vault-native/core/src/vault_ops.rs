@@ -261,6 +261,85 @@ pub fn merge_vault_dir(
     Ok(stats)
 }
 
+/// Merge a backup into an already-open vault (Branch A), re-encrypting file
+/// blobs with the local master key so backups from a *different* password/vault
+/// work. Used by the desktop GUI's "Import Backup".
+///
+/// `current_conn` is the target vault's open connection; `vault_dir` provides
+/// the `files/` directory where merged blobs are written. `backup_password` is
+/// the password of the vault that created the backup (also the export password
+/// used to encrypt the backup container), which may differ from the local
+/// vault's password.
+pub fn merge_backup_to_vault(
+    vault_dir: &Path,
+    current_conn: &rusqlite::Connection,
+    local_master_key: Option<&[u8]>,
+    backup_data: &[u8],
+    backup_password: &str,
+) -> Result<MergeStats> {
+    let contents = crate::ffi::import_vault(
+        backup_data.to_vec(),
+        backup_password.to_string(),
+    )?;
+
+    let db_data = contents
+        .db_file
+        .clone()
+        .ok_or_else(|| Error::InvalidData("backup has no database file".into()))?;
+
+    // Derive the backup's own master key (from its password, not the local one)
+    let backup_master_key = derive_master_key_from_contents(&contents, backup_password)?;
+
+    // Write backup DB to a temp file so branch_a_merge can open it
+    let tmp_dir = tempfile::tempdir().map_err(|e| Error::Io(e.to_string()))?;
+    let backup_db_path = tmp_dir.path().join("backup.db");
+    std::fs::write(&backup_db_path, db_data)?;
+
+    let files_dir = vault_dir.join("files");
+
+    match local_master_key {
+        Some(local_key) => {
+            // Re-encrypt file blobs from the backup key to the local key.
+            // branch_a_merge writes the files and updates encryption_iv/file_path,
+            // so no unconditional blob copy afterwards (it would clobber them).
+            crate::merge::branch_a_merge(
+                backup_db_path
+                    .to_str()
+                    .ok_or_else(|| Error::InvalidData("invalid backup db path".into()))?,
+                &backup_master_key,
+                current_conn,
+                &contents.files,
+                Some(&backup_master_key),
+                Some(local_key),
+                &files_dir,
+            )
+        }
+        None => {
+            // Plaintext vault: no re-encryption available, so merge without keys
+            // and copy backup blobs over verbatim (matches the CLI path).
+            let stats = crate::merge::branch_a_merge(
+                backup_db_path
+                    .to_str()
+                    .ok_or_else(|| Error::InvalidData("invalid backup db path".into()))?,
+                &backup_master_key,
+                current_conn,
+                &contents.files,
+                None,
+                None,
+                &files_dir,
+            )?;
+            for kv in &contents.files {
+                let target = files_dir.join(&kv.key);
+                if let Some(parent) = target.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(&target, &kv.value)?;
+            }
+            Ok(stats)
+        }
+    }
+}
+
 /// Import a backup and restore it to target directories (Branch B — full replace).
 ///
 /// Shared by the GUI and the Android app — a single implementation of the import path.
@@ -595,5 +674,89 @@ hash_length = 32
         assert_eq!(stats.documents_added, 1);
         assert_eq!(stats.documents_updated, 0);
         assert_eq!(stats.documents_conflicted, 0);
+    }
+
+    #[test]
+    fn test_merge_backup_to_vault_cross_password() {
+        // Vault A (password "testpass") with one encrypted document
+        let dir_a = tempfile::tempdir().unwrap();
+        let mk_a = create_test_vault(dir_a.path(), "testpass");
+        let db_path_a = dir_a.path().join("databases").join("librecrate.db");
+        let conn_a =
+            crate::db::schema::open_encrypted(db_path_a.to_str().unwrap(), &mk_a).unwrap();
+        crate::db::storage::import_document(
+            &conn_a,
+            dir_a.path(),
+            "doc_a",
+            "Doc A",
+            b"alpha content bytes".as_slice(),
+            "text/plain",
+            "",
+            "",
+            Some("alpha content"),
+            Some(&mk_a),
+        )
+        .unwrap();
+
+        // Vault B (different password "otherpass") with one document
+        let dir_b = tempfile::tempdir().unwrap();
+        let mk_b = create_test_vault(dir_b.path(), "otherpass");
+        let db_path_b = dir_b.path().join("databases").join("librecrate.db");
+        let conn_b =
+            crate::db::schema::open_encrypted(db_path_b.to_str().unwrap(), &mk_b).unwrap();
+        crate::db::storage::import_document(
+            &conn_b,
+            dir_b.path(),
+            "doc_b",
+            "Doc B",
+            b"beta content bytes".as_slice(),
+            "text/plain",
+            "",
+            "",
+            Some("beta content"),
+            Some(&mk_b),
+        )
+        .unwrap();
+        drop(conn_b);
+
+        // Backup from vault B, encrypted with B's own vault password
+        let backup_b = export_vault_dir(dir_b.path(), "otherpass").unwrap();
+
+        // Merge into vault A's open connection, re-encrypting with A's key
+        let stats = merge_backup_to_vault(
+            dir_a.path(),
+            &conn_a,
+            Some(&mk_a),
+            &backup_b,
+            "otherpass",
+        )
+        .unwrap();
+
+        assert_eq!(stats.documents_added, 1);
+        assert_eq!(stats.documents_updated, 0);
+        assert_eq!(stats.documents_conflicted, 0);
+
+        // Both documents present
+        let docs = crate::db::queries::list_documents(&conn_a).unwrap();
+        assert_eq!(docs.len(), 2);
+
+        // Merged file re-encrypted with A's key decrypts correctly
+        let content_b =
+            crate::db::storage::export_document_file(&conn_a, dir_a.path(), "doc_b", Some(&mk_a));
+        assert_eq!(content_b.as_deref(), Some(&b"beta content bytes"[..]));
+
+        // Existing document still readable with A's key
+        let content_a =
+            crate::db::storage::export_document_file(&conn_a, dir_a.path(), "doc_a", Some(&mk_a));
+        assert_eq!(content_a.as_deref(), Some(&b"alpha content bytes"[..]));
+
+        // FTS: the merged document is searchable by content
+        let hits = crate::db::fts::search(&conn_a, "beta").unwrap();
+        assert!(
+            hits.iter().any(|h| h.id == "doc_b"),
+            "merged document must be searchable by content"
+        );
+        let hits_a = crate::db::fts::search(&conn_a, "alpha").unwrap();
+        assert!(hits_a.iter().any(|h| h.id == "doc_a"));
     }
 }
