@@ -1,14 +1,22 @@
 # Changelog
 
-## 0.5.3 (2026-08-03)
+## 0.5.3 (2026-08-04)
 
 ### Backup compatibility
 
 - **Phone and desktop now share one backup/import implementation**: the Android app and the desktop GUI both use the single Rust `export_vault_dirs` / `restore_backup_to_dirs` code path, so backups move between platforms with no format differences.
 - **Fixed phone → desktop backup import** (`crypto error: key unwrap failed`): phone backups now include a `params.toml` recording the exact Argon2id parameters used to wrap the master key. Restoring overwrites any stale desktop `params.toml`, so the GUI always derives the correct key.
 - **Phone no longer hardcodes KDF parameters**: `RustKeyManager` writes and reads `params.toml` (its own 16384/3/2 settings), while remaining compatible with desktop vaults (19456/2/2).
-- **Desktop GUI unlocks with the imported vault's password**: after a successful import the app switches to the unlock screen instead of keeping a stale vault open.
 - **Round-trip tests**: phone↔GUI backup compatibility is now covered in Rust (`phone_roundtrip`), through the real GUI code path (`vault.rs`), and with Kotlin unit tests for the `params.toml` builder/parser.
+
+### Backup import now merges
+
+- **Import Backup merges instead of replacing** (desktop GUI and Android): existing documents, collections, and tags are preserved, and the backup's content is added on top. When a document already exists with different content, the local one is kept with a conflict flag and the backup's version is added as a copy.
+- **The local passkey stays unchanged**: merging keeps the current vault open under its own passkey; only the backup's own passkey is needed to decrypt it, so backups created with a different passkey can be merged and are re-encrypted with the local key.
+- **Merged documents are full-text searchable**: text content is carried over from the backup.
+- **Fixed backup import failing on Android** (`Permission denied`): the temporary database is now written inside the app's own storage instead of the system temp directory.
+- **Fresh installs still restore wholesale**: when there is no local vault (fresh install/reinstall), the backup is restored exactly as before and the app opens the unlock screen.
+- **Merge tests**: cross-passkey merge covered in Rust (`test_merge_backup_to_vault_cross_password`, `test_merge_backup_into_existing_library_cross_password`) and with Android instrumented tests; the document-type library test now tolerates thumbnails.
 
 ## 0.5.2 (2026-08-01)
 

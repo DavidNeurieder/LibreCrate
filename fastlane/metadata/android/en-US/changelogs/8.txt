@@ -1,5 +1,7 @@
-• Phone and desktop now share the same Rust backup/import code — backups work in both directions
+• Phone and desktop now share the same backup/import code — backups work in both directions
 • Fixed phone → desktop backup import ("crypto error: key unwrap failed")
-• Phone vaults now record their key-derivation parameters, so unlock always uses the right settings
-• Desktop app goes to the unlock screen after importing a backup
+• Phone vaults now record their key-derivation parameters for reliable unlock
+• Importing a backup now merges into your library instead of replacing it
+• Your vault passkey stays the same; only the backup's own passkey is needed
+• Fixed backup import failing on some devices
 • Version bumped to 0.5.3
