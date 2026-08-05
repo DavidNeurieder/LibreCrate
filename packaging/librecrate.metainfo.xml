@@ -39,9 +39,9 @@
     </screenshot>
   </screenshots>
   <releases>
-    <release version="0.5.3" date="2026-08-03">
+    <release version="0.5.4" date="2026-08-05">
       <description>
-        <p>Backup compatibility: the Android app and desktop GUI now share a single Rust backup/import implementation. Phone backups record their key-derivation parameters (params.toml), fixing phone → desktop import ("crypto error: key unwrap failed"); the desktop app now unlocks with the imported vault's password after a restore.</p>
+        <p>Backup import now merges: importing a backup into an existing library keeps your documents and adds the backup's content on top, your local passkey stays unchanged, and backups created with a different passkey can be merged (files are re-encrypted with the local key). Phone and desktop share a single Rust backup/import implementation, and phone backups record their key-derivation parameters — fixing phone → desktop import ("crypto error: key unwrap failed"). Also fixed a F-Droid build failure by making MuPDF system-font support an opt-in desktop-only feature.</p>
       </description>
     </release>
     <release version="0.5.2" date="2026-08-01">

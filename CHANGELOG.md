@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.5.3 (2026-08-04)
+## 0.5.4 (2026-08-05)
+
+### F-Droid build fix
+
+- **Fixed F-Droid build failure** (`pkg-config`/`fontconfig` not found): MuPDF's `system-fonts` feature — which pulls `font-kit` and needs a system `fontconfig` on Linux hosts — is now an opt-in feature enabled only by the desktop GUI. F-Droid's Android build compiles the core crate on a Linux host (to generate UniFFI bindings) and no longer requires `pkg-config` or `libfontconfig`. Desktop font rendering is unchanged; Android never used system fonts (the `font-kit` dependency is excluded for Android anyway).
 
 ### Backup compatibility
 
