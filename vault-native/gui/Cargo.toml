@@ -11,7 +11,7 @@ name = "librecrate-gui"
 path = "src/main.rs"
 
 [dependencies]
-vault-native = { path = "../core" }
+vault-native = { path = "../core", features = ["system-fonts"] }
 iced = { version = "0.14", features = ["svg", "image", "tokio", "selector"] }
 tokio = { version = "1", features = ["rt", "fs", "io-util"] }
 dirs = "5"

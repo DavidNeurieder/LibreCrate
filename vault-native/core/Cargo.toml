@@ -8,6 +8,10 @@ description = "LibreCrate vault core: encrypted backup format, SQLCipher DB, mer
 [lib]
 crate-type = ["lib", "cdylib"]
 
+[features]
+default = []
+system-fonts = ["mupdf/system-fonts"]
+
 [dependencies]
 argon2 = "0.5"
 aes-gcm = "0.10"
@@ -26,7 +30,7 @@ uniffi = "0.28"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
 tempfile = "3"
 toml = "0.8"
-mupdf = { version = "0.8", default-features = false, features = ["epub", "cbz", "system-fonts", "base14-fonts", "bundled-fonts-sil"] }
+mupdf = { version = "0.8", default-features = false, features = ["epub", "cbz", "base14-fonts", "bundled-fonts-sil"] }
 
 [build-dependencies]
 uniffi = { version = "0.28", features = ["build"] }
