@@ -1,0 +1,5 @@
+• Importing a backup now merges into your library instead of replacing it
+• Your vault passkey stays the same; only the backup's own passkey is needed
+• Fixed backup import failing on some devices
+• Fixed a build error so the app can be released on F-Droid
+• Version bumped to 0.5.4
