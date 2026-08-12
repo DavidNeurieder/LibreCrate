@@ -36,14 +36,24 @@ pub struct RenderedPage {
 pub struct LoadedDoc {
     pub handle: Arc<PdfHandle>,
     pub tmp_dir: Arc<tempfile::TempDir>,
-    pub page_count: usize,
+    pub reflowable: bool,
+    /// Pages whose chapters have been laid out so far. For non-reflowable
+    /// documents this is the full page count; for reflowable documents it grows
+    /// as chapters are discovered lazily.
+    pub known_pages: usize,
+    /// Page count per discovered chapter.
+    pub chapter_pages: Vec<usize>,
+    /// Total chapters in the document (1 for non-reflowable).
+    pub chapters_total: usize,
     pub first: RenderedPage,
 }
 
 impl std::fmt::Debug for LoadedDoc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LoadedDoc")
-            .field("page_count", &self.page_count)
+            .field("reflowable", &self.reflowable)
+            .field("known_pages", &self.known_pages)
+            .field("chapters_total", &self.chapters_total)
             .field("first", &self.first)
             .finish_non_exhaustive()
     }
@@ -60,7 +70,11 @@ pub struct CachedViewer {
     pub doc_id: String,
     pub handle: Arc<PdfHandle>,
     pub tmp_dir: Arc<tempfile::TempDir>,
+    pub reflowable: bool,
+    /// Known (laid-out) page count; the full total for non-reflowable docs.
     pub page_count: usize,
+    pub chapter_pages: Vec<usize>,
+    pub chapters_total: usize,
     pub heights: Vec<Option<f32>>,
     pub zoom: f32,
     pub scroll_y: f32,
@@ -86,6 +100,12 @@ pub enum Message {
     SearchPrev,
     SearchDone(Result<Vec<usize>, String>),
     MeasureDone(Result<Vec<f32>, String>),
+    /// A chapter's page count was laid out lazily. Carries the chapter index.
+    ChapterDiscovered(usize, Result<usize, String>),
+    /// A jump into a still-undiscovered region finished. Carries the target
+    /// chapter index and the page counts for every chapter up to it, so the
+    /// jump resolves in a single round-trip.
+    JumpResolved(Result<(usize, Vec<usize>), String>),
 }
 
 pub struct State {
@@ -94,7 +114,12 @@ pub struct State {
     header_subtitle: Option<String>,
     handle: Option<Arc<PdfHandle>>,
     tmp_dir: Option<Arc<tempfile::TempDir>>,
+    /// Known (laid-out) pages; equals the total for non-reflowable documents.
     page_count: usize,
+    reflowable: bool,
+    chapter_pages: Vec<usize>,
+    chapters_total: usize,
+    discovering: bool,
     pages: HashMap<usize, image::Handle>,
     heights: Vec<Option<f32>>,
     page_bytes: Vec<usize>,
@@ -160,9 +185,14 @@ fn type_label(mime: &str) -> String {
     }
 }
 
-fn subtitle_for(doc: &DocumentRow, page_count: usize) -> String {
+fn subtitle_for(doc: &DocumentRow, page_count: usize, estimate: bool) -> String {
+    let count = if estimate {
+        format!("~{page_count}")
+    } else {
+        page_count.to_string()
+    };
     format!(
-        "{page_count} pages · {} · {}",
+        "{count} pages · {} · {}",
         format_size(doc.file_size),
         type_label(&doc.mime_type)
     )
@@ -178,6 +208,28 @@ fn render_page(handle: &PdfHandle, index: usize, width: i32) -> Result<RenderedP
         width: w,
         height: h,
     } = handle.render_page(index as i32, width).map_err(|e| e.to_string())?;
+    Ok(RenderedPage {
+        index,
+        data,
+        width: w.max(0) as u32,
+        height: h.max(0) as u32,
+    })
+}
+
+fn render_chapter_page(
+    handle: &PdfHandle,
+    chapter: usize,
+    page_in_chapter: usize,
+    index: usize,
+    width: i32,
+) -> Result<RenderedPage, String> {
+    let PdfPageRender {
+        data,
+        width: w,
+        height: h,
+    } = handle
+        .render_chapter_page(chapter as i32, page_in_chapter as i32, width)
+        .map_err(|e| e.to_string())?;
     Ok(RenderedPage {
         index,
         data,
@@ -208,16 +260,62 @@ fn load_document(vault: &Vault, doc: &DocumentRow) -> Result<LoadedDoc, String> 
 
     let handle = PdfHandle::open(tmp_path.to_str().unwrap_or("").to_string())
         .map_err(|e| e.to_string())?;
-    let page_count = handle.page_count().map_err(|e| e.to_string())?;
-    if page_count <= 0 {
-        return Err("This PDF has no pages".to_string());
-    }
-    let first = render_page(&handle, 0, target_width(PREVIEW_SCALE))?;
+    let reflowable = handle.is_reflowable().map_err(|e| e.to_string())?;
+
+    let (known_pages, chapter_pages, chapters_total, first) = if reflowable {
+        // Lay out only the chapters we need to show the first page. Never call
+        // `page_count()` here: for reflowable documents that lays out the whole
+        // book, which is exactly the freeze we are avoiding.
+        let chapters = handle.chapter_count().map_err(|e| e.to_string())?;
+        if chapters <= 0 {
+            return Err("This document has no pages".to_string());
+        }
+        let chapters_total = chapters as usize;
+        let mut chapter_pages: Vec<usize> = Vec::new();
+        let mut known_pages = 0usize;
+        let mut first = None;
+        let cap = chapters_total.min(64);
+        for ch in 0..cap {
+            let n = handle
+                .chapter_page_count(ch as i32)
+                .map_err(|e| e.to_string())?;
+            let n = n.max(0) as usize;
+            chapter_pages.push(n);
+            known_pages += n;
+            if n > 0 && first.is_none() {
+                first = Some(render_chapter_page(
+                    &handle,
+                    ch,
+                    0,
+                    known_pages - n,
+                    target_width(PREVIEW_SCALE),
+                )?);
+                break;
+            }
+        }
+        let first = first.ok_or_else(|| "This document has no pages".to_string())?;
+        (known_pages, chapter_pages, chapters_total, first)
+    } else {
+        let page_count = handle.page_count().map_err(|e| e.to_string())?;
+        if page_count <= 0 {
+            return Err("This document has no pages".to_string());
+        }
+        let first = render_page(&handle, 0, target_width(PREVIEW_SCALE))?;
+        (
+            page_count as usize,
+            vec![page_count as usize],
+            1,
+            first,
+        )
+    };
 
     Ok(LoadedDoc {
         handle,
         tmp_dir,
-        page_count: page_count as usize,
+        reflowable,
+        known_pages,
+        chapter_pages,
+        chapters_total,
         first,
     })
 }
@@ -272,6 +370,10 @@ impl State {
             handle: None,
             tmp_dir: None,
             page_count: 0,
+            reflowable: false,
+            chapter_pages: Vec::new(),
+            chapters_total: 1,
+            discovering: false,
             pages: HashMap::new(),
             heights: Vec::new(),
             page_bytes: Vec::new(),
@@ -326,7 +428,9 @@ impl State {
         jump_page: Option<usize>,
     ) -> (Self, Task<crate::app::Message>) {
         let mut state = Self::base(doc, vault);
-        state.header_subtitle = Some(subtitle_for(&state.doc, cached.page_count));
+        state.reflowable = cached.reflowable;
+        state.chapters_total = cached.chapters_total;
+        state.header_subtitle = Some(subtitle_for(&state.doc, cached.page_count, cached.reflowable));
         state.handle = Some(cached.handle);
         state.tmp_dir = Some(cached.tmp_dir);
         state.page_count = cached.page_count;
@@ -341,6 +445,17 @@ impl State {
         let page = jump_page
             .map(|p| p.min(cached.page_count.saturating_sub(1)))
             .unwrap_or(cached.current_page.min(cached.page_count.saturating_sub(1)));
+        // For reflowable docs the cached position may lie past the discovered
+        // pages; keep it so `jump_to` can stream the remaining chapters in.
+        let page = if cached.reflowable && cached.page_count > 0 {
+            let discovered = cached.chapter_pages.len().max(1);
+            let remaining = cached.chapters_total.saturating_sub(discovered);
+            let est = cached.page_count + (cached.page_count / discovered) * remaining;
+            jump_page.map(|p| p.min(est.saturating_sub(1))).unwrap_or(page)
+        } else {
+            page
+        };
+        state.chapter_pages = cached.chapter_pages;
         let offset = jump_page
             .map(|_| 0.0)
             .unwrap_or_else(|| (cached.scroll_y - state.exact_offset_of(page)).max(0.0));
@@ -355,7 +470,11 @@ impl State {
         if self.loading || self.handle.is_none() || self.page_count == 0 {
             return;
         }
-        let page = self.current_page.min(self.page_count - 1);
+        // Store the absolute page number even if it lies in the as-yet
+        // undiscovered region of a reflowable book: restoring later resolves it
+        // back to a chapter and lays out only what is needed.
+        let total = self.estimated_total_pages().max(1);
+        let page = self.current_page.min(total - 1);
         let offset = (self.last_scroll_y - self.exact_offset_of(page)).max(0.0);
         let json = serde_json::json!({
             "page": page,
@@ -387,7 +506,10 @@ impl State {
             doc_id: self.doc.id.clone(),
             handle,
             tmp_dir,
+            reflowable: self.reflowable,
             page_count: self.page_count,
+            chapter_pages: self.chapter_pages.clone(),
+            chapters_total: self.chapters_total,
             heights: self.heights.clone(),
             zoom: self.zoom,
             scroll_y: self.last_scroll_y,
@@ -417,25 +539,30 @@ impl State {
                 let LoadedDoc {
                     handle,
                     tmp_dir,
-                    page_count,
+                    reflowable,
+                    known_pages,
+                    chapter_pages,
+                    chapters_total,
                     first,
                 } = loaded;
                 self.handle = Some(handle);
                 self.tmp_dir = Some(tmp_dir);
-                self.page_count = page_count;
-                self.header_subtitle = Some(subtitle_for(&self.doc, page_count));
-                self.heights = vec![None; page_count];
-                self.page_bytes = vec![0; page_count];
-                self.render_limit = page_count.min(MAX_PRELOAD_PAGES);
+                self.reflowable = reflowable;
+                self.page_count = known_pages;
+                self.chapter_pages = chapter_pages;
+                self.chapters_total = chapters_total.max(1);
+                self.header_subtitle = Some(subtitle_for(&self.doc, self.estimated_total_pages(), reflowable));
+                self.heights = vec![None; known_pages];
+                self.page_bytes = vec![0; known_pages];
+                self.render_limit = known_pages.min(MAX_PRELOAD_PAGES);
                 self.render_cursor = 1;
                 self.loading = false;
                 self.insert_preview(first);
                 let mut tasks = vec![self.spawn_render(0)];
                 if let Some(jump) = self.restore.take() {
-                    let page = jump.page.min(self.page_count - 1);
-                    self.current_page = page;
-                    self.last_persisted_page = page;
-                    tasks.push(self.jump_to(page, jump.offset_within_page));
+                    self.current_page = jump.page.min(self.page_count.saturating_sub(1));
+                    self.last_persisted_page = self.current_page;
+                    tasks.push(self.jump_to(jump.page, jump.offset_within_page));
                 }
                 if tasks.len() == 1 {
                     tasks.remove(0)
@@ -495,7 +622,24 @@ impl State {
                 if target_limit > self.render_limit {
                     self.render_limit = target_limit;
                 }
-                self.next_render_task().unwrap_or_else(Task::none)
+                let mut tasks: Vec<Task<crate::app::Message>> = Vec::new();
+                if let Some(t) = self.next_render_task() {
+                    tasks.push(t);
+                }
+                // Approaching the last known page: pull in the next chapter so
+                // scrolling never dead-ends at the edge of the discovered region.
+                if self.reflowable
+                    && !self.discovering
+                    && self.chapter_pages.len() < self.chapters_total
+                    && bottom_page + 1 >= self.page_count
+                {
+                    tasks.push(self.discover_more());
+                }
+                if tasks.is_empty() {
+                    Task::none()
+                } else {
+                    Task::batch(tasks)
+                }
             }
             Message::ScrollBy(delta) => self
                 .scroll_to_y(self.viewport_y + delta)
@@ -559,6 +703,109 @@ impl State {
             }
             Message::MeasureDone(Err(e)) => {
                 self.measuring = false;
+                self.error = Some(e);
+                Task::none()
+            }
+            Message::ChapterDiscovered(chapter, Ok(count)) => {
+                self.discovering = false;
+                if chapter == self.chapter_pages.len() {
+                    self.chapter_pages.push(count);
+                    self.page_count += count;
+                    self.heights.extend(std::iter::repeat(None).take(count));
+                    self.page_bytes.extend(std::iter::repeat(0).take(count));
+                    self.header_subtitle = Some(subtitle_for(
+                        &self.doc,
+                        self.estimated_total_pages(),
+                        self.reflowable,
+                    ));
+                }
+                let mut tasks: Vec<Task<crate::app::Message>> = Vec::new();
+                if let Some(jump) = self.pending_jump.take() {
+                    if jump.page < self.page_count {
+                        tasks.push(self.jump_to(jump.page, jump.offset_within_page));
+                    } else if self.chapter_pages.len() < self.chapters_total {
+                        // Not enough of the book is discovered yet; keep waiting.
+                        self.pending_jump = Some(jump);
+                        tasks.push(self.discover_more());
+                    } else {
+                        // Book fully discovered; the page genuinely does not exist.
+                        self.error = Some(format!(
+                            "Page {} is out of range (document has {} pages)",
+                            jump.page, self.page_count
+                        ));
+                    }
+                }
+                if let Some(t) = self.next_render_task() {
+                    tasks.push(t);
+                }
+                if tasks.is_empty() {
+                    Task::none()
+                } else {
+                    Task::batch(tasks)
+                }
+            }
+            Message::ChapterDiscovered(chapter, Err(e)) => {
+                self.discovering = false;
+                if chapter == self.chapter_pages.len() {
+                    // A chapter failed to lay out (e.g. malformed); record it as
+                    // empty and keep going so the rest of the book stays readable.
+                    self.chapter_pages.push(0);
+                }
+                let mut tasks: Vec<Task<crate::app::Message>> = Vec::new();
+                if let Some(jump) = self.pending_jump.take().filter(|j| j.page < self.page_count) {
+                    tasks.push(self.jump_to(jump.page, jump.offset_within_page));
+                } else if self.chapter_pages.len() < self.chapters_total {
+                    tasks.push(self.discover_more());
+                } else if self.page_count == 0 {
+                    self.error = Some(e);
+                }
+                if let Some(t) = self.next_render_task() {
+                    tasks.push(t);
+                }
+                if tasks.is_empty() {
+                    Task::none()
+                } else {
+                    Task::batch(tasks)
+                }
+            }
+            Message::JumpResolved(Ok((chapter, counts))) => {
+                self.discovering = false;
+                if chapter + 1 > self.chapters_total {
+                    self.chapters_total = chapter + 1;
+                }
+                for (i, n) in counts.into_iter().enumerate() {
+                    if i == self.chapter_pages.len() {
+                        self.chapter_pages.push(n);
+                        self.page_count += n;
+                        self.heights.extend(std::iter::repeat(None).take(n));
+                        self.page_bytes.extend(std::iter::repeat(0).take(n));
+                    }
+                }
+                self.header_subtitle = Some(subtitle_for(
+                    &self.doc,
+                    self.estimated_total_pages(),
+                    self.reflowable,
+                ));
+                let mut tasks: Vec<Task<crate::app::Message>> = Vec::new();
+                if let Some(jump) = self.pending_jump.take().filter(|j| j.page < self.page_count) {
+                    tasks.push(self.jump_to(jump.page, jump.offset_within_page));
+                } else if let Some(jump) = self.pending_jump.take() {
+                    self.error = Some(format!(
+                        "Page {} is out of range (document has {} pages)",
+                        jump.page, self.page_count
+                    ));
+                }
+                if let Some(t) = self.next_render_task() {
+                    tasks.push(t);
+                }
+                if tasks.is_empty() {
+                    Task::none()
+                } else {
+                    Task::batch(tasks)
+                }
+            }
+            Message::JumpResolved(Err(e)) => {
+                self.discovering = false;
                 self.error = Some(e);
                 Task::none()
             }
@@ -629,6 +876,13 @@ impl State {
             self.render_cursor += 1;
             return Some(self.spawn_render(idx));
         }
+        // Everything known is rendered: pull in the next chapter of a reflowable
+        // book so content keeps streaming in as the user scrolls.
+        if self.reflowable
+            && self.chapter_pages.len() < self.chapters_total
+        {
+            return Some(self.discover_more());
+        }
         None
     }
 
@@ -636,13 +890,136 @@ impl State {
         self.rendering = true;
         let handle = self.handle.clone().expect("handle present");
         let width = target_width(self.zoom);
+        let reflowable = self.reflowable;
+        let (chapter, page_in_chapter) = (self.chapter_of(index), self.page_in_chapter_of(index));
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || render_page(&handle, index, width))
-                    .await
-                    .map_err(|e| e.to_string())?
+                tokio::task::spawn_blocking(move || {
+                    if reflowable {
+                        render_chapter_page(&handle, chapter, page_in_chapter, index, width)
+                    } else {
+                        render_page(&handle, index, width)
+                    }
+                })
+                .await
+                .map_err(|e| e.to_string())?
             },
             |res| crate::app::Message::Viewer(Message::PageRendered(res)),
+        )
+    }
+
+    /// Number of chapters whose page counts are known so far.
+    fn discovered_chapters(&self) -> usize {
+        self.chapter_pages.len()
+    }
+
+    /// Total pages across every chapter laid out so far plus an estimate for the
+    /// remaining chapters (based on the average pages per known chapter).
+    fn estimated_total_pages(&self) -> usize {
+        if !self.reflowable {
+            return self.page_count;
+        }
+        if self.page_count == 0 || self.discovered_chapters() == 0 {
+            return self.page_count;
+        }
+        let remaining_chapters = self.chapters_total.saturating_sub(self.discovered_chapters());
+        if remaining_chapters == 0 {
+            return self.page_count;
+        }
+        let avg_per_chapter = self.page_count / self.discovered_chapters();
+        self.page_count + avg_per_chapter * remaining_chapters
+    }
+
+    /// Chapter index containing the linear (absolute) page index.
+    fn chapter_of(&self, page: usize) -> usize {
+        if !self.reflowable || self.chapter_pages.is_empty() {
+            return 0;
+        }
+        let mut acc = 0usize;
+        for (c, &n) in self.chapter_pages.iter().enumerate() {
+            if page < acc + n {
+                return c;
+            }
+            acc += n;
+        }
+        self.chapter_pages.len() - 1
+    }
+
+    /// Page index within its chapter for a linear (absolute) page index.
+    fn page_in_chapter_of(&self, page: usize) -> usize {
+        if !self.reflowable || self.chapter_pages.is_empty() {
+            return page;
+        }
+        let c = self.chapter_of(page);
+        let before: usize = self.chapter_pages[..c].iter().sum();
+        page - before
+    }
+
+    /// Lay out the next undiscovered chapter of a reflowable book.
+    fn discover_more(&mut self) -> Task<crate::app::Message> {
+        if !self.reflowable || self.discovering {
+            return Task::none();
+        }
+        if self.discovered_chapters() >= self.chapters_total {
+            return Task::none();
+        }
+        let Some(handle) = self.handle.clone() else {
+            return Task::none();
+        };
+        self.discovering = true;
+        let chapter = self.discovered_chapters();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    handle
+                        .chapter_page_count(chapter as i32)
+                        .map(|n| n.max(0) as usize)
+                        .map_err(|e| e.to_string())
+                })
+                .await
+                .map_err(|e| e.to_string())?
+            },
+            move |res| crate::app::Message::Viewer(Message::ChapterDiscovered(chapter, res)),
+        )
+    }
+
+    /// Jump to an absolute page whose chapters have not been laid out yet.
+    /// Resolves the page to a chapter (laying out chapters only up to the
+    /// target) and collects every chapter's page count up to it, so the whole
+    /// jump resolves in a single round-trip.
+    fn jump_to_unknown(&mut self, page: usize, offset_within_page: f32) -> Task<crate::app::Message> {
+        if !self.reflowable {
+            return Task::none();
+        }
+        let Some(handle) = self.handle.clone() else {
+            return Task::none();
+        };
+        self.pending_jump = Some(JumpTarget {
+            page,
+            offset_within_page,
+        });
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    let loc = handle
+                        .location_from_page_number(page as i32)
+                        .map_err(|e| e.to_string())?;
+                    let chapter = loc.chapter.max(0) as usize;
+                    let mut counts = Vec::with_capacity(chapter + 1);
+                    for c in 0..=chapter {
+                        counts.push(
+                            handle
+                                .chapter_page_count(c as i32)
+                                .map(|n| n.max(0) as usize)
+                                .map_err(|e| e.to_string())?,
+                        );
+                    }
+                    Ok((chapter, counts))
+                })
+                .await
+                .map_err(|e| e.to_string())?
+            },
+            |res| crate::app::Message::Viewer(Message::JumpResolved(res)),
         )
     }
 
@@ -674,7 +1051,20 @@ impl State {
             }
             acc += h + gap;
         }
-        self.page_count - 1
+        if !self.reflowable {
+            return self.page_count - 1;
+        }
+        // y is inside the still-undiscovered region: map onto an estimated page
+        // so the reported position and preload window stay meaningful there.
+        let est_total = self.estimated_total_pages();
+        if est_total <= self.page_count {
+            return self.page_count - 1;
+        }
+        let remaining = (est_total - self.page_count) as f32;
+        let y_in_est = (y - acc).max(0.0);
+        let per_page = avg + gap;
+        let idx = (y_in_est / per_page).floor().min(remaining - 1.0).max(0.0) as usize;
+        self.page_count + idx
     }
 
     fn all_heights_up_to(&self, i: usize) -> bool {
@@ -697,7 +1087,16 @@ impl State {
     }
 
     fn content_height(&self) -> f32 {
-        self.exact_offset_of(self.page_count) + PAD_BOTTOM * self.zoom
+        let known = self.exact_offset_of(self.page_count) + PAD_BOTTOM * self.zoom;
+        if !self.reflowable {
+            return known;
+        }
+        // Keep the scrollbar spanning the full (estimated) book: the exact
+        // height of laid-out pages plus an estimate for the chapters that have
+        // not been discovered yet. The estimate is replaced by real heights as
+        // chapters stream in.
+        let remaining = self.estimated_total_pages().saturating_sub(self.page_count);
+        known + remaining as f32 * (self.avg_page_height() + PAGE_GAP * self.zoom)
     }
 
     fn scroll_target(&self, y: f32) -> Option<f32> {
@@ -719,6 +1118,11 @@ impl State {
     fn jump_to(&mut self, page: usize, offset_within_page: f32) -> Task<crate::app::Message> {
         if self.page_count == 0 || self.handle.is_none() {
             return Task::none();
+        }
+        // Jumping into a region of a reflowable book whose chapters are not laid
+        // out yet: resolve the page to a chapter and stream chapters in first.
+        if self.reflowable && page >= self.page_count {
+            return self.jump_to_unknown(page, offset_within_page);
         }
         let page = page.min(self.page_count - 1);
         if page + 1 > self.render_limit {
@@ -844,10 +1248,19 @@ impl State {
         self.searching = true;
         self.search_status = Some("Searching…".to_string());
         let page_count = self.page_count;
+        let reflowable = self.reflowable;
         let q = query.clone();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || -> Result<Vec<usize>, String> {
+                    if reflowable {
+                        // Walk chapters lazily; never call page_count() on a
+                        // reflowable doc (it would lay out the whole book first).
+                        return handle
+                            .search_document(q.clone())
+                            .map(|v| v.into_iter().map(|i| i.max(0) as usize).collect())
+                            .map_err(|e| e.to_string());
+                    }
                     let mut matches = Vec::new();
                     for i in 0..page_count {
                         if let Ok(text) = handle.extract_text(i as i32) {
@@ -910,7 +1323,8 @@ impl State {
 
     fn viewer(&self) -> Element<'_, Message> {
         let zoom_pct = (self.zoom * 100.0).round() as i64;
-        let top_page = (self.page_at_y(self.viewport_y) + 1).min(self.page_count);
+        let total_pages = self.estimated_total_pages().max(1);
+        let top_page = (self.page_at_y(self.viewport_y) + 1).min(total_pages);
         let has_results = !self.search_results.is_empty();
 
         let zoom_pill = container(text(format!("{zoom_pct}%")).size(13))
@@ -931,7 +1345,7 @@ impl State {
             .push(common::subtle_button("+").on_press(Message::ZoomIn))
             .push(common::subtle_button("Reset").on_press(Message::ResetZoom))
             .push(
-                text(format!("Page {top_page}/{count}", count = self.page_count))
+                text(format!("Page {top_page}/{total_pages}"))
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.65)),
             )
@@ -1088,7 +1502,7 @@ mod tests {
         let (vault, _dir) = make_test_vault_with_dir();
         let doc = import_sample(&vault, "search_3page.pdf");
         let loaded = load_document(&vault, &doc).unwrap();
-        assert_eq!(loaded.page_count, 3);
+        assert_eq!(loaded.known_pages, 3);
         assert_eq!(loaded.first.index, 0);
         assert!(!loaded.first.data.is_empty());
         assert!(loaded.first.width > 0 && loaded.first.height > 0);
@@ -1116,7 +1530,8 @@ mod tests {
         let doc = import_sample(&vault, "mini.epub");
         assert_eq!(doc.mime_type, "application/epub+zip");
         let loaded = load_document(&vault, &doc).unwrap();
-        assert!(loaded.page_count > 0);
+        assert!(loaded.reflowable);
+        assert!(loaded.known_pages > 0);
         assert_eq!(loaded.first.index, 0);
         assert!(!loaded.first.data.is_empty());
         assert!(loaded.first.width > 0 && loaded.first.height > 0);
@@ -1138,7 +1553,8 @@ mod tests {
         let (vault, _dir) = make_test_vault_with_dir();
         let doc = import_sample(&vault, "mini_scripts.epub");
         let loaded = load_document(&vault, &doc).unwrap();
-        assert!(loaded.page_count > 0);
+        assert!(loaded.reflowable);
+        assert!(loaded.known_pages > 0);
         assert_eq!(loaded.first.index, 0);
         assert!(!loaded.first.data.is_empty());
         assert!(loaded.first.width > 0 && loaded.first.height > 0);
@@ -1148,12 +1564,77 @@ mod tests {
     }
 
     #[test]
+    fn test_load_document_opens_multichapter_epub_lazily() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "multi_chapter.epub");
+        let loaded = load_document(&vault, &doc).unwrap();
+        assert!(loaded.reflowable);
+        assert_eq!(loaded.chapters_total, 30);
+        // Opening must only lay out the first chapter.
+        assert_eq!(loaded.chapter_pages.len(), 1);
+        assert_eq!(loaded.known_pages, loaded.chapter_pages[0]);
+        assert_eq!(loaded.chapter_pages[0], loaded.handle.chapter_page_count(0).unwrap() as usize);
+        // A stable scrollbar estimate must cover the rest of the book.
+        assert!(loaded.known_pages < 30 * loaded.chapter_pages[0]);
+        assert!(loaded.first.width > 0 && loaded.first.height > 0);
+    }
+
+    #[test]
+    fn test_state_discovery_grows_pages_and_chapter_pages() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "multi_chapter.epub");
+        let mut state = loaded_state(&vault, doc);
+        assert_eq!(state.chapters_total, 30);
+        assert_eq!(state.chapter_pages.len(), 1);
+        let before = state.page_count;
+        let ch1_pages = state.handle.clone().unwrap().chapter_page_count(1).unwrap() as usize;
+        let _ = state.update(Message::ChapterDiscovered(1, Ok(ch1_pages)));
+        assert_eq!(state.chapter_pages.len(), 2);
+        assert_eq!(state.page_count, before + ch1_pages);
+        assert_eq!(state.heights.len(), state.page_count);
+        assert_eq!(state.page_bytes.len(), state.page_count);
+        // The page counter in the toolbar must use the estimate, not just the
+        // discovered count.
+        assert!(state.estimated_total_pages() > state.page_count);
+    }
+
+    #[test]
+    fn test_jump_into_undiscovered_region_resolves_in_one_roundtrip() {
+        let (vault, _dir) = make_test_vault_with_dir();
+        let doc = import_sample(&vault, "multi_chapter.epub");
+        let mut state = loaded_state(&vault, doc);
+        assert_eq!(state.chapter_pages.len(), 1);
+
+        let _task = state.jump_to_unknown(15, 0.0);
+
+        // Simulate the blocking work the task would have done, feeding the
+        // result straight back into the state.
+        let handle = state.handle.clone().unwrap();
+        let loc = handle.location_from_page_number(15).unwrap();
+        let mut counts = Vec::new();
+        for c in 0..=loc.chapter {
+            counts.push(handle.chapter_page_count(c).unwrap() as usize);
+        }
+        let _ = state.update(Message::JumpResolved(Ok((loc.chapter as usize, counts))));
+
+        assert_eq!(state.chapter_pages.len(), loc.chapter as usize + 1);
+        assert!(state.page_count > 15, "target page must now be discoverable");
+        assert!(state.error.is_none());
+        // The jump is either fully applied or waiting only on height measurement
+        // for the now-discovered target page.
+        if let Some(jump) = state.pending_jump.as_ref() {
+            assert_eq!(jump.page, 15);
+        }
+    }
+
+    #[test]
     fn test_load_document_opens_cbz() {
         let (vault, _dir) = make_test_vault_with_dir();
         let doc = import_sample(&vault, "mini.cbz");
         assert_eq!(doc.mime_type, "application/x-cbr");
         let loaded = load_document(&vault, &doc).unwrap();
-        assert_eq!(loaded.page_count, 2);
+        assert!(!loaded.reflowable);
+        assert_eq!(loaded.known_pages, 2);
         let p0 = render_page(&loaded.handle, 0, target_width(1.0)).unwrap();
         assert!(p0.width > 0 && p0.height > 0 && !p0.data.is_empty());
         let p1 = render_page(&loaded.handle, 1, target_width(1.0)).unwrap();
@@ -1165,7 +1646,8 @@ mod tests {
         let (vault, _dir) = make_test_vault_with_dir();
         let doc = import_sample(&vault, "mini.fb2");
         let loaded = load_document(&vault, &doc).unwrap();
-        assert!(loaded.page_count > 0);
+        assert!(loaded.reflowable);
+        assert!(loaded.known_pages > 0);
         let text = loaded.handle.extract_text(0).unwrap();
         assert!(text.contains("LibreCrateMiniEpub"), "fb2 text was: {text:?}");
     }
@@ -1429,7 +1911,7 @@ mod tests {
         assert!(ui.find("Open externally").is_ok());
         assert!(ui.find("Reset").is_ok());
         assert!(ui.find("Search in this document…").is_ok());
-        let subtitle = subtitle_for(&state.doc, state.page_count);
+        let subtitle = subtitle_for(&state.doc, state.estimated_total_pages(), state.reflowable);
         assert!(ui.find(subtitle.as_str()).is_ok());
         assert!(ui.find("100%").is_ok());
         assert!(ui.find("←").is_ok());

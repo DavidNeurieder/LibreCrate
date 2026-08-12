@@ -1,0 +1,183 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+          fetch-depth: 500
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: sudo apt-get update --fix-missing && sudo apt-get -y install libfontconfig1-dev
+      - run: cargo clippy --tests --features serde -- -D warnings
+      - run: cargo doc -p mupdf --no-deps --document-private-items
+
+  test:
+    name: Test Suite
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-2022, windows-2025]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+          fetch-depth: 500
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: sudo apt-get update --fix-missing && sudo apt-get -y install libfontconfig1-dev
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Download tesseract training data
+        run: curl -LO https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata
+
+      - run: cargo test --features serde
+
+      - name: Test bundled font crates
+        run: cargo test -p mupdf-fonts-droid -p mupdf-fonts-noto -p mupdf-fonts-sil
+
+      - name: Test runtime bundled fonts (Noto only)
+        run: |
+          cargo test -p mupdf --no-default-features --features bundled-fonts-noto test_bundled_noto_font
+          cargo test -p mupdf --no-default-features --features bundled-fonts-noto noto_crate_covers_all_mupdf_script_stems
+      - name: Test runtime bundled fonts (Noto + Droid)
+        run: |
+          cargo test -p mupdf --no-default-features --features bundled-fonts-noto,bundled-fonts-droid bundled_cjk_hook_prefers_explicit_font_name
+          cargo test -p mupdf --no-default-features --features bundled-fonts-noto,bundled-fonts-droid test_bundled_droid_cjk_font
+      - name: Test runtime bundled Noto special fallbacks
+        if: matrix.os == 'ubuntu-latest'
+        # base14-fonts: the test's base font is the built-in Courier
+        run: cargo test -p mupdf --no-default-features --features bundled-fonts-noto,base14-fonts test_bundled_noto_special_fallback_fonts
+
+      - name: Test package mupdf-sys
+        if: matrix.os != 'windows-2025'
+        run: cargo package --manifest-path mupdf-sys/Cargo.toml
+
+      - name: Test package bundled font crates
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cargo package -p mupdf-fonts-droid
+          cargo package -p mupdf-fonts-noto
+          cargo package -p mupdf-fonts-sil
+
+  test-wasm:
+    name: Test Suite (Emscripten)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+          fetch-depth: 500
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-emscripten
+      - uses: mymindstorm/setup-emsdk@v14
+
+      - run: CFLAGS="-sSUPPORT_LONGJMP=wasm" cargo test --target wasm32-unknown-emscripten --config "target.wasm32-unknown-emscripten.runner = 'node'" --features serde
+
+  test-msys:
+    name: Test Suite (MSYS2)
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: msys2 {0}
+    strategy:
+      matrix:
+        include:
+          - { sys: ucrt64, env: ucrt-x86_64 }
+          - { sys: mingw64, env: x86_64 }
+          - { sys: clang64, env: clang-x86_64 }
+    steps:
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{matrix.sys}}
+          install: mingw-w64-${{matrix.env}}-rust mingw-w64-${{matrix.env}}-clang base base-devel unzip git
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+          fetch-depth: 500
+
+      - name: Download tesseract training data
+        run: curl -LO https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata
+
+      - run: rustc --version --verbose
+      - run: cargo test --features serde
+        env:
+          LIBCLANG_PATH: /${{matrix.sys}}/bin
+          CARGO_TERM_COLOR: always
+
+  asan:
+    name: Address Sanitizer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+          fetch-depth: 500
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - run: sudo apt-get update --fix-missing && sudo apt-get -y install libfontconfig1-dev llvm
+
+      - name: Download tesseract training data
+        run: curl -LO https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata
+
+      - name: cargo test --features serde
+        run: cargo test -Zbuild-std --target x86_64-unknown-linux-gnu --features serde
+        env:
+          RUSTFLAGS: -Zsanitizer=address
+          RUSTDOCFLAGS: -Zsanitizer=address
+          LSAN_OPTIONS: report_objects=1:suppressions=lsan_suppressions.txt
+
+  valgrind:
+    name: Valgrind
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+          fetch-depth: 500
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@valgrind
+
+      - run: sudo apt-get update --fix-missing && sudo apt-get -y install libfontconfig1-dev
+
+      - name: Download tesseract training data
+        run: curl -LO https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata
+
+      - run: cargo test --features serde
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: "valgrind --error-exitcode=1 --track-origins=yes"
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check

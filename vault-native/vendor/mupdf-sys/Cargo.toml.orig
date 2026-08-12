@@ -1,0 +1,248 @@
+[package]
+name = "mupdf-sys"
+version.workspace = true
+edition.workspace = true
+include = [
+    "COPYING*",
+    "LICENSE*",
+    "AUTHORS*",
+
+    "*.rs",
+    "wrapper/*",
+
+    "mupdf/resources/hyphen/hyph-all.zip",
+    "mupdf/resources/hyphen/hyph-std.zip",
+    "mupdf/generated/resources/hyphen/*.c",
+
+    "mupdf/resources/fonts/urw/*.cff",
+    "mupdf/generated/resources/fonts/urw/*.c",
+
+    "mupdf/Make*",
+    "mupdf/platform/win32/*",
+
+    "mupdf/scripts/*.c",
+    "mupdf/source/helpers/pkcs7/*.c",
+    "mupdf/include/mupdf/*.h",
+    "mupdf/include/mupdf/helpers/*.h",
+
+    "mupdf/source/fitz/*.h",
+    "mupdf/source/fitz/*.c",
+    "mupdf/source/fitz/*.cpp",
+    "mupdf/source/fitz/icc/*.icc.h",
+    "mupdf/include/mupdf/fitz/*.h",
+
+    "mupdf/source/pdf/*.c",
+    "mupdf/source/pdf/*.h",
+    "mupdf/source/pdf/cmaps/*.h",
+    "mupdf/source/pdf/js/*.h",
+    "mupdf/include/mupdf/pdf/*.h",
+
+    "mupdf/source/xps/*.c",
+    "mupdf/source/xps/*.h",
+
+    "mupdf/source/svg/*.c",
+    "mupdf/source/svg/*.h",
+
+    "mupdf/source/html/*.c",
+    "mupdf/source/html/*.h",
+
+    "mupdf/source/reflow/*.c",
+
+    "mupdf/source/cbz/*.c",
+
+    "mupdf/thirdparty/brotli/c/include/brotli/*.h",
+    "mupdf/thirdparty/brotli/c/common/*.c",
+    "mupdf/thirdparty/brotli/c/common/*.h",
+    "mupdf/thirdparty/brotli/c/dec/*.c",
+    "mupdf/thirdparty/brotli/c/dec/*.h",
+    "mupdf/thirdparty/brotli/c/enc/*.c",
+    "mupdf/thirdparty/brotli/c/enc/*.h",
+
+    "mupdf/thirdparty/freetype/*.c",
+    "mupdf/thirdparty/freetype/src/base/*.c",
+    "mupdf/thirdparty/freetype/src/base/*.h",
+    "mupdf/thirdparty/freetype/src/cff/*.c",
+    "mupdf/thirdparty/freetype/src/cff/*.h",
+    "mupdf/thirdparty/freetype/src/cid/*.c",
+    "mupdf/thirdparty/freetype/src/cid/*.h",
+    "mupdf/thirdparty/freetype/src/psaux/*.c",
+    "mupdf/thirdparty/freetype/src/psaux/*.h",
+    "mupdf/thirdparty/freetype/src/pshinter/*.c",
+    "mupdf/thirdparty/freetype/src/pshinter/*.h",
+    "mupdf/thirdparty/freetype/src/psnames/*.c",
+    "mupdf/thirdparty/freetype/src/psnames/*.h",
+    "mupdf/thirdparty/freetype/src/raster/*.c",
+    "mupdf/thirdparty/freetype/src/raster/*.h",
+    "mupdf/thirdparty/freetype/src/sfnt/*.c",
+    "mupdf/thirdparty/freetype/src/sfnt/*.h",
+    "mupdf/thirdparty/freetype/src/smooth/*.c",
+    "mupdf/thirdparty/freetype/src/smooth/*.h",
+    "mupdf/thirdparty/freetype/src/truetype/*.c",
+    "mupdf/thirdparty/freetype/src/truetype/*.h",
+    "mupdf/thirdparty/freetype/src/type1/*.c",
+    "mupdf/thirdparty/freetype/src/type1/*.h",
+    "mupdf/thirdparty/freetype/include",
+    "mupdf/scripts/freetype/*.h",
+
+    "mupdf/thirdparty/gumbo-parser/src/*.c",
+    "mupdf/thirdparty/gumbo-parser/src/*.h",
+    "mupdf/thirdparty/gumbo-parser/visualc/include/*.h",
+
+    "mupdf/thirdparty/harfbuzz/src/*.cc",
+    "mupdf/thirdparty/harfbuzz/src/*.h",
+    "mupdf/thirdparty/harfbuzz/src/*.hh",
+    "mupdf/thirdparty/harfbuzz/src/graph/gsubgpos-context.cc",
+    "mupdf/thirdparty/harfbuzz/src/graph/*.hh",
+    "mupdf/thirdparty/harfbuzz/src/OT",
+
+    "mupdf/thirdparty/libjpeg/*.c",
+    "mupdf/thirdparty/libjpeg/*.h",
+    "mupdf/scripts/libjpeg/*.h",
+
+    "mupdf/thirdparty/lcms2/src/*.c",
+    "mupdf/thirdparty/lcms2/src/*.h",
+    "mupdf/thirdparty/lcms2/include/*.h",
+
+    "mupdf/thirdparty/mujs/*.c",
+    "mupdf/thirdparty/mujs/*.h",
+
+    "mupdf/thirdparty/zlib/*.c",
+    "mupdf/thirdparty/zlib/*.h",
+
+    "mupdf/thirdparty/jbig2dec/*.c",
+    "mupdf/thirdparty/jbig2dec/*.h",
+
+    "mupdf/thirdparty/openjpeg/src/lib/openjp2/*.c",
+    "mupdf/thirdparty/openjpeg/src/lib/openjp2/*.h",
+
+    "mupdf/thirdparty/leptonica/src/*.c",
+    "mupdf/thirdparty/leptonica/src/*.h",
+
+    "mupdf/thirdparty/tesseract/src/*.cpp",
+    "mupdf/thirdparty/tesseract/src/api/*.cpp",
+    "mupdf/thirdparty/tesseract/src/api/*.h",
+    "mupdf/thirdparty/tesseract/src/arch/*.cpp",
+    "mupdf/thirdparty/tesseract/src/arch/*.h",
+    "mupdf/thirdparty/tesseract/src/ccmain/*.cpp",
+    "mupdf/thirdparty/tesseract/src/ccmain/*.h",
+    "mupdf/thirdparty/tesseract/src/ccstruct/*.cpp",
+    "mupdf/thirdparty/tesseract/src/ccstruct/*.h",
+    "mupdf/thirdparty/tesseract/src/ccutil/*.cpp",
+    "mupdf/thirdparty/tesseract/src/ccutil/*.h",
+    "mupdf/thirdparty/tesseract/src/classify/*.cpp",
+    "mupdf/thirdparty/tesseract/src/classify/*.h",
+    "mupdf/thirdparty/tesseract/src/dict/*.cpp",
+    "mupdf/thirdparty/tesseract/src/dict/*.h",
+    "mupdf/thirdparty/tesseract/src/lstm/*.cpp",
+    "mupdf/thirdparty/tesseract/src/lstm/*.h",
+    "mupdf/thirdparty/tesseract/src/textord/*.cpp",
+    "mupdf/thirdparty/tesseract/src/textord/*.h",
+    "mupdf/thirdparty/tesseract/src/viewer/*.cpp",
+    "mupdf/thirdparty/tesseract/src/viewer/*.h",
+    "mupdf/thirdparty/tesseract/src/wordrec/*.cpp",
+    "mupdf/thirdparty/tesseract/src/wordrec/*.h",
+    "mupdf/thirdparty/tesseract/src/cutil/*.cpp",
+    "mupdf/thirdparty/tesseract/src/cutil/*.h",
+    "mupdf/thirdparty/tesseract/include/tesseract/*.h",
+    "mupdf/scripts/tesseract/*.h",
+    "mupdf/scripts/tesseract/tesseract/*.h",
+
+    "mupdf/thirdparty/extract/src/*.c",
+    "mupdf/thirdparty/extract/src/*.h",
+    "mupdf/thirdparty/extract/include/extract/*.h",
+    "mupdf/thirdparty/extract/src/template.docx",
+    "mupdf/thirdparty/extract/src/template.odt",
+    "mupdf/thirdparty/extract/src/docx_template_build.py",
+
+    "mupdf/thirdparty/zxing-cpp/core/src/*.cpp",
+    "mupdf/thirdparty/zxing-cpp/core/src/*.h",
+    "mupdf/thirdparty/zxing-cpp/core/src/aztec/*.cpp",
+    "mupdf/thirdparty/zxing-cpp/core/src/aztec/*.h",
+    "mupdf/thirdparty/zxing-cpp/core/src/datamatrix/*.cpp",
+    "mupdf/thirdparty/zxing-cpp/core/src/datamatrix/*.h",
+    "mupdf/thirdparty/zxing-cpp/core/src/maxicode/*.cpp",
+    "mupdf/thirdparty/zxing-cpp/core/src/maxicode/*.h",
+    "mupdf/thirdparty/zxing-cpp/core/src/oned/*.cpp",
+    "mupdf/thirdparty/zxing-cpp/core/src/oned/*.h",
+    "mupdf/thirdparty/zxing-cpp/core/src/pdf417/*.cpp",
+    "mupdf/thirdparty/zxing-cpp/core/src/pdf417/*.h",
+    "mupdf/thirdparty/zxing-cpp/core/src/qrcode/*.cpp",
+    "mupdf/thirdparty/zxing-cpp/core/src/qrcode/*.h",
+    "mupdf/scripts/zxing-cpp/*.cpp",
+    "mupdf/scripts/zxing-cpp/*.h",
+
+    "mupdf/thirdparty/zxing-cpp/core/src/libzueci/*.c",
+    "mupdf/thirdparty/zxing-cpp/core/src/libzueci/*.h",
+
+    "mupdf/thirdparty/zint/backend/*.c",
+    "mupdf/thirdparty/zint/backend/*.h",
+    "mupdf/thirdparty/zint/backend/fonts/*.h",
+]
+description = "Rust FFI binding to MuPDF"
+keywords = ["pdf", "mupdf"]
+license = "AGPL-3.0"
+links="mupdf-wrapper"
+repository = "https://github.com/messense/mupdf-rs"
+
+[features]
+default = ["base14-fonts"]
+# Use system libs for most thirdparty libs
+sys-lib = []
+# Use system freetype
+sys-lib-freetype = []
+# Use system gumbo parser
+sys-lib-gumbo = []
+# Use system harfbuzz
+sys-lib-harfbuzz = []
+# Use system jbig2dec
+sys-lib-jbig2dec = []
+# Use system jpegxr
+sys-lib-jpegxr = []
+# Use system lcms2
+sys-lib-lcms2 = []
+# Use system libjpeg
+sys-lib-libjpeg = []
+# Use system openjpeg
+sys-lib-openjpeg = []
+# Use system zlib
+sys-lib-zlib = []
+# Use system leptonica
+sys-lib-leptonica = []
+# Use system tesseract
+sys-lib-tesseract = []
+# Use system zxing-cpp
+sys-lib-zxingcpp = []
+# Use system brotli
+sys-lib-brotli = []
+
+# Deprecated no-op. Large non-URW fonts are no longer compiled into mupdf-sys;
+# use mupdf's runtime bundled font features instead.
+all-fonts = []
+# Compile the URW base14 fonts (~600KB). Disabling this defines TOFU_BASE14,
+# which makes plain PDFs render without text unless replacement fonts are
+# provided at runtime.
+base14-fonts = []
+
+js = []
+xps = []
+svg = []
+cbz = []
+img = []
+html = []
+epub = []
+brotli = []
+docx-output = []
+tesseract = []
+zxingcpp = []
+libarchive = []
+
+zerocopy = ["dep:zerocopy"]
+
+[build-dependencies]
+bindgen = { version = "0.72", default-features = false, features = ["runtime"] }
+cc = "1.0.50"
+pkg-config = "0.3"
+regex = "1.11"
+
+[dependencies]
+zerocopy = { version = "0.8.17", features = ["derive"], optional = true }

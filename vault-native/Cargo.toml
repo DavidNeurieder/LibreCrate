@@ -2,6 +2,14 @@
 resolver = "2"
 members = ["core", "cli", "gui"]
 
+# Vendored copies of mupdf / mupdf-sys (pinned 0.8.0) carry the chapter-based
+# FFI wrappers used for lazy reflowable (EPUB) layout. Building from these local
+# paths keeps the F-Droid build self-contained (no fetch of these crates from
+# crates.io) and deterministic.
+[patch.crates-io]
+mupdf = { path = "vendor/mupdf" }
+mupdf-sys = { path = "vendor/mupdf-sys" }
+
 [profile.release]
 codegen-units = 1
 lto = true
