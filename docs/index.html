@@ -3,32 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LibreCrate — Encrypted document vault for Android</title>
-  <meta name="description" content="LibreCrate is an encrypted document vault for Android. Stores, views, and searches PDFs, EPUBs, passes, comics, images, and notes — all encrypted at rest, with zero network access.">
+  <title>LibreCrate — Encrypted cross-platform document vault</title>
+  <meta name="description" content="LibreCrate is a cross-platform encrypted document vault for Android, Linux, macOS, and Windows. Stores, views, and searches PDFs, EPUBs, passes, comics, images, and notes — all encrypted at rest, with zero network access.">
   <link rel="canonical" href="https://davidneurieder.github.io/LibreCrate/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="LibreCrate">
-  <meta property="og:title" content="LibreCrate — Encrypted document vault for Android">
-  <meta property="og:description" content="Encrypted document vault for Android. PDFs, EPUBs, passes, comics, images, and notes — all encrypted at rest, zero network access.">
+  <meta property="og:title" content="LibreCrate — Encrypted cross-platform document vault">
+  <meta property="og:description" content="Cross-platform encrypted document vault for Android, Linux, macOS, and Windows. PDFs, EPUBs, passes, comics, images, and notes — all encrypted at rest, zero network access.">
   <meta property="og:url" content="https://davidneurieder.github.io/LibreCrate/">
   <meta property="og:image" content="https://davidneurieder.github.io/LibreCrate/og-banner.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://davidneurieder.github.io/LibreCrate/og-banner.png">
-  <meta name="twitter:title" content="LibreCrate — Encrypted document vault for Android">
-  <meta name="twitter:description" content="Encrypted document vault for Android. PDFs, EPUBs, passes, comics, images, and notes — all encrypted at rest, zero network access.">
+  <meta name="twitter:title" content="LibreCrate — Encrypted cross-platform document vault">
+  <meta name="twitter:description" content="Cross-platform encrypted document vault for Android, Linux, macOS, and Windows. PDFs, EPUBs, passes, comics, images, and notes — all encrypted at rest, zero network access.">
   <link rel="stylesheet" href="styles.css">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "LibreCrate",
-    "operatingSystem": "Android",
+    "operatingSystem": "Android, Linux, macOS, Windows",
     "applicationCategory": "SecurityApplication",
-    "description": "Encrypted document vault for Android. Stores, views, organizes, and searches PDFs, EPUBs, Apple Wallet passes, comics, images, and notes — all encrypted at rest, with zero network access.",
+    "description": "Cross-platform encrypted document vault for Android, Linux, macOS, and Windows. Stores, views, organizes, and searches PDFs, EPUBs, Apple Wallet passes, comics, images, and notes — all encrypted at rest, with zero network access.",
     "url": "https://davidneurieder.github.io/LibreCrate/",
-    "softwareVersion": "0.3.0",
+    "softwareVersion": "0.5.4",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "author": { "@type": "Person", "name": "David Neurieder" }
   }
@@ -39,10 +39,10 @@
     <div class="container">
       <img class="app-icon" src="icon.png" alt="LibreCrate app icon" width="104" height="104">
       <h1>LibreCrate</h1>
-      <p class="tagline">Encrypted document vault for Android</p>
+      <p class="tagline">Encrypted document vault for Android, Linux, macOS &amp; Windows</p>
       <p class="lead">Stores, views, organizes, and searches PDFs, EPUBs, Apple&nbsp;Wallet passes, comics, images, and notes — all encrypted at rest, with zero network access.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/DavidNeurieder/LibreCrate/releases/download/v0.3.0/LibreCrate_v0.3.0.apk">Get it on GitHub</a>
+        <a class="btn btn-primary" href="https://github.com/DavidNeurieder/LibreCrate/releases/download/v0.5.4/LibreCrate_v0.5.4.apk">Get it on GitHub</a>
         <a class="btn btn-ghost" href="https://github.com/DavidNeurieder/librecrate">View source</a>
       </div>
     </div>
@@ -63,7 +63,7 @@
           </div>
           <div class="card">
             <h3>Optional password</h3>
-            <p>Even with the phone unlocked, content can't be read without your password.</p>
+            <p>Even with the device unlocked, content can't be read without your password.</p>
           </div>
           <div class="card">
             <h3>No network</h3>
@@ -94,7 +94,7 @@
           <div class="row"><span>Lock</span><span>Clears in-memory master key when backgrounded; requires password re-entry</span></div>
           <div class="row"><span>Backup</span><span>Encrypted Zip bundle with wrapped master key + DB + files</span></div>
         </div>
-        <p class="note">No Google Play Services, Firebase, Crashlytics, or AdMob. F-Droid only.</p>
+        <p class="note">No Google Play Services, Firebase, Crashlytics, or AdMob. Zero proprietary dependencies.</p>
       </div>
     </section>
 
@@ -116,22 +116,26 @@
     <section class="section section-alt" id="get">
       <div class="container">
         <h2>Get LibreCrate</h2>
-        <p>Install from F-Droid (no Google Play account required):</p>
+        <p>Free and open source (AGPL-3.0). Download the Android APK or the Linux/macOS/Windows desktop binaries from GitHub Releases:</p>
         <div class="cta">
-          <a class="btn btn-primary" href="#get">Coming soon</a>
+          <a class="btn btn-primary" href="https://github.com/DavidNeurieder/LibreCrate/releases">Get it on GitHub</a>
+          <a class="btn btn-ghost" href="https://github.com/DavidNeurieder/librecrate">View source</a>
         </div>
+        <p class="note">F-Droid listing in review — no Google Play Services, no proprietary SDKs.</p>
         <h3>Build from source</h3>
         <pre><code>git clone https://github.com/DavidNeurieder/librecrate
 cd librecrate
 ./gradlew assembleDebug</code></pre>
-        <p>APK at <code>app/build/outputs/apk/debug/app-debug.apk</code>.</p>
+        <p>APK at <code>app/build/outputs/apk/debug/app-debug.apk</code>. Desktop:
+        <code>cargo build --release --package librecrate</code> (CLI) or
+        <code>librecrate-gui</code> (GUI).</p>
       </div>
     </section>
   </main>
 
   <footer>
     <div class="container">
-      <p>LibreCrate — version 0.3.0. Zero network access. <a href="https://github.com/DavidNeurieder/librecrate/blob/main/LICENSE">License</a> · <a href="https://github.com/DavidNeurieder/librecrate">Source</a></p>
+      <p>LibreCrate — version 0.5.4. Zero network access. <a href="https://github.com/DavidNeurieder/librecrate/blob/main/LICENSE">License</a> · <a href="https://github.com/DavidNeurieder/librecrate">Source</a></p>
     </div>
   </footer>
 </body>
