@@ -12,7 +12,7 @@ Categories:
   - Ebook Reader
   - Pass Wallet
   - Wallet
-License: AGPL-3.0-or-later
+License: AGPL-3.0-only
 AuthorName: David Neurieder
 AuthorWebSite: https://davidneurieder.github.io/
 SourceCode: https://github.com/DavidNeurieder/LibreCrate

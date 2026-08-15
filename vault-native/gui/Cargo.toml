@@ -2,7 +2,7 @@
 name = "librecrate-gui"
 version = "0.5.4"
 edition = "2021"
-license = "AGPL-3.0-or-later"
+license = "AGPL-3.0-only"
 rust-version = "1.80"
 description = "LibreCrate desktop GUI — encrypted vault manager with document import, full-text search, collections, tags, and cross-platform backup/restore"
 

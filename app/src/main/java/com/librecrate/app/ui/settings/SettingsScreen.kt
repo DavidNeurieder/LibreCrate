@@ -513,7 +513,7 @@ private fun AboutSection(context: Context) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "GPL-3.0-only",
+                text = "AGPL-3.0-only",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

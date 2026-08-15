@@ -2,7 +2,7 @@
 name = "vault-native"
 version = "0.5.4"
 edition = "2021"
-license = "AGPL-3.0-or-later"
+license = "AGPL-3.0-only"
 description = "LibreCrate vault core: encrypted backup format, SQLCipher DB, merge logic"
 
 [lib]

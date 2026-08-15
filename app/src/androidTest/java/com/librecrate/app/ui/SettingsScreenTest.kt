@@ -75,7 +75,7 @@ class SettingsScreenTest {
 
     @Test
     fun showsLicense() {
-        composeTestRule.onNodeWithText("GPL-3.0-only").assertExists()
+        composeTestRule.onNodeWithText("AGPL-3.0-only").assertExists()
     }
 
     @Test
