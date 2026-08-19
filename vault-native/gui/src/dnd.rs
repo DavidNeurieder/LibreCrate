@@ -143,6 +143,7 @@ mod linux {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_client_message(
         conn: &RustConnection,
         raw: &[u8],
@@ -332,8 +333,8 @@ mod linux {
         let mut iter = path.bytes();
         while let Some(b) = iter.next() {
             if b == b'%' {
-                let hi = iter.next().and_then(|c| hex_val(c));
-                let lo = iter.next().and_then(|c| hex_val(c));
+                let hi = iter.next().and_then(hex_val);
+                let lo = iter.next().and_then(hex_val);
                 if let (Some(h), Some(l)) = (hi, lo) {
                     bytes.push((h << 4) | l);
                 } else {

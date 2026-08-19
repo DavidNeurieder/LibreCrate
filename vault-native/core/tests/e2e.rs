@@ -34,7 +34,7 @@ fn test_db_lifecycle() {
             mime_type: "application/pdf".into(),
             file_path: format!("files/doc{}.pdf", i),
             file_size: 1024 * (i + 1) as i64,
-            page_count: (i + 1) as i32,
+            page_count: (i + 1),
             author: "Author".into(),
             description: format!("Description {}", i),
             imported_at: now,

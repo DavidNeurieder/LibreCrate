@@ -610,7 +610,7 @@ fn test_oneshot_password_prompt_via_stdin() {
     init(d.path(), "pw");
     // Run list without -p flag — password is piped via stdin
     let mut child = Command::new(bin())
-        .args(&["list", d.path().to_str().unwrap()])
+        .args(["list", d.path().to_str().unwrap()])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -631,7 +631,7 @@ fn test_oneshot_password_wrong_via_stdin() {
     let d = v();
     init(d.path(), "correct");
     let mut child = Command::new(bin())
-        .args(&["list", d.path().to_str().unwrap()])
+        .args(["list", d.path().to_str().unwrap()])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

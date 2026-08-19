@@ -294,7 +294,7 @@ mod tests {
     #[test]
     fn test_ui_back_produces_message() {
         let vault = make_test_vault();
-        let mut state = State::new(vault);
+        let state = State::new(vault);
         let mut ui = iced_test::simulator(state.view());
         ui.click("Back").unwrap();
         let msgs: Vec<Message> = ui.into_messages().collect();

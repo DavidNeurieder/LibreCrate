@@ -179,7 +179,7 @@ impl State {
             .collect()
     }
 
-    fn sorted_documents(docs: &mut Vec<DocumentRow>, sort: SortOption) {
+    fn sorted_documents(docs: &mut [DocumentRow], sort: SortOption) {
         match sort {
             SortOption::RecentlyOpened => docs.sort_by(|a, b| b.last_opened_at.cmp(&a.last_opened_at)),
             SortOption::NameAsc => docs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase())),
@@ -297,7 +297,7 @@ impl State {
             Message::OpenDocument(id) => {
                 if let Some(doc) = self.documents.iter().find(|d| d.id == id) {
                     return Task::done(crate::app::Message::Navigate(open_navigation(
-                        &doc,
+                        doc,
                         self.vault.clone(),
                     )));
                 }
@@ -348,13 +348,12 @@ impl State {
                                 .flatten()
                         },
                         move |thumb| {
-                            let msg = thumb
+                            thumb
                                 .map(|data| {
                                     let handle = image::Handle::from_bytes(data);
                                     crate::app::Message::Library(Message::ThumbnailLoaded(id, handle))
                                 })
-                                .unwrap_or(crate::app::Message::Library(Message::Noop));
-                            msg
+                                .unwrap_or(crate::app::Message::Library(Message::Noop))
                         },
                     )
                 }).collect();
@@ -380,7 +379,7 @@ impl State {
             Message::OpenSearchMatch(id, page) => {
                 if let Some(doc) = self.documents.iter().find(|d| d.id == id) {
                     return Task::done(crate::app::Message::Navigate(open_navigation_at_page(
-                        &doc,
+                        doc,
                         self.vault.clone(),
                         page,
                     )));
@@ -704,7 +703,7 @@ impl State {
     fn info_panel(&self, doc: &DocumentRow) -> Element<'_, Message> {
         let mime_display = doc.mime_type
             .split('/')
-            .last()
+            .next_back()
             .unwrap_or(&doc.mime_type)
             .to_uppercase();
 

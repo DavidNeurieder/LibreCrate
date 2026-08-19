@@ -45,7 +45,7 @@ impl AesCipher {
 }
 
 pub fn wrap(kek: &[u8], plaintext: &[u8]) -> Option<Vec<u8>> {
-    if plaintext.len() % 8 != 0 || plaintext.len() < 16 {
+    if !plaintext.len().is_multiple_of(8) || plaintext.len() < 16 {
         return None;
     }
     let cipher = select_cipher(kek)?;
@@ -67,8 +67,8 @@ pub fn wrap(kek: &[u8], plaintext: &[u8]) -> Option<Vec<u8>> {
             buf[..8].copy_from_slice(&block.as_slice()[..8]);
             buf[offset..offset + 8].copy_from_slice(&block.as_slice()[8..]);
 
-            for k in 0..8 {
-                buf[k] ^= ((t >> (56 - k * 8)) & 0xFF) as u8;
+            for (k, byte) in buf.iter_mut().take(8).enumerate() {
+                *byte ^= ((t >> (56 - k * 8)) & 0xFF) as u8;
             }
         }
     }
@@ -76,7 +76,7 @@ pub fn wrap(kek: &[u8], plaintext: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub fn unwrap(wrapped: &[u8], kek: &[u8]) -> Option<Vec<u8>> {
-    if wrapped.len() % 8 != 0 || wrapped.len() < 24 {
+    if !wrapped.len().is_multiple_of(8) || wrapped.len() < 24 {
         return None;
     }
     let cipher = select_cipher(kek)?;
@@ -89,8 +89,8 @@ pub fn unwrap(wrapped: &[u8], kek: &[u8]) -> Option<Vec<u8>> {
             let offset = (i + 1) * 8;
             let t = j * n + i + 1;
 
-            for k in 0..8 {
-                buf[k] ^= ((t >> (56 - k * 8)) & 0xFF) as u8;
+            for (k, byte) in buf.iter_mut().take(8).enumerate() {
+                *byte ^= ((t >> (56 - k * 8)) & 0xFF) as u8;
             }
 
             let mut block = GenericArray::default();

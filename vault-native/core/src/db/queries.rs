@@ -2,6 +2,7 @@ use rusqlite::{params, Connection, Result};
 
 /// A lightweight document row returned by query functions.
 #[derive(Debug, Clone, uniffi::Record)]
+#[derive(Default)]
 pub struct DocumentRow {
     pub id: String,
     pub title: String,
@@ -28,35 +29,6 @@ pub struct DocumentRow {
     pub content_hash: Option<String>,
 }
 
-impl Default for DocumentRow {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            title: String::new(),
-            file_name: String::new(),
-            mime_type: String::new(),
-            file_path: String::new(),
-            file_size: 0,
-            page_count: 0,
-            author: String::new(),
-            description: String::new(),
-            thumbnail_path: None,
-            imported_at: 0,
-            last_opened_at: 0,
-            modified_at: 0,
-            is_favorite: false,
-            is_conflict: false,
-            conflict_with: None,
-            collection_id: None,
-            encryption_iv: None,
-            current_page: 0,
-            reading_position: None,
-            barcode_format: None,
-            barcode_value: None,
-            content_hash: None,
-        }
-    }
-}
 
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct CollectionRow {
@@ -113,7 +85,7 @@ pub fn list_documents(conn: &Connection) -> Result<Vec<DocumentRow>> {
     let sql = format!("SELECT {DOCUMENT_COLUMNS} FROM documents ORDER BY title");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
-        .query_map([], |row| document_from_row(row))?
+        .query_map([], document_from_row)?
         .filter_map(|r| r.ok())
         .collect();
     Ok(rows)
@@ -138,12 +110,12 @@ pub fn list_documents_filtered(
         conditions.push(format!("d.is_favorite = ?{}", param_values.len() + 1));
         param_values.push(Box::new(1i32));
     }
-    if tag_id.is_some() {
+    if let Some(tid) = tag_id {
         conditions.push(format!(
             "d.id IN (SELECT document_id FROM document_tags WHERE tag_id = ?{})",
             param_values.len() + 1
         ));
-        param_values.push(Box::new(tag_id.unwrap().to_string()));
+        param_values.push(Box::new(tid.to_string()));
     }
 
     let where_clause = if conditions.is_empty() {
@@ -164,7 +136,7 @@ pub fn list_documents_filtered(
 
     let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
     let rows = stmt
-        .query_map(params_refs.as_slice(), |row| document_from_row(row))?
+        .query_map(params_refs.as_slice(), document_from_row)?
         .filter_map(|r| r.ok())
         .collect();
     Ok(rows)
@@ -196,7 +168,7 @@ pub fn find_documents_by_name(conn: &Connection, name: &str) -> Result<Vec<Docum
     let sql = format!("SELECT {DOCUMENT_COLUMNS} FROM documents WHERE title = ?1");
     let mut stmt = conn.prepare(&sql)?;
     let exact: Vec<DocumentRow> = stmt
-        .query_map(params![name], |row| document_from_row(row))?
+        .query_map(params![name], document_from_row)?
         .filter_map(|r| r.ok())
         .collect();
     if !exact.is_empty() {
@@ -207,7 +179,7 @@ pub fn find_documents_by_name(conn: &Connection, name: &str) -> Result<Vec<Docum
     let sql = format!("SELECT {DOCUMENT_COLUMNS} FROM documents WHERE title LIKE ?1 ORDER BY title");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
-        .query_map(params![pattern], |row| document_from_row(row))?
+        .query_map(params![pattern], document_from_row)?
         .filter_map(|r| r.ok())
         .collect();
     Ok(rows)
@@ -250,6 +222,7 @@ pub fn update_document(conn: &Connection, id: &str, title: &str, is_favorite: bo
     Ok(affected > 0)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_document_full(
     conn: &Connection,
     id: &str,
@@ -481,7 +454,7 @@ pub fn get_documents_for_tag(conn: &Connection, tag_id: &str) -> Result<Vec<Docu
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
-        .query_map(params![tag_id], |row| document_from_row(row))?
+        .query_map(params![tag_id], document_from_row)?
         .filter_map(|r| r.ok())
         .collect();
     Ok(rows)

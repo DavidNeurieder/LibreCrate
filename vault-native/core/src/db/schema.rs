@@ -90,7 +90,7 @@ pub fn create_all_tables(conn: &Connection) -> rusqlite::Result<()> {
 /// Schema version history:
 ///   0 — initial
 ///   1 — add content_hash column
-
+///
 /// Migrate the schema from an older version to the current version.
 pub fn migrate_schema(conn: &Connection) -> rusqlite::Result<()> {
     let version = get_schema_version(conn)?;

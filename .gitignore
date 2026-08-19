@@ -43,6 +43,7 @@ Thumbs.db
 
 # Rust build artifacts (vault-native workspace)
 vault-native/target/
+vault-native/vendor/
 
 # Packaging output
 out/

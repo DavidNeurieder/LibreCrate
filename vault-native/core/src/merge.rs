@@ -138,7 +138,7 @@ pub fn branch_a_merge(
                      content_hash
                      FROM documents WHERE id = ?",
                     rusqlite::params![doc.id],
-                    |row| crate::db::queries::document_from_row(row),
+                    crate::db::queries::document_from_row,
                 );
             match existing_row {
                 Err(_) => {

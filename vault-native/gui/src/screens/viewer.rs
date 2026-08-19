@@ -1318,7 +1318,7 @@ mod tests {
             let _ = state.update(Message::PageRendered(Ok(page)));
         }
 
-        let h1 = state.heights[1].unwrap();
+        let _h1 = state.heights[1].unwrap();
         state.heights[1] = None;
 
         let avg = (state.heights[0].unwrap() + state.heights[2].unwrap()) / 2.0;
@@ -1513,7 +1513,7 @@ mod tests {
         let _ = state.update(Message::ViewportChanged(y2, 600.0));
         let cached = state.leaving().unwrap();
 
-        let (mut state2, _task) = State::from_cached(doc, vault, cached);
+        let (state2, _task) = State::from_cached(doc, vault, cached);
         assert!(!state2.loading);
         assert!(state2.handle.is_some());
         assert!(state2.error.is_none());
@@ -1605,7 +1605,7 @@ mod tests {
                 y: Some(target),
             },
         );
-        ui2.operate(&mut renderer, &mut op);
+        ui2.operate(&renderer, &mut op);
 
         let mut messages: Vec<Message> = Vec::new();
         ui2.update(
@@ -1879,8 +1879,7 @@ mod tests {
 
         let page_up = state.scroll_target(state.viewport_y - state.viewport_visible).unwrap();
         let _ = state.update(Message::ScrollPage(-1));
-        let (applied, _, cache_kept) = drive(&mut state, &mut renderer, size, cache, Some(page_up));
-        cache = cache_kept;
+        let (applied, _, _cache_kept) = drive(&mut state, &mut renderer, size, cache, Some(page_up));
         assert!(
             (applied - page_up).abs() < 1.0,
             "page up: expected {page_up}, got {applied}"
@@ -1891,7 +1890,7 @@ mod tests {
     fn diag_height_drift() {
         let (vault, _dir) = make_test_vault_with_dir();
         let doc = import_sample(&vault, "search_3page.pdf");
-        let mut state = loaded_state(&vault, doc);
+        let state = loaded_state(&vault, doc);
         let handle = state.handle.clone().unwrap();
         let h100: Vec<f32> = (0..state.page_count)
             .map(|i| render_page(&handle, i, target_width(1.0)).unwrap().height as f32)

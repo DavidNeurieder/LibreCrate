@@ -167,7 +167,7 @@ pub fn store_thumbnail(base_dir: &Path, id: &str, data: &[u8], key: Option<&[u8]
     }
     let blob = if let Some(k) = key {
         let (iv, ct) = aes_gcm::encrypt_bytes(data, k).unwrap_or_else(|| (vec![], vec![]));
-        if iv.is_empty() { return Err(std::io::Error::new(std::io::ErrorKind::Other, "encryption failed")); }
+        if iv.is_empty() { return Err(std::io::Error::other("encryption failed")); }
         let mut out = iv;
         out.extend_from_slice(&ct);
         out
@@ -255,6 +255,7 @@ fn extension_for_mime(mime: &str) -> Option<&'static str> {
 
 /// Import a document: store the file blob (encrypted if key is provided), insert DB row, and index into FTS5.
 /// Returns the document ID.
+#[allow(clippy::too_many_arguments)]
 pub fn import_document(
     conn: &Connection,
     base_dir: &Path,
@@ -278,7 +279,7 @@ pub fn import_document(
     let (stored_data, iv): (Vec<u8>, Vec<u8>) = if let Some(k) = key {
         let (real_iv, ct) = aes_gcm::encrypt_bytes(file_data, k)
             .ok_or_else(|| rusqlite::Error::ToSqlConversionFailure(
-                Box::new(std::io::Error::new(std::io::ErrorKind::Other, "encryption failed"))
+                Box::new(std::io::Error::other("encryption failed"))
             ))?;
         let mut out = real_iv.clone();
         out.extend_from_slice(&ct);

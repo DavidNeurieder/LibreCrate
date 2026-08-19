@@ -260,6 +260,7 @@ impl DbHandle {
         Ok(crate::db::fts::rebuild_index(&conn)?)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn import_document(
         &self,
         base_dir: String,
@@ -393,6 +394,7 @@ impl DbHandle {
         )?)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update_document_full(
         &self,
         id: String,

@@ -168,7 +168,7 @@ impl Vault {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         let title = file_name.clone();
-        let mut mime = mime_guess2::from_path(&path)
+        let mut mime = mime_guess2::from_path(path)
             .first_or_octet_stream()
             .to_string();
         if mime == "application/octet-stream"
@@ -452,7 +452,7 @@ pub(crate) mod tests {
         let dir = tempfile::tempdir().unwrap();
         let vault = Vault::create(dir.path(), "testpass").unwrap();
         let id = uuid::Uuid::new_v4().to_string();
-        let file_data = b"hello world".to_vec();
+        let _file_data = b"hello world".to_vec();
 
         vault.db.add_document_full(
             DocumentRow {

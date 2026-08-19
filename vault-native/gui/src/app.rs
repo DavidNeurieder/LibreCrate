@@ -22,6 +22,7 @@ impl Hash for DndPending {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum Screen {
     FirstRun(screens::first_run::State),
     Unlock(screens::unlock::State),
@@ -33,6 +34,7 @@ pub enum Screen {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Message {
     FirstRun(screens::first_run::Message),
     Unlock(screens::unlock::Message),
@@ -359,11 +361,11 @@ fn viewer_keyboard_handler(
 
     let viewer_msg = if modifiers.control() {
         let key_char = match key.as_ref() {
-            Key::Character(c) => Some(c.as_ref()),
+            Key::Character(c) => Some(c),
             _ => None,
         };
         let mod_char = match modified_key.as_ref() {
-            Key::Character(c) => Some(c.as_ref()),
+            Key::Character(c) => Some(c),
             _ => None,
         };
         let is_plus = matches!(

@@ -127,22 +127,19 @@ impl State {
 
                             let mut exported = 0usize;
                             for doc in &selected {
-                                match vault.db.export_document_file(
+                                if let Ok(Some(data)) = vault.db.export_document_file(
                                     vault.base_dir.to_string_lossy().to_string(),
                                     doc.id.clone(),
                                 ) {
-                                    Ok(Some(data)) => {
-                                        let name = &doc.file_name;
-                                        let final_name = if selected.iter().filter(|d| d.file_name == *name).count() > 1 {
-                                            format!("{}_{}", doc.id, name)
-                                        } else {
-                                            name.clone()
-                                        };
-                                        zip.start_file(&final_name, options).map_err(|e| e.to_string())?;
-                                        zip.write_all(&data).map_err(|e| e.to_string())?;
-                                        exported += 1;
-                                    }
-                                    _ => {}
+                                    let name = &doc.file_name;
+                                    let final_name = if selected.iter().filter(|d| d.file_name == *name).count() > 1 {
+                                        format!("{}_{}", doc.id, name)
+                                    } else {
+                                        name.clone()
+                                    };
+                                    zip.start_file(&final_name, options).map_err(|e| e.to_string())?;
+                                    zip.write_all(&data).map_err(|e| e.to_string())?;
+                                    exported += 1;
                                 }
                             }
 
