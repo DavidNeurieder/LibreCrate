@@ -1,6 +1,6 @@
 [package]
 name = "librecrate-gui"
-version = "0.5.4"
+version = "0.5.5"
 edition = "2021"
 license = "AGPL-3.0-only"
 rust-version = "1.80"

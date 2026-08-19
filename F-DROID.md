@@ -38,9 +38,9 @@ Binaries: https://github.com/DavidNeurieder/LibreCrate/releases/download/v%v/Lib
 AllowedAPKSigningKeys: 11f860ee7ac19b8d992a52bf114a491f9b8b598091b7a5e94ce775b50e6e69fa
 
 Builds:
-  - versionName: 0.5.4
-    versionCode: 9
-    commit: v0.5.4
+  - versionName: 0.5.5
+    versionCode: 10
+    commit: v0.5.5
     subdir: app
     sudo:
       - apt-get update
@@ -55,12 +55,26 @@ Builds:
       - test -x "$HOME/.cargo/bin/cargo"
     gradle:
       - yes
+  - versionName: 0.5.4
+    versionCode: 9
+    commit: v0.5.4
+    subdir: app
+    sudo:
+      - apt-get update
+      - apt-get install -y build-essential clang libclang-dev perl rustup
+    ndk: r28c
+    prebuild:
+      - rustup default 1.94.0
+      - rustup target add aarch64-linux-android
+      - test -x "$HOME/.cargo/bin/cargo"
+    gradle:
+      - yes
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: app/build.gradle.kts|versionCode\s=\s(\d+)|.|versionName\s=\s"(.*)"
-CurrentVersion: 0.5.4
-CurrentVersionCode: 9
+CurrentVersion: 0.5.5
+CurrentVersionCode: 10
 ```
 
 ## How it works

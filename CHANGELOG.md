@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.5 (2026-08-19)
+
+### Code quality
+
+- **Fixed all clippy/compiler warnings across the workspace**: eliminated ~30 warnings including redundant closures, needless borrows, unnecessary casts, unused variables, and mutable-variable-does-not-need-to-be-mutable warnings. Added `#[allow]` annotations for intentionally-high-argument-count FFI functions and large enum variants.
+- **Derived `Default` for `DocumentRow`**: replaced 26-line manual `impl Default` with `#[derive(Default)]`.
+- **Modernized code style**: `.is_multiple_of()`, `.next_back()`, `std::io::Error::other()`, `if let Some` over `is_some()` + `unwrap()`.
+
+### License
+
+- **License changed to AGPL-3.0-only** across all source files and metadata.
+
 ## 0.5.4 (2026-08-05)
 
 ### F-Droid build fix

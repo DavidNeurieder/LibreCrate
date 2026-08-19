@@ -1,0 +1,3 @@
+• Fixed all compiler warnings for cleaner builds
+• License changed to AGPL-3.0-only
+• Version bumped to 0.5.5

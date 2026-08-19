@@ -39,7 +39,12 @@
     </screenshot>
   </screenshots>
   <releases>
-    <release version="0.5.4" date="2026-08-05">
+  <release version="0.5.5" date="2026-08-19">
+    <description>
+      <p>Code quality: fixed all clippy/compiler warnings across the workspace. License changed to AGPL-3.0-only.</p>
+    </description>
+  </release>
+  <release version="0.5.4" date="2026-08-05">
       <description>
         <p>Backup import now merges: importing a backup into an existing library keeps your documents and adds the backup's content on top, your local passkey stays unchanged, and backups created with a different passkey can be merged (files are re-encrypted with the local key). Phone and desktop share a single Rust backup/import implementation, and phone backups record their key-derivation parameters — fixing phone → desktop import ("crypto error: key unwrap failed"). Also fixed a F-Droid build failure by making MuPDF system-font support an opt-in desktop-only feature.</p>
       </description>
