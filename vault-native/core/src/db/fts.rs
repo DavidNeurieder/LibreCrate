@@ -173,8 +173,8 @@ pub fn extract_page_matches(highlighted: &str) -> Vec<PageMatch> {
 
 fn truncate_around_match(text: &str, context: usize) -> String {
     if let Some(pos) = text.find("<b>") {
-        let start = pos.saturating_sub(context);
-        let end = (pos + 200).min(text.len());
+        let start = text.floor_char_boundary(pos.saturating_sub(context));
+        let end = text.ceil_char_boundary((pos + 200).min(text.len()));
         let mut s = String::new();
         if start > 0 {
             s.push_str("...");
@@ -282,6 +282,14 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_page_matches_with_multibyte_chars() {
+        let text = "[PAGE=1]It was three o\u{2019} clock. Bond <b>felt</b> tired.[PAGE=2]The\u{2019} next chapter had no match.";
+        let matches = extract_page_matches(text);
+        assert_eq!(matches.len(), 1);
+        assert!(matches[0].snippet.contains("felt"));
+    }
+
+    #[test]
     fn test_search_with_all_matches() {
         let conn = setup_db();
         insert_doc(
@@ -300,6 +308,17 @@ mod tests {
 
         let page_matches = extract_page_matches(&results[0].highlighted);
         assert!(page_matches.len() >= 2, "expected at least 2 page matches, got {}", page_matches.len());
+    }
+
+    #[test]
+    fn test_truncate_around_match_with_multibyte_chars() {
+        let prefix = "a".repeat(80);
+        let text = format!(
+            "{prefix} It was three o\u{2019} clock in the morning. The noise of the traffic had died. Bond didn\u{2019}t feel tired. <b>fox</b> is here. Extra padding to push the match far enough that byte arithmetic lands inside a multi-byte char. Some more text to fill. Even more filler text goes here to make sure the end offset also lands mid-character because the text is long enough.",
+            prefix = prefix,
+        );
+        let result = truncate_around_match(&text, 80);
+        assert!(result.contains("fox"));
     }
 }
 
