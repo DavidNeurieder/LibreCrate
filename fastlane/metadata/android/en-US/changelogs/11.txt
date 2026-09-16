@@ -1,0 +1,4 @@
+• Fixed a crash when searching documents with special characters
+• Fixed a crash on devices with 16 KB memory pages
+• Fixed the "Confirm password" field not responding to taps on the vault setup screen
+• Version bumped to 0.5.6

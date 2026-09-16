@@ -1,0 +1,747 @@
+Yes. At this point I'd treat this as a platform refactor, not merely a Flutter port.
+
+The end state would be three reusable Rust layers + Flutter, with LibreCrate and FerriSync remaining conceptually separate.
+
+1. Target architecture
+                           Flutter
+                              │
+                     flutter_rust_bridge
+                              │
+                     ┌────────▼────────┐
+                     │ LibreCrate API │
+                     └───────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+              ▼              ▼              ▼
+        LibreCrate Core   Reader Core   LibreCrate Sync
+              │              │              │
+              │              │              ▼
+              │              │        FerriSync Core
+              │              │              │
+              └──────────────┼──────────────┘
+                             │
+                     Shared Sync Model
+                             │
+                      Shared Merge Engine
+
+
+I'd organize the repositories/workspace roughly as:
+
+rust/
+├── sync-model/
+├── merge-engine/
+├── ferrisync-core/
+├── librecrate-core/
+├── librecrate-reader/
+├── librecrate-sync/
+├── librecrate-api/
+└── librecrate-cli/
+
+flutter/
+└── ...
+
+
+The exact crate boundaries should be adjusted after inspecting the current code, but this is the architectural direction.
+
+Phase 1 — Freeze the current behavior
+
+Before refactoring, establish what must not break.
+
+Create a compatibility test suite covering:
+
+Existing LibreCrate vaults
+Existing backups
+Encryption/decryption
+Password changes
+Import/export
+PDF
+EPUB
+CBZ
+Markdown
+PKPass
+Images
+Search
+Collections
+Reading position
+CLI operations
+Existing database migrations
+
+The most important rule:
+
+An existing LibreCrate vault must remain readable by the new implementation.
+
+Don't change the vault format just because we're reorganizing the code.
+
+Phase 2 — Extract the Rust core
+
+Take the current vault-native/core and make it the real platform engine.
+
+Something like:
+
+librecrate-core/
+├── vault/
+├── crypto/
+├── storage/
+├── database/
+├── documents/
+├── metadata/
+├── search/
+└── backup/
+
+
+The core should have:
+
+No Flutter.
+
+No Iced.
+
+No Android.
+
+No UI assumptions.
+
+The CLI should use this core too.
+
+             librecrate-core
+             /            \
+            ▼              ▼
+         Flutter          CLI
+
+
+That immediately gives you a useful test: if the CLI can perform everything, the core is probably properly separated.
+
+Phase 3 — Clean up the document model
+
+Stop letting every subsystem deal with raw files.
+
+Introduce proper domain objects:
+
+Document
+DocumentId
+DocumentFormat
+Metadata
+Collection
+Tag
+Locator
+Annotation
+Bookmark
+ReadingProgress
+
+
+For example:
+
+Document
+├── id
+├── title
+├── authors
+├── format
+├── metadata
+├── cover
+└── capabilities
+
+
+The rest of the application should operate on these rather than repeatedly asking:
+
+"Is this a PDF?"
+"What's the extension?"
+"Where's the file?"
+
+Phase 4 — Build the unified reader architecture
+
+This is one of the major refactors.
+
+Create:
+
+librecrate-reader/
+├── reader/
+├── locator/
+├── epub/
+├── pdf/
+├── cbz/
+├── markdown/
+└── image/
+
+
+Define a common reader model:
+
+ReaderSession
+├── open
+├── close
+├── position
+├── navigate
+├── search
+├── bookmark
+├── annotation
+└── preferences
+
+
+Then format-specific engines sit underneath:
+
+                   ReaderSession
+                        │
+              ┌─────────┼─────────┐
+              ▼         ▼         ▼
+            EPUB       PDF       CBZ
+              │         │         │
+           Readium    PDF       images
+
+
+The user sees one LibreCrate Reader.
+
+Not "the EPUB reader", "the PDF reader", etc.
+
+Phase 5 — Build the shared synchronization model
+
+Before integrating FerriSync deeply, create a domain-neutral crate:
+
+sync-model/
+
+
+It defines concepts such as:
+
+ObjectId
+RevisionId
+Version
+Change
+Snapshot
+Hash
+
+
+Conceptually:
+
+Object
+   │
+   ├── revision 1
+   │       │
+   │       ├── revision 2
+   │       └── revision 3
+   │
+   └── divergent changes
+
+
+This gives both projects a common language for synchronization.
+
+Phase 6 — Build the shared merge engine
+
+Then:
+
+merge-engine/
+
+
+depends on sync-model.
+
+It should handle:
+
+Revision comparison
+Ancestry
+Divergence detection
+Change ordering
+Automatic merging
+Conflict generation
+Deterministic resolution
+Conflict IDs
+
+But it should not know what a PDF, EPUB, folder, or LibreCrate vault is.
+
+The engine should provide generic primitives.
+
+Applications provide semantics.
+
+For example:
+
+                    Merge Engine
+                         │
+             ┌───────────┼───────────┐
+             ▼           ▼           ▼
+           Set         Map        Register
+           merge       merge       merge
+
+
+LibreCrate can then define:
+
+ReadingProgress → latest
+Collections     → set union
+Annotations     → object merge
+
+
+while FerriSync can define:
+
+File → newest / conflict
+
+Phase 7 — Refactor FerriSync around that model
+
+Keep FerriSync's strengths:
+
+Device discovery
+Pairing
+Device identity
+TLS
+File watching
+Transfer
+Network protocol
+Progress
+Generic folder synchronization
+
+But separate:
+
+FerriSync
+├── transport
+├── discovery
+├── pairing
+├── filesystem
+└── synchronization
+
+
+from:
+
+merge-engine
+sync-model
+
+
+The key change is that FerriSync shouldn't own the entire concept of "conflict resolution."
+
+It should be able to say:
+
+"Here are the changes I received."
+
+The merge engine says:
+
+"Here is the resulting state."
+
+Phase 8 — Create librecrate-sync
+
+This becomes the adapter between the two worlds:
+
+LibreCrate
+      │
+      ▼
+librecrate-sync
+      │
+      ├── converts vault state → sync objects
+      ├── receives sync objects
+      ├── invokes merge engine
+      └── applies result to vault
+             │
+             ▼
+        librecrate-core
+
+
+This is where LibreCrate-specific synchronization semantics live.
+
+For example:
+
+Document
+Collection
+ReadingProgress
+Bookmark
+Annotation
+
+
+can each have appropriate merge behavior.
+
+Phase 9 — Stop synchronizing SQLite as an opaque blob
+
+This is an important consequence of the above architecture.
+
+Instead of:
+
+database.sqlite
+        ↕
+     FerriSync
+
+
+you want:
+
+LibreCrate state
+      │
+      ▼
+Sync objects
+      │
+      ▼
+FerriSync
+      │
+      ▼
+Sync objects
+      │
+      ▼
+Merge engine
+      │
+      ▼
+LibreCrate state
+      │
+      ▼
+SQLite
+
+
+SQLite becomes a local representation of the state.
+
+That makes conflicts dramatically more manageable.
+
+Phase 10 — Define the public LibreCrate API
+
+Now create:
+
+librecrate-api/
+
+
+This is the only layer Flutter needs to know.
+
+Something like:
+
+Vault
+├── create
+├── unlock
+├── lock
+├── documents
+├── collections
+├── search
+├── import
+├── export
+├── backup
+├── restore
+├── reader
+└── sync
+
+
+Don't expose the internals.
+
+Flutter shouldn't know that Rust happens to use SQLite.
+
+It shouldn't know how AES keys are structured.
+
+It shouldn't know how FerriSync discovers devices.
+
+Phase 11 — Define the FFI boundary
+
+Use the existing Flutter/Rust approach where appropriate, likely flutter_rust_bridge.
+
+The FFI layer should expose DTOs, not arbitrary internal Rust types.
+
+For example:
+
+Rust
+ │
+ ▼
+DocumentDto
+ReaderStateDto
+SearchResultDto
+SyncDeviceDto
+SyncStatusDto
+ConflictDto
+ │
+ ▼
+Flutter
+
+
+Also make long-running operations asynchronous:
+
+await vault.importDocument(...);
+await vault.backup(...);
+await vault.sync(...);
+
+
+And provide events for progress/status.
+
+Phase 12 — Build Flutter incrementally
+
+Only now build the new UI.
+
+I'd structure it:
+
+flutter/lib/
+├── app/
+├── models/
+├── services/
+├── screens/
+│   ├── unlock/
+│   ├── library/
+│   ├── search/
+│   ├── reader/
+│   ├── collections/
+│   ├── sync/
+│   ├── backup/
+│   └── settings/
+├── reader/
+└── widgets/
+
+
+The important architectural rule:
+
+Flutter
+   ↓
+LibreCrate API
+   ↓
+Rust
+
+
+Never:
+
+Flutter
+   ↓
+SQLite
+   ↓
+random Rust function
+   ↓
+FerriSync
+
+
+Keep the boundary clean.
+
+Phase 13 — Build the unified reader UI
+
+Now the reader becomes a major piece of the Flutter app:
+
+ReaderScreen
+      │
+      ▼
+ReaderController
+      │
+      ▼
+ReaderSession
+      │
+ ┌────┼────┐
+ ▼    ▼    ▼
+EPUB PDF  CBZ
+
+
+Common UI:
+
+Navigation
+Progress
+Search
+Bookmarks
+Annotations
+Reading position
+Font settings
+Theme
+Fullscreen
+Document information
+
+Format-specific rendering stays underneath.
+
+Phase 14 — Build sync UX
+
+FerriSync's capabilities should become invisible infrastructure.
+
+The user experience becomes:
+
+Settings
+   ↓
+Devices
+   ↓
+"MacBook Pro"
+   ● Connected
+
+       Sync now
+
+
+And:
+
+Syncing…
+
+████████████░░ 82%
+
+12 documents
+3 collections
+5 reading positions
+
+
+If there are conflicts:
+
+3 conflicts
+
+"Programming Rust"
+Reading position:
+Phone: Chapter 7
+Mac: Chapter 8
+
+[Keep Phone] [Keep Mac]
+
+
+Most things should resolve automatically.
+
+Phase 15 — Migrate platform by platform
+
+I wouldn't attempt all platforms simultaneously.
+
+I'd do:
+
+A. Linux/Windows/macOS
+
+Get Flutter + Rust working on desktop first.
+
+B. Android
+
+Move the existing Android functionality to Flutter.
+
+C. CLI
+
+Keep the CLI as a first-class client of the Rust core.
+
+Eventually:
+
+             Rust Core
+            /    |     \
+           /     |      \
+      Flutter   CLI    future UI
+
+Phase 16 — Remove the old UI implementations
+
+Only after feature parity:
+
+Compose → remove
+Iced → remove
+old Android bridge → remove
+
+
+Keep the Git history, of course, but don't keep dead architectural paths around indefinitely.
+
+Phase 17 — Hardening
+
+Before calling the refactor complete, I'd put significant effort into:
+
+Security
+Key handling
+Memory lifetime
+Locking
+Clipboard behavior
+Temporary files
+Crash behavior
+Backup encryption
+Sync encryption
+Device authentication
+Sync correctness
+
+Test:
+
+A changes
+B changes
+A syncs
+B syncs
+
+
+and:
+
+A changes
+B changes
+A and B sync simultaneously
+
+
+and:
+
+offline → offline → reconnect
+
+
+and especially:
+
+three devices
+       ↓
+divergent changes
+       ↓
+merge
+
+Vault compatibility
+
+Test old vaults against the new implementation continuously.
+
+The final dependency graph
+
+I'd want to end up approximately here:
+
+                         Flutter
+                            │
+                    flutter_rust_bridge
+                            │
+                     librecrate-api
+                            │
+              ┌─────────────┴─────────────┐
+              │                           │
+     librecrate-core              librecrate-sync
+              │                           │
+              │                    ┌──────┴──────┐
+              │                    │             │
+              │              ferrisync-core   merge-engine
+              │                                  │
+              │                             sync-model
+              │
+       librecrate-reader
+
+
+With FerriSync itself remaining usable independently:
+
+                   FerriSync
+                       │
+              ┌────────┴────────┐
+              │                 │
+         CLI / TUI          Flutter
+              │                 │
+              └──────┬──────────┘
+                     │
+               ferrisync-core
+                     │
+              sync-model
+                     │
+              merge-engine
+
+
+And LibreCrate becomes another client of the same foundation.
+
+The order I'd actually execute it
+
+This is important. I would not do these in arbitrary order.
+
+1.  Freeze current behavior
+        ↓
+2.  Extract/clean LibreCrate core
+        ↓
+3.  Clean document model
+        ↓
+4.  Create unified reader abstraction
+        ↓
+5.  Create sync-model
+        ↓
+6.  Create merge-engine
+        ↓
+7.  Refactor FerriSync to use them
+        ↓
+8.  Build librecrate-sync adapter
+        ↓
+9.  Create stable LibreCrate API
+        ↓
+10. Build FFI layer
+        ↓
+11. Build Flutter shell
+        ↓
+12. Port library/search
+        ↓
+13. Port unified reader
+        ↓
+14. Port sync UX
+        ↓
+15. Port backup/settings/etc.
+        ↓
+16. Desktop + Android parity
+        ↓
+17. Remove Compose/Iced
+        ↓
+18. Security + sync stress testing
+        ↓
+19. Release
+
+The one thing I'd change from the original idea
+
+I wouldn't call this a "Flutter rewrite."
+
+I'd call it:
+
+LibreCrate Platform 2.0
+
+Because the biggest improvement isn't Flutter.
+
+It's the separation into:
+
+Vault engine → Reader engine → Sync model → Merge engine → Network transport → API → UI.
+
+That gives you something much more valuable than a prettier frontend: a reusable Rust document platform where LibreCrate and FerriSync are composable products rather than two projects that happen to share some code.
+
+And I'd make backward-compatible vaults + deterministic synchronization the two non-negotiable architectural requirements throughout the entire refactor.

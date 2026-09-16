@@ -1,0 +1,272 @@
+I checked the repository. LibreCrate on GitHub
+
+LibreCrate is an open-source, offline encrypted document vault. The current repository README identifies version 0.5.5 and supports Android plus Linux/macOS/Windows desktop and CLI. 
+G
+GitHub
+
+What it does
+Stores PDF, EPUB, PKPass, CBZ comics, images, and Markdown notes.
+Encrypts files at rest with AES-256-GCM.
+Uses Argon2id for password-based key derivation and AES-256 Key Wrap for the master key.
+Has zero network access, according to the project documentation.
+Provides full-text search using FTS5.
+Supports encrypted backups that can be moved between Android and desktop.
+Android uses Jetpack Compose; the desktop application is written with Iced/Rust.
+The core vault/crypto/database functionality is implemented in Rust and connected to Android through UniFFI. 
+G
+GitHub
+Architecture
+
+The repository is particularly interesting if you're looking at the code rather than just using the app:
+
+LibreCrate
+├── app/                  # Android app
+├── vault-native/
+│   ├── core/             # Rust vault, crypto, DB, backup, merge
+│   ├── cli/              # CLI / REPL
+│   └── gui/              # Iced desktop GUI
+├── vault-reader/
+├── reader-epub/
+├── vault-native-android/
+└── specification/
+
+
+The Android build automatically builds the Rust native library through UniFFI. 
+G
+GitHub
+
+If you tell me what you want to do with this repository—for example, understand the architecture, audit the encryption/security, build it on Android, fork it, add a feature, or compare it with another document vault—I can dig into the relevant source files and walk you through it.
+
+G
+Sources
+
+
+Great. I looked at the actual repository structure rather than just the README. LibreCrate already has a very good boundary for a Flutter migration: the vault-native/core crate contains the shared crypto/database/backup/merge functionality, while the UI is currently split between Compose and Iced.
+G
+GitHub
+
+My recommendation would be not to rewrite everything at once.
+
+The target architecture
+
+I'd move toward:
+
+                    Flutter
+                       │
+                 Dart API layer
+                       │
+                 FFI / UniFFI
+                       │
+              ┌────────▼────────┐
+              │  LibreCrate     │
+              │  Rust Core      │
+              ├─────────────────┤
+              │ Vault            │
+              │ Crypto           │
+              │ Database         │
+              │ Search           │
+              │ Import/export    │
+              │ Backup/restore   │
+              │ Merge            │
+              └────────┬────────┘
+                       │
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+       Android       Desktop       CLI
+
+
+The important thing is that Flutter doesn't become the new core.
+
+The existing project already has the core separated from the UIs, which makes this much less painful than starting from scratch.
+G
+GitHub
+
+What I would keep
+
+I'd keep almost all of:
+
+vault-native/core
+the vault file format
+encryption implementation
+database schema
+FTS5 search
+backup format
+restore/merge logic
+document metadata
+CLI
+Rust tests
+
+That's especially important because the repository already has a substantial test suite: the README reports 226+ Rust workspace tests in addition to Android tests.
+G
+GitHub
+
+I wouldn't throw that away just to change the UI framework.
+
+What I'd replace
+
+I'd eventually remove:
+
+app/                  ← Compose UI
+vault-native/gui/     ← Iced UI
+vault-native-android/ ← Android-specific UI bridge
+
+
+and replace the UI portion with something like:
+
+librecrate/
+├── rust/
+│   └── ...
+│
+├── flutter/
+│   ├── lib/
+│   │   ├── main.dart
+│   │   ├── app.dart
+│   │   ├── models/
+│   │   ├── services/
+│   │   ├── screens/
+│   │   │   ├── unlock/
+│   │   │   ├── library/
+│   │   │   ├── document/
+│   │   │   ├── reader/
+│   │   │   ├── collections/
+│   │   │   ├── search/
+│   │   │   ├── settings/
+│   │   │   └── backup/
+│   │   └── widgets/
+│   │
+│   ├── android/
+│   ├── linux/
+│   ├── macos/
+│   └── windows/
+│
+└── ...
+
+The interesting part: readers
+
+This is where I wouldn't blindly port the Android implementation.
+
+LibreCrate currently has several different viewers—MuPDF for PDFs, Readium for EPUB, CBZ rendering, PKPass rendering, image viewing and Markdown editing.
+G
+GitHub
+
+I'd make the Rust core responsible for:
+
+encrypted file
+      ↓
+decrypt
+      ↓
+document abstraction
+      ↓
+Flutter reader
+
+
+rather than making Rust draw the actual UI.
+
+For example:
+
+PdfReader(
+  document: document,
+  initialPage: document.lastReadPage,
+);
+
+
+The reader can then request decrypted data/pages through the native layer.
+
+One architectural decision I'd make early
+
+I'd introduce a clean application API between Flutter and Rust.
+
+Something along these lines:
+
+Flutter
+   │
+   │  createVault()
+   │  unlockVault()
+   │  listDocuments()
+   │  search()
+   │  importDocument()
+   │  deleteDocument()
+   │  backup()
+   │  restore()
+   │
+   ▼
+LibreCrate API
+   │
+   ▼
+Rust Core
+
+
+Don't expose your entire Rust internal object graph to Dart.
+
+That's going to make the project dramatically easier to evolve.
+
+And I'd make the API async
+
+Because operations like importing a 500 MB PDF, extracting text, indexing it, creating a backup, or restoring a vault shouldn't block the Flutter UI.
+
+Conceptually:
+
+final result = await vault.importFile(path);
+
+
+rather than exposing synchronous operations that tie up the UI thread.
+
+One thing I would not do
+
+I wouldn't start by creating a beautiful Flutter UI.
+
+I'd start by proving this:
+
+Flutter Android
+       │
+       ▼
+     FFI
+       │
+       ▼
+   Rust Core
+       │
+       ▼
+existing LibreCrate vault
+
+
+Then:
+
+Create vault
+Unlock vault
+List documents
+Import PDF
+Read metadata
+Search
+Delete
+Backup
+Restore
+Lock/unlock
+
+If all of that works, then build the polished UI.
+
+That lets you preserve compatibility with existing .librecrate vaults and backups while replacing the frontend.
+
+My verdict
+
+For this particular project, I'd actually change my earlier answer from "Flutter could make sense" to:
+
+Yes, I think Flutter + Rust is probably the better long-term architecture for LibreCrate.
+
+The current project is already halfway there. The Rust core is shared, while Compose and Iced are the two presentation layers.
+G
+GitHub
+
+So the migration isn't really:
+
+"Rewrite LibreCrate in Flutter."
+
+It's:
+
+"Replace two UI implementations with one Flutter UI while preserving the Rust vault engine."
+
+That's a much more compelling proposition.
+
+If you want, I can next go through the actual Rust core and Android/desktop source tree and design the exact Flutter ↔ Rust API, including which existing files I'd delete/move/keep and a suggested migration sequence.
+
+G
+Sources

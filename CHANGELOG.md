@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.6 (2026-09-16)
+
+### Search
+
+- **Fixed crash when searching documents containing multi-byte characters** (`byte index is not a char boundary`): search result snippets (`truncate_around_match`) now slice on character boundaries (`floor_char_boundary`/`ceil_char_boundary`) instead of raw byte offsets, so text containing non-ASCII characters (e.g. `’`) no longer panics in the vault-native core. Added regression tests for multibyte snippets and page matches.
+
+### Android
+
+- **Fixed crash on devices with 16 KB memory pages** (`program alignment (8192) cannot be smaller than system page size (16384)`): upgraded JNA from 5.14.0 to 5.17.0 in the Android build, whose `libjnidispatch.so` ships with a matching 16 KB load alignment alongside the already-aligned `libvault_native.so`.
+- **Fixed "Confirm password" field not focusable by tap on the vault setup screen**: the setup screen is now scrollable and IME-aware, and the "Next" key explicitly moves focus from the Password field to the Confirm field. Previously the confirmation field shifted behind the on-screen keyboard, so direct taps were intercepted by the IME while keyboard navigation still worked.
+
 ## 0.5.5 (2026-08-19)
 
 ### Code quality

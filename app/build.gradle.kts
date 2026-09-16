@@ -17,8 +17,8 @@ android {
         applicationId = "com.librecrate.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.5.5"
+        versionCode = 11
+        versionName = "0.5.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

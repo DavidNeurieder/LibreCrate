@@ -1,0 +1,384 @@
+Yes. I would build a shared merge engine, but I'd make it deliberately generic and keep it below both LibreCrate and FerriSync.
+
+The key is to distinguish synchronization from merging.
+
+FerriSync
+    │
+    │ transports changes
+    ▼
+┌──────────────────────┐
+│    Merge Engine      │
+│                      │
+│ detect conflicts     │
+│ compare versions     │
+│ merge changes        │
+│ resolve conflicts    │
+└──────────┬───────────┘
+           │
+      ┌────┴─────┐
+      ▼          ▼
+ LibreCrate   other apps
+
+I'd make it a separate Rust crate
+
+Something like:
+
+crates/
+├── merge-engine/
+├── ferrisync-core/
+├── librecrate-core/
+├── librecrate-sync/
+└── ...
+
+
+Potentially called:
+
+sync-merge
+
+
+or
+
+ferri-merge
+
+
+although I'd favor a domain-neutral name, because the whole point is that FerriSync shouldn't own it.
+
+The crucial design: generic changes
+
+The merge engine shouldn't know about:
+
+PDFs
+EPUBs
+vaults
+folders
+SQLite
+Flutter
+
+Instead it should operate on a generic change model.
+
+For example:
+
+pub struct ObjectId(...);
+
+pub struct Revision {
+    pub object_id: ObjectId,
+    pub version: Version,
+    pub parent: Option<Version>,
+    pub hash: Hash,
+}
+
+pub enum Change {
+    Create { ... },
+    Update { ... },
+    Delete { ... },
+}
+
+
+Then it can determine:
+
+                  A
+                  │
+              revision 1
+               /     \
+              /       \
+             B         C
+          Device A   Device B
+
+
+and recognize that B and C are divergent descendants of the same revision.
+
+That's much more useful than simply saying:
+
+"A is newer than B."
+
+Then the application supplies the merge policy
+
+This is the really important part.
+
+FerriSync might say:
+
+MergeStrategy::PreferNewest
+
+
+for an ordinary file.
+
+LibreCrate might say:
+
+MergeStrategy::Custom(LibreCrateMerger)
+
+
+for reading state.
+
+For example:
+
+Reading position:
+
+Device A → page 120
+Device B → page 140
+
+Result → page 140
+
+
+But collections might be:
+
+A: Fiction, Sci-Fi
+B: Fiction, Fantasy
+
+Result:
+Fiction
+Sci-Fi
+Fantasy
+
+
+And annotations might require a completely different strategy.
+
+The merge engine provides mechanics; the application provides semantics.
+
+I'd go one step further: CRDT-like primitives
+
+I wouldn't necessarily build a full-blown CRDT framework initially, but I'd design the engine so it can support CRDT-style merging.
+
+For example:
+
+Sets:
+    union
+
+Counters:
+    additive merge
+
+Registers:
+    version-based resolution
+
+Maps:
+    recursive merge
+
+Lists:
+    sequence-aware merge
+
+
+That would be incredibly useful for LibreCrate.
+
+Imagine:
+
+Collections
+
+
+being represented as a set:
+
+Device A:
+{Books, Sci-Fi}
+
+Device B:
+{Books, Fantasy}
+
+Merged:
+{Books, Sci-Fi, Fantasy}
+
+
+No conflict at all.
+
+Reading progress is even simpler
+
+You could model:
+
+Book X
+└── reading_position
+      ├── locator
+      ├── timestamp
+      └── device
+
+
+Then:
+
+A: page 50 @ 18:00
+B: page 70 @ 19:00
+
+→ page 70
+
+
+You can make that deterministic.
+
+This also fixes the SQLite problem
+
+Instead of synchronizing:
+
+database.sqlite
+
+
+you synchronize:
+
+DocumentChange
+CollectionChange
+ReadingProgressChange
+AnnotationChange
+
+
+Then LibreCrate does:
+
+received changes
+       ↓
+merge engine
+       ↓
+merged state
+       ↓
+SQLite
+       ↓
+FTS5 rebuild/update
+
+
+SQLite becomes a local projection of the synchronized state, rather than the synchronization protocol itself.
+
+That's a major architectural improvement.
+
+FerriSync benefits too
+
+This would allow FerriSync to evolve from:
+
+folder synchronization
+
+
+into:
+
+object synchronization
+
+
+while retaining folder sync as one implementation.
+
+For example:
+
+                    Merge Engine
+                         ▲
+                         │
+              ┌──────────┴──────────┐
+              │                     │
+       Filesystem objects      App objects
+              │                     │
+          FerriSync              LibreCrate
+
+
+And potentially later:
+
+Notes app
+Password manager
+Photo library
+Bookmark manager
+
+
+could use the same synchronization/merge primitives.
+
+I'd keep transport completely separate
+
+This distinction is important:
+
+Discovery
+    ↓
+Authentication
+    ↓
+Transport
+    ↓
+Change exchange
+    ↓
+Merge engine
+    ↓
+Application
+
+
+So FerriSync owns the first three/four layers.
+
+The merge engine owns the merge.
+
+LibreCrate owns the meaning.
+
+That makes the architecture very clean.
+
+One thing I'd absolutely include: deterministic conflict IDs
+
+Every conflict should have a stable ID.
+
+Something like:
+
+pub struct ConflictId {
+    object_id: ObjectId,
+    local_revision: RevisionId,
+    remote_revision: RevisionId,
+}
+
+
+Then the UI can say:
+
+3 conflicts need your attention
+
+rather than silently picking one side.
+
+For LibreCrate, that could eventually look like:
+
+Sync conflicts
+
+"Programming Rust"
+Reading position
+  This device: Chapter 8
+  MacBook: Chapter 9
+
+[Keep Chapter 8] [Keep Chapter 9]
+
+
+Most conflicts could be automatically resolved, but genuinely ambiguous ones should surface to the user.
+
+My ideal workspace
+
+I'd now seriously consider a shared workspace like:
+
+rust/
+├── crates/
+│
+│   ├── sync-model/
+│   │    Shared IDs, revisions, changes
+│   │
+│   ├── merge-engine/
+│   │    Generic versioning + merge
+│   │
+│   ├── ferrisync-core/
+│   │    Discovery, pairing, transport
+│   │
+│   ├── librecrate-core/
+│   │    Vault, crypto, documents
+│   │
+│   ├── librecrate-sync/
+│   │    LibreCrate ↔ sync-model adapter
+│   │
+│   └── librecrate-api/
+│
+└── flutter/
+
+
+With the dependency graph:
+
+                  sync-model
+                 /           \
+                ▼             ▼
+         merge-engine     ferrisync-core
+                ▲
+                │
+         librecrate-sync
+                ▲
+                │
+         librecrate-core
+                ▲
+                │
+          librecrate-api
+                ▲
+                │
+             Flutter
+
+
+Although I'd probably adjust the exact dependency direction after seeing the current FerriSync internals.
+
+Bottom line
+
+Yes. Definitely.
+
+But I wouldn't build a "LibreCrate merge engine" and then try to reuse it in FerriSync.
+
+I'd build a small, domain-neutral synchronization/merge foundation, then have both projects implement adapters around it.
+
+That could ultimately become the most valuable piece of the architecture: FerriSync handles moving state between machines; the shared merge engine determines what that state means when both machines changed it.
