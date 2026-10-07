@@ -1,6 +1,9 @@
 # LibreCrate — offline document vault
 
-[![Get it on GitHub](https://img.shields.io/badge/Get_it_on_GitHub-181717?style=for-the-badge&logo=github)](https://github.com/DavidNeurieder/LibreCrate/releases)
+
+[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
+     alt="Get it on F-Droid"
+     height="60">](https://f-droid.org/en/packages/com.librecrate.app/)
 
 **Version 0.5.6** · 
 
