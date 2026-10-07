@@ -63,7 +63,7 @@ a:hover { text-decoration: underline; }
   font-size: 1.05rem;
 }
 
-.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.cta { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
 .btn {
   display: inline-block;
   padding: 12px 22px;
