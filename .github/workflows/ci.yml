@@ -95,7 +95,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: vault-native
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses >/dev/null || true
       - name: Assemble debug APK
