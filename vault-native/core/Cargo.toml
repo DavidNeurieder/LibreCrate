@@ -13,7 +13,7 @@ default = []
 system-fonts = ["mupdf/system-fonts"]
 
 [dependencies]
-argon2 = "0.5"
+argon2 = "0.6"
 aes-gcm = "0.10"
 aes = "0.8"
 
