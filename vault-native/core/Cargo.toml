@@ -38,7 +38,7 @@ uniffi = { version = "0.28", features = ["build"] }
 
 [dev-dependencies]
 tempfile = "3"
-uniffi_bindgen = "0.28"
+uniffi_bindgen = "0.32"
 camino = "1"
 rusqlite = "0.31"
 zip = { version = "2", default-features = false, features = ["deflate"] }
