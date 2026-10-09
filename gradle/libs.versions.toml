@@ -30,7 +30,7 @@ willenaSqliteJdbc = "3.46.1.0"
 # Test
 junit = "4.13.2"
 mockk = "1.13.9"
-coroutinesCore = "1.7.3"
+coroutinesCore = "1.11.0"
 coroutinesTest = "1.7.3"
 turbine = "1.0.0"
 androidxTestExtJunit = "1.1.5"
