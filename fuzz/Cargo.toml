@@ -1,0 +1,64 @@
+[workspace]
+members = ["."]
+
+[package]
+name = "librecrate-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Fuzz targets for LibreCrate's untrusted parsers (nightly + cargo-fuzz only)"
+
+# ---------------------------------------------------------------------------
+# This is an OPT-IN workspace, isolated from `vault-native/` so stable builds
+# (CI, `make`, `build_and_test.py`) never compile the sanitizer harness.
+#
+# Run with:
+#     rustup toolchain install nightly
+#     cargo install cargo-fuzz
+#     cd fuzz
+#     cargo +nightly fuzz run fuzz_package_read
+# ---------------------------------------------------------------------------
+
+[dependencies]
+libfuzzer-sys = "0.4"
+vault-native = { path = "../vault-native/core" }
+
+[[bin]]
+name = "fuzz_package_read"
+path = "fuzz_targets/fuzz_package_read.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_manifest_json"
+path = "fuzz_targets/fuzz_manifest_json.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_extract_zip"
+path = "fuzz_targets/fuzz_extract_zip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_archive_path"
+path = "fuzz_targets/fuzz_archive_path.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_thumbnail"
+path = "fuzz_targets/fuzz_thumbnail.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_import"
+path = "fuzz_targets/fuzz_import.rs"
+test = false
+doc = false
+
+# libFuzzer + ASAN artifacts are debug symbols in release.
+[profile.release]
+debug = 1

@@ -6,6 +6,69 @@ pub const DEFAULT_ITERATIONS: u32 = 2;
 pub const DEFAULT_PARALLELISM: u32 = 2;
 pub const DEFAULT_HASH_LENGTH: i32 = 32;
 
+/// Absolute safety ceiling for Argon2 parameters accepted from untrusted
+/// sources (backup manifests, `params.toml` in an imported backup, FFI calls).
+///
+/// These values are separate from the normal parameters (`Argon2Params`) and
+/// are deliberately generous so legitimately-created vaults and backups are
+/// never rejected — the goal is to stop a hostile archive from requesting
+/// unbounded memory/CPU, not to tighten derived-vault policy.
+///
+/// Values live above both normal parameter sets:
+///   - desktop/GUI/CLI: 19456 KiB / 2 iterations / 2 parallelism  (~27 ms/derivation)
+///   - Android:         16384 KiB / 3 iterations / 2 parallelism  (~32 ms/derivation)
+///
+/// Measured on a mid-range x86_64 dev machine (release build, `cargo bench -p
+/// vault-native --bench kdf`), the ceiling costs ~437 ms + 64 MiB per hostile
+/// invocation — bounded, and ~16× the legitimate desktop cost, so abuse is
+/// expensive while normal operation is unaffected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KdfPolicy {
+    pub max_memory_kib: u32,
+    pub max_iterations: u32,
+    pub max_parallelism: u32,
+}
+
+impl Default for KdfPolicy {
+    fn default() -> Self {
+        Self {
+            max_memory_kib: 64 * 1024, // 64 MiB
+            max_iterations: 10,
+            max_parallelism: 4,
+        }
+    }
+}
+
+/// Validate that untrusted KDF parameters are within the absolute ceiling
+/// BEFORE Argon2 is executed. Zero values and obvious overflow are rejected
+/// here so callers never reach `Params::new` with attacker-controlled inputs.
+pub fn validate_kdf_params(params: &Argon2Params, policy: &KdfPolicy) -> crate::error::Result<()> {
+    if params.memory_cost == 0 || params.iterations == 0 || params.parallelism == 0 {
+        return Err(crate::error::Error::InvalidKdfParameters(
+            "memory/iterations/parallelism must be non-zero".into(),
+        ));
+    }
+    if params.memory_cost > policy.max_memory_kib {
+        return Err(crate::error::Error::InvalidKdfParameters(format!(
+            "memory cost {} KiB exceeds limit {} KiB",
+            params.memory_cost, policy.max_memory_kib
+        )));
+    }
+    if params.iterations > policy.max_iterations {
+        return Err(crate::error::Error::InvalidKdfParameters(format!(
+            "iterations {} exceed limit {}",
+            params.iterations, policy.max_iterations
+        )));
+    }
+    if params.parallelism > policy.max_parallelism {
+        return Err(crate::error::Error::InvalidKdfParameters(format!(
+            "parallelism {} exceeds limit {}",
+            params.parallelism, policy.max_parallelism
+        )));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct Argon2Params {
     pub memory_cost: u32,
@@ -59,8 +122,28 @@ pub fn derive_key(password: &str, salt: &[u8], params: &Argon2Params) -> Option<
     Some(key)
 }
 
-pub fn derive_key_and_zero(password: &str, salt: &[u8], params: &Argon2Params) -> Option<Vec<u8>> {
-    derive_key(password, salt, params)
+/// Derive an Argon2id key into a `DerivedKey` wrapper that zeroizes its heap
+/// buffer when dropped. Every derivation that unlocks or unwraps key material
+/// should use this so password-derived bytes don't linger in memory.
+pub fn derive_key_and_zero(
+    password: &str,
+    salt: &[u8],
+    params: &Argon2Params,
+) -> Option<super::secrets::DerivedKey> {
+    use super::secrets::DerivedKey;
+    let p = Params::new(
+        params.memory_cost,
+        params.iterations,
+        params.parallelism,
+        Some(params.hash_length as usize),
+    )
+    .ok()?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, p);
+    let mut key = DerivedKey(vec![0u8; params.hash_length as usize]);
+    argon2
+        .hash_password_into(password.as_bytes(), salt, &mut key.0)
+        .ok()?;
+    Some(key)
 }
 
 #[cfg(test)]

@@ -11,6 +11,7 @@
 //! and it goes through the same `vault_ops::export_vault_dirs` /
 //! `vault_ops::restore_backup_to_dirs` functions the new uniffi exports call.
 
+use std::path::Path;
 use vault_native::crypto::aes_gcm;
 use vault_native::crypto::aes_kw;
 use vault_native::crypto::argon2::{self, Argon2Params};
@@ -19,10 +20,9 @@ use vault_native::db::schema::{create_encrypted_db, open_encrypted};
 use vault_native::db::storage::import_document;
 use vault_native::format::export::create_vault_layout;
 use vault_native::vault_ops::{
-    export_vault_dir, export_vault_dirs, parse_kdf_params_from_toml, restore_backup_to_dirs,
-    restore_backup_to_dir,
+    export_vault_dir, export_vault_dirs, parse_kdf_params_from_toml, restore_backup_to_dir,
+    restore_backup_to_dirs,
 };
-use std::path::Path;
 
 /// Phone-side constants from `RustKeyManager.kt`.
 const PHONE_MEMORY_COST: u32 = 16_384;
@@ -91,14 +91,16 @@ fn open_like_gui(root: &Path, password: &str) -> (rusqlite::Connection, Vec<u8>)
     let enc_dir = root.join("encryption");
     let salt = std::fs::read(enc_dir.join("salt")).unwrap();
     let wrapped = std::fs::read(enc_dir.join("wrapped_master_key")).unwrap();
-    let params = parse_kdf_params_from_toml(
-        &std::fs::read_to_string(enc_dir.join("params.toml")).unwrap(),
-    )
-    .unwrap();
+    let params =
+        parse_kdf_params_from_toml(&std::fs::read_to_string(enc_dir.join("params.toml")).unwrap())
+            .unwrap();
     let kek = argon2::derive_key(password, &salt, &params).unwrap();
     let master_key = aes_kw::unwrap(&wrapped, &kek).expect("key unwrap failed");
     let conn = open_encrypted(
-        root.join("databases").join("librecrate.db").to_str().unwrap(),
+        root.join("databases")
+            .join("librecrate.db")
+            .to_str()
+            .unwrap(),
         &master_key,
     )
     .unwrap();
@@ -146,7 +148,10 @@ fn test_phone_backup_exports_into_gui_and_unlocks() {
     assert_eq!(recovered_mk, master_key, "master key must round-trip");
     assert_vault_has_docs(
         &conn,
-        &[("phone-doc-1", "Phone Doc One"), ("phone-doc-2", "Phone Doc Two")],
+        &[
+            ("phone-doc-1", "Phone Doc One"),
+            ("phone-doc-2", "Phone Doc Two"),
+        ],
     );
 
     // File contents must survive the round trip.
@@ -161,8 +166,19 @@ fn test_phone_backup_exports_into_gui_and_unlocks() {
 
     // Wrong password must not unlock (regression for the original bug).
     assert!(aes_kw::unwrap(
-        &std::fs::read(gui_root.path().join("encryption").join("wrapped_master_key")).unwrap(),
-        &argon2::derive_key("wrong", &std::fs::read(gui_root.path().join("encryption").join("salt")).unwrap(), &phone_params()).unwrap(),
+        &std::fs::read(
+            gui_root
+                .path()
+                .join("encryption")
+                .join("wrapped_master_key")
+        )
+        .unwrap(),
+        &argon2::derive_key(
+            "wrong",
+            &std::fs::read(gui_root.path().join("encryption").join("salt")).unwrap(),
+            &phone_params()
+        )
+        .unwrap(),
     )
     .is_none());
 }
@@ -209,25 +225,28 @@ fn test_desktop_backup_restores_into_phone_layout() {
 
     // Regression guard: the OLD phone behavior ignored params.toml and always
     // used 16384/3/2 — that must fail to unwrap a desktop vault.
-    let old_kek =
-        argon2::derive_key("desktop-pass", &salt, &phone_params()).unwrap();
+    let old_kek = argon2::derive_key("desktop-pass", &salt, &phone_params()).unwrap();
     assert!(
         aes_kw::unwrap(&wrapped, &old_kek).is_none(),
         "old hardcoded-16384 behavior must NOT unlock a desktop vault"
     );
 
     // FIXED phone behavior: read params.toml (19456/2/2) and unlock.
-    let params = parse_kdf_params_from_toml(
-        &std::fs::read_to_string(enc_dir.join("params.toml")).unwrap(),
-    )
-    .unwrap();
+    let params =
+        parse_kdf_params_from_toml(&std::fs::read_to_string(enc_dir.join("params.toml")).unwrap())
+            .unwrap();
     assert_eq!(params.memory_cost, 19456);
     let kek = argon2::derive_key("desktop-pass", &salt, &params).unwrap();
     let recovered_mk = aes_kw::unwrap(&wrapped, &kek).expect("key unwrap failed");
     assert_eq!(recovered_mk, desktop_mk, "master key must round-trip");
 
     let conn = open_encrypted(
-        phone_root.path().join("databases").join("librecrate.db").to_str().unwrap(),
+        phone_root
+            .path()
+            .join("databases")
+            .join("librecrate.db")
+            .to_str()
+            .unwrap(),
         &recovered_mk,
     )
     .unwrap();
@@ -263,10 +282,9 @@ fn test_phone_backup_overwrites_stale_desktop_params() {
     restore_backup_to_dir(&backup, PHONE_PASSWORD, gui_root.path()).unwrap();
 
     let enc_dir = gui_root.path().join("encryption");
-    let params = parse_kdf_params_from_toml(
-        &std::fs::read_to_string(enc_dir.join("params.toml")).unwrap(),
-    )
-    .unwrap();
+    let params =
+        parse_kdf_params_from_toml(&std::fs::read_to_string(enc_dir.join("params.toml")).unwrap())
+            .unwrap();
     assert_eq!(
         params.memory_cost, PHONE_MEMORY_COST,
         "restore must overwrite the stale desktop params.toml with the phone's"
@@ -275,7 +293,10 @@ fn test_phone_backup_overwrites_stale_desktop_params() {
     let (conn, _) = open_like_gui(gui_root.path(), PHONE_PASSWORD);
     assert_vault_has_docs(
         &conn,
-        &[("phone-doc-1", "Phone Doc One"), ("phone-doc-2", "Phone Doc Two")],
+        &[
+            ("phone-doc-1", "Phone Doc One"),
+            ("phone-doc-2", "Phone Doc Two"),
+        ],
     );
 
     // Pre-fix behavior (stale desktop params still in place) would have failed.
@@ -299,5 +320,8 @@ fn test_backup_encrypts_files_with_master_key_and_roundtrips() {
     assert!(stored.len() > aes_gcm::IV_LENGTH);
     let iv = &stored[..aes_gcm::IV_LENGTH];
     let ct = &stored[aes_gcm::IV_LENGTH..];
-    assert_eq!(aes_gcm::decrypt_bytes(ct, &master_key, iv).unwrap(), b"phone file one");
+    assert_eq!(
+        aes_gcm::decrypt_bytes(ct, &master_key, iv).unwrap(),
+        b"phone file one"
+    );
 }

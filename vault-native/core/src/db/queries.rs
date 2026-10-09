@@ -1,8 +1,7 @@
 use rusqlite::{params, Connection, Result};
 
 /// A lightweight document row returned by query functions.
-#[derive(Debug, Clone, uniffi::Record)]
-#[derive(Default)]
+#[derive(Debug, Clone, uniffi::Record, Default)]
 pub struct DocumentRow {
     pub id: String,
     pub title: String,
@@ -28,7 +27,6 @@ pub struct DocumentRow {
     pub barcode_value: Option<String>,
     pub content_hash: Option<String>,
 }
-
 
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct CollectionRow {
@@ -134,7 +132,8 @@ pub fn list_documents_filtered(
 
     let mut stmt = conn.prepare(&sql)?;
 
-    let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|p| p.as_ref()).collect();
     let rows = stmt
         .query_map(params_refs.as_slice(), document_from_row)?
         .filter_map(|r| r.ok())
@@ -176,7 +175,8 @@ pub fn find_documents_by_name(conn: &Connection, name: &str) -> Result<Vec<Docum
     }
 
     let pattern = format!("%{}%", name);
-    let sql = format!("SELECT {DOCUMENT_COLUMNS} FROM documents WHERE title LIKE ?1 ORDER BY title");
+    let sql =
+        format!("SELECT {DOCUMENT_COLUMNS} FROM documents WHERE title LIKE ?1 ORDER BY title");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
         .query_map(params![pattern], document_from_row)?
@@ -210,7 +210,12 @@ pub fn delete_document(conn: &Connection, id: &str) -> Result<bool> {
     Ok(affected > 0)
 }
 
-pub fn update_document(conn: &Connection, id: &str, title: &str, is_favorite: bool) -> Result<bool> {
+pub fn update_document(
+    conn: &Connection,
+    id: &str,
+    title: &str,
+    is_favorite: bool,
+) -> Result<bool> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -247,9 +252,17 @@ pub fn update_document_full(
          modified_at = ?10
          WHERE id = ?11",
         params![
-            title, author, description, collection_id,
-            is_favorite as i32, is_conflict as i32, conflict_with,
-            current_page, reading_position, now, id,
+            title,
+            author,
+            description,
+            collection_id,
+            is_favorite as i32,
+            is_conflict as i32,
+            conflict_with,
+            current_page,
+            reading_position,
+            now,
+            id,
         ],
     )?;
     Ok(affected > 0)
@@ -334,9 +347,8 @@ pub fn add_collection(conn: &Connection, col: &CollectionRow) -> Result<()> {
 }
 
 pub fn get_collection(conn: &Connection, id: &str) -> Result<Option<CollectionRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, icon, sort_order, parent_id FROM collections WHERE id = ?",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, name, icon, sort_order, parent_id FROM collections WHERE id = ?")?;
     let mut rows = stmt.query(params![id])?;
     match rows.next()? {
         Some(row) => Ok(Some(CollectionRow {
@@ -369,7 +381,14 @@ pub fn list_collections(conn: &Connection) -> Result<Vec<CollectionRow>> {
     Ok(rows)
 }
 
-pub fn update_collection(conn: &Connection, id: &str, name: &str, icon: &str, sort_order: i32, parent_id: Option<&str>) -> Result<bool> {
+pub fn update_collection(
+    conn: &Connection,
+    id: &str,
+    name: &str,
+    icon: &str,
+    sort_order: i32,
+    parent_id: Option<&str>,
+) -> Result<bool> {
     let affected = conn.execute(
         "UPDATE collections SET name = ?1, icon = ?2, sort_order = ?3, parent_id = ?4 WHERE id = ?5",
         params![name, icon, sort_order, parent_id, id],
@@ -550,7 +569,9 @@ mod tests {
         };
         add_document(&conn, &doc).unwrap();
 
-        assert!(crate::db::fts::search(&conn, "blahblah").unwrap().is_empty());
+        assert!(crate::db::fts::search(&conn, "blahblah")
+            .unwrap()
+            .is_empty());
 
         update_document_text_content(&conn, "fts1", Some("now with a blahblah marker")).unwrap();
         let results = crate::db::fts::search(&conn, "blahblah").unwrap();
@@ -662,7 +683,8 @@ mod tests {
         assert_eq!(paged[0].title, "Doc 1");
         assert_eq!(paged[1].title, "Doc 2");
 
-        let col_filtered = list_documents_filtered(&conn, 10, 0, Some("col1"), false, None).unwrap();
+        let col_filtered =
+            list_documents_filtered(&conn, 10, 0, Some("col1"), false, None).unwrap();
         assert_eq!(col_filtered.len(), 3);
     }
 
@@ -680,9 +702,19 @@ mod tests {
         add_document(&conn, &doc).unwrap();
 
         update_document_full(
-            &conn, "rich1", "Updated Title", "Author Name",
-            "Updated Desc", Some("col1"), true, false, None, 42, Some("page42"),
-        ).unwrap();
+            &conn,
+            "rich1",
+            "Updated Title",
+            "Author Name",
+            "Updated Desc",
+            Some("col1"),
+            true,
+            false,
+            None,
+            42,
+            Some("page42"),
+        )
+        .unwrap();
 
         let updated = get_document(&conn, "rich1").unwrap().unwrap();
         assert_eq!(updated.title, "Updated Title");
@@ -694,9 +726,18 @@ mod tests {
         assert_eq!(updated.reading_position, Some("page42".into()));
 
         set_reading_position(&conn, "rich1", "chapter5").unwrap();
-        assert_eq!(get_document(&conn, "rich1").unwrap().unwrap().reading_position, Some("chapter5".into()));
+        assert_eq!(
+            get_document(&conn, "rich1")
+                .unwrap()
+                .unwrap()
+                .reading_position,
+            Some("chapter5".into())
+        );
 
         set_current_page(&conn, "rich1", 99).unwrap();
-        assert_eq!(get_document(&conn, "rich1").unwrap().unwrap().current_page, 99);
+        assert_eq!(
+            get_document(&conn, "rich1").unwrap().unwrap().current_page,
+            99
+        );
     }
 }

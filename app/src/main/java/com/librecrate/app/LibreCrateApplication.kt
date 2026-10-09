@@ -50,6 +50,10 @@ private class ActivityLifecycleLockCallbacks(
     override fun onActivityStopped(activity: Activity) {
         if (activityCount.decrementAndGet() <= 0) {
             encryptionManager.lock()
+            // PR 6: locking must also tear down the open SQLCipher connection
+            // and free the DbHandle so the master key is zeroized and no
+            // decryptable connection survives in the background.
+            app.vaultRepository.close()
         }
     }
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit

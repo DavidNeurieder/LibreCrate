@@ -1,7 +1,10 @@
 use rusqlite::{params, Connection, Result};
 
 pub fn rebuild_index(conn: &Connection) -> Result<()> {
-    conn.execute("INSERT INTO documents_fts(documents_fts) VALUES('rebuild')", [])?;
+    conn.execute(
+        "INSERT INTO documents_fts(documents_fts) VALUES('rebuild')",
+        [],
+    )?;
     Ok(())
 }
 
@@ -162,8 +165,12 @@ pub fn extract_page_matches(highlighted: &str) -> Vec<PageMatch> {
         }
 
         let num_start = marker_offset + marker_len;
-        let num_end = rest[num_start..].find(']').unwrap_or(rest.len() - num_start);
-        current_page = rest[num_start..num_start + num_end].parse().unwrap_or(current_page);
+        let num_end = rest[num_start..]
+            .find(']')
+            .unwrap_or(rest.len() - num_start);
+        current_page = rest[num_start..num_start + num_end]
+            .parse()
+            .unwrap_or(current_page);
 
         pos += num_start + num_end + 1;
     }
@@ -196,7 +203,11 @@ fn truncate_around_match(text: &str, context: usize) -> String {
 
 /// Search within a single document's text_content using FTS5 highlight.
 /// Returns matching snippet(s) with page numbers extracted from context.
-pub fn search_in_document(conn: &Connection, document_id: &str, query: &str) -> Result<Vec<FtsSnippetResult>> {
+pub fn search_in_document(
+    conn: &Connection,
+    document_id: &str,
+    query: &str,
+) -> Result<Vec<FtsSnippetResult>> {
     let mut stmt = conn.prepare(
         "SELECT d.id, d.title, f.rank,
                 snippet(documents_fts, 3, '<b>', '</b>', '...', 64)
@@ -242,7 +253,12 @@ mod tests {
     #[test]
     fn test_fts_search() {
         let conn = setup_db();
-        insert_doc(&conn, "doc1", "The quick brown fox", "This is a document about the quick brown fox");
+        insert_doc(
+            &conn,
+            "doc1",
+            "The quick brown fox",
+            "This is a document about the quick brown fox",
+        );
         insert_doc(&conn, "doc2", "Lazy dog", "The lazy dog sleeps all day");
         // FTS index is populated automatically by the fts_after_insert trigger
 
@@ -307,7 +323,11 @@ mod tests {
         assert!(results[0].snippet.contains("<b>"));
 
         let page_matches = extract_page_matches(&results[0].highlighted);
-        assert!(page_matches.len() >= 2, "expected at least 2 page matches, got {}", page_matches.len());
+        assert!(
+            page_matches.len() >= 2,
+            "expected at least 2 page matches, got {}",
+            page_matches.len()
+        );
     }
 
     #[test]
@@ -321,4 +341,3 @@ mod tests {
         assert!(result.contains("fox"));
     }
 }
-

@@ -16,27 +16,38 @@ pub struct VaultSnapshot {
 
 /// Parse KDF parameters from a `params.toml` string.
 /// Missing fields fall back to Argon2id defaults.
+///
+/// The file can come from an untrusted backup, so the parsed values are
+/// validated against the KDF ceiling before any derivation runs (PR 1).
 pub fn parse_kdf_params_from_toml(toml_str: &str) -> Result<Argon2Params> {
     let p: toml::Value = toml::from_str(toml_str)
         .map_err(|e| Error::InvalidData(format!("failed to parse params.toml: {e}")))?;
-    Ok(Argon2Params {
+    let params = Argon2Params {
         memory_cost: p
             .get("memory_cost")
             .and_then(|v| v.as_integer())
-            .unwrap_or(19456) as u32,
+            .unwrap_or(crate::crypto::argon2::DEFAULT_MEMORY_COST as i64)
+            as u32,
         iterations: p
             .get("iterations")
             .and_then(|v| v.as_integer())
-            .unwrap_or(2) as u32,
+            .unwrap_or(crate::crypto::argon2::DEFAULT_ITERATIONS as i64) as u32,
         parallelism: p
             .get("parallelism")
             .and_then(|v| v.as_integer())
-            .unwrap_or(2) as u32,
+            .unwrap_or(crate::crypto::argon2::DEFAULT_PARALLELISM as i64)
+            as u32,
         hash_length: p
             .get("hash_length")
             .and_then(|v| v.as_integer())
-            .unwrap_or(32) as i32,
-    })
+            .unwrap_or(crate::crypto::argon2::DEFAULT_HASH_LENGTH as i64)
+            as i32,
+    };
+    crate::crypto::argon2::validate_kdf_params(
+        &params,
+        &crate::crypto::argon2::KdfPolicy::default(),
+    )?;
+    Ok(params)
 }
 
 /// Read all files under a directory tree into `Vec<KeyValue>`, keyed by the
@@ -56,7 +67,10 @@ fn read_dir_kv(root: &Path) -> Result<Vec<KeyValue>> {
                         .to_string_lossy()
                         .to_string();
                     let data = std::fs::read(&path)?;
-                    entries.push(KeyValue { key: name, value: data });
+                    entries.push(KeyValue {
+                        key: name,
+                        value: data,
+                    });
                 } else if path.is_dir() {
                     stack.push(path);
                 }
@@ -188,10 +202,7 @@ pub fn merge_vault_dir(
     backup_password: &str,
     vault_a_password: &str,
 ) -> Result<MergeStats> {
-    let contents = crate::ffi::import_vault(
-        backup_data.to_vec(),
-        backup_password.to_string(),
-    )?;
+    let contents = crate::ffi::import_vault(backup_data.to_vec(), backup_password.to_string())?;
 
     let _db_data = contents
         .db_file
@@ -212,12 +223,16 @@ pub fn merge_vault_dir(
     // Serialize vault A from disk and derive its master key
     let snapshot_a = serialize_vault_from_disk(vault_a_dir)?;
 
-    let wrapped_key_a = snapshot_a.keys.iter()
+    let wrapped_key_a = snapshot_a
+        .keys
+        .iter()
         .find(|k| k.key == "wrapped_master_key" || k.key == "master_key")
         .map(|k| k.value.as_slice())
         .ok_or_else(|| Error::InvalidData("missing master key in vault A".into()))?;
 
-    let salt_a = snapshot_a.keys.iter()
+    let salt_a = snapshot_a
+        .keys
+        .iter()
         .find(|k| k.key == "salt")
         .map(|k| k.value.as_slice())
         .ok_or_else(|| Error::InvalidData("missing salt in vault A".into()))?;
@@ -225,20 +240,24 @@ pub fn merge_vault_dir(
     let user_key_a = crate::kdf::derive_user_key(vault_a_password, salt_a, &snapshot_a.kdf_params)
         .ok_or(Error::AuthenticationFailed)?;
 
-    let mk_a = crate::crypto::aes_kw::unwrap(wrapped_key_a, &user_key_a)
+    let mk_a = crate::crypto::aes_kw::unwrap(wrapped_key_a, &user_key_a.0)
         .ok_or(Error::AuthenticationFailed)?;
 
     // Open vault A's database
     let a_db_path = vault_a_dir.join("databases").join("librecrate.db");
     let conn = crate::db::schema::open_encrypted(
-        a_db_path.to_str().ok_or_else(|| Error::InvalidData("invalid db path".into()))?,
+        a_db_path
+            .to_str()
+            .ok_or_else(|| Error::InvalidData("invalid db path".into()))?,
         &mk_a,
     )?;
 
     let files_dir = vault_a_dir.join("files");
 
     let stats = crate::merge::branch_a_merge(
-        backup_db_path.to_str().ok_or_else(|| Error::InvalidData("invalid backup db path".into()))?,
+        backup_db_path
+            .to_str()
+            .ok_or_else(|| Error::InvalidData("invalid backup db path".into()))?,
         &backup_master_key,
         &conn,
         &contents.files,
@@ -251,7 +270,8 @@ pub fn merge_vault_dir(
 
     // Copy B's file blobs into A's files dir
     for kv in &contents.files {
-        let target = files_dir.join(&kv.key);
+        let safe = crate::format::path::safe_archive_path(&kv.key)?;
+        let target = files_dir.join(&safe);
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -277,10 +297,7 @@ pub fn merge_backup_to_vault(
     backup_data: &[u8],
     backup_password: &str,
 ) -> Result<MergeStats> {
-    let contents = crate::ffi::import_vault(
-        backup_data.to_vec(),
-        backup_password.to_string(),
-    )?;
+    let contents = crate::ffi::import_vault(backup_data.to_vec(), backup_password.to_string())?;
 
     let db_data = contents
         .db_file
@@ -341,7 +358,8 @@ pub fn merge_backup_to_vault(
                         &files_dir,
                     )?;
                     for kv in &contents.files {
-                        let target = files_dir.join(&kv.key);
+                        let safe = crate::format::path::safe_archive_path(&kv.key)?;
+                        let target = files_dir.join(&safe);
                         if let Some(parent) = target.parent() {
                             std::fs::create_dir_all(parent)?;
                         }
@@ -365,10 +383,7 @@ pub fn restore_backup_to_dirs(
     database_dir: &Path,
     files_dir: &Path,
 ) -> Result<()> {
-    let contents = crate::ffi::import_vault(
-        backup_data.to_vec(),
-        password.to_string(),
-    )?;
+    let contents = crate::ffi::import_vault(backup_data.to_vec(), password.to_string())?;
 
     let db_data = contents
         .db_file
@@ -386,11 +401,7 @@ pub fn restore_backup_to_dirs(
 }
 
 /// Import a backup and restore it to a target directory (Branch B — full replace).
-pub fn restore_backup_to_dir(
-    backup_data: &[u8],
-    password: &str,
-    target_dir: &Path,
-) -> Result<()> {
+pub fn restore_backup_to_dir(backup_data: &[u8], password: &str, target_dir: &Path) -> Result<()> {
     restore_backup_to_dirs(
         backup_data,
         password,
@@ -480,12 +491,9 @@ hash_length = 32
         .unwrap();
 
         // Import
-        let contents = crate::format::import::import(
-            &exported.data,
-            "backuppass",
-            &Argon2Params::default(),
-        )
-        .unwrap();
+        let contents =
+            crate::format::import::import(&exported.data, "backuppass", &Argon2Params::default())
+                .unwrap();
 
         // Derive master key using the vault password (not backup password)
         let recovered_mk = derive_master_key_from_contents(&contents, "testpass").unwrap();
@@ -507,12 +515,9 @@ hash_length = 32
         )
         .unwrap();
 
-        let contents = crate::format::import::import(
-            &exported.data,
-            "backuppass",
-            &Argon2Params::default(),
-        )
-        .unwrap();
+        let contents =
+            crate::format::import::import(&exported.data, "backuppass", &Argon2Params::default())
+                .unwrap();
 
         let result = derive_master_key_from_contents(&contents, "wrong");
         assert!(result.is_err());
@@ -528,12 +533,9 @@ hash_length = 32
         assert_eq!(&backup_bytes[..16], b"LIBCRATE_VAULT\0\0");
 
         // Re-import and verify we can recover the master key
-        let contents = crate::format::import::import(
-            &backup_bytes,
-            "backuppass",
-            &Argon2Params::default(),
-        )
-        .unwrap();
+        let contents =
+            crate::format::import::import(&backup_bytes, "backuppass", &Argon2Params::default())
+                .unwrap();
         let recovered_mk = derive_master_key_from_contents(&contents, "testpass").unwrap();
         assert_eq!(recovered_mk, mk);
     }
@@ -545,11 +547,7 @@ hash_length = 32
 
         // Import a document
         let db_path = dir.path().join("databases").join("librecrate.db");
-        let conn = crate::db::schema::open_encrypted(
-            db_path.to_str().unwrap(),
-            &mk,
-        )
-        .unwrap();
+        let conn = crate::db::schema::open_encrypted(db_path.to_str().unwrap(), &mk).unwrap();
         let file_data = b"hello world".to_vec();
         crate::db::storage::import_document(
             &conn,
@@ -570,12 +568,9 @@ hash_length = 32
         let backup_bytes = export_vault_dir(dir.path(), "backuppass").unwrap();
 
         // Import and verify document count
-        let contents = crate::format::import::import(
-            &backup_bytes,
-            "backuppass",
-            &Argon2Params::default(),
-        )
-        .unwrap();
+        let contents =
+            crate::format::import::import(&backup_bytes, "backuppass", &Argon2Params::default())
+                .unwrap();
         assert_eq!(contents.files.len(), 1);
         assert_eq!(contents.files[0].key, "doc1");
     }
@@ -587,11 +582,7 @@ hash_length = 32
 
         // Import a document into vault A
         let db_path = dir_a.path().join("databases").join("librecrate.db");
-        let conn = crate::db::schema::open_encrypted(
-            db_path.to_str().unwrap(),
-            &mk,
-        )
-        .unwrap();
+        let conn = crate::db::schema::open_encrypted(db_path.to_str().unwrap(), &mk).unwrap();
         let file_data = b"test content".to_vec();
         crate::db::storage::import_document(
             &conn,
@@ -629,11 +620,7 @@ hash_length = 32
 
         // Import doc_a into vault A
         let db_path_a = dir_a.path().join("databases").join("librecrate.db");
-        let conn_a = crate::db::schema::open_encrypted(
-            db_path_a.to_str().unwrap(),
-            &mk_a,
-        )
-        .unwrap();
+        let conn_a = crate::db::schema::open_encrypted(db_path_a.to_str().unwrap(), &mk_a).unwrap();
         crate::db::storage::import_document(
             &conn_a,
             dir_a.path(),
@@ -654,11 +641,7 @@ hash_length = 32
         let mk_b = create_test_vault(dir_b.path(), "testpass");
 
         let db_path_b = dir_b.path().join("databases").join("librecrate.db");
-        let conn_b = crate::db::schema::open_encrypted(
-            db_path_b.to_str().unwrap(),
-            &mk_b,
-        )
-        .unwrap();
+        let conn_b = crate::db::schema::open_encrypted(db_path_b.to_str().unwrap(), &mk_b).unwrap();
         crate::db::storage::import_document(
             &conn_b,
             dir_b.path(),
@@ -678,13 +661,7 @@ hash_length = 32
         let backup_b = export_vault_dir(dir_b.path(), "backuppass").unwrap();
 
         // Merge vault B into vault A
-        let stats = merge_vault_dir(
-            dir_a.path(),
-            &backup_b,
-            "backuppass",
-            "testpass",
-        )
-        .unwrap();
+        let stats = merge_vault_dir(dir_a.path(), &backup_b, "backuppass", "testpass").unwrap();
 
         assert_eq!(stats.documents_added, 1);
         assert_eq!(stats.documents_updated, 0);
@@ -697,8 +674,7 @@ hash_length = 32
         let dir_a = tempfile::tempdir().unwrap();
         let mk_a = create_test_vault(dir_a.path(), "testpass");
         let db_path_a = dir_a.path().join("databases").join("librecrate.db");
-        let conn_a =
-            crate::db::schema::open_encrypted(db_path_a.to_str().unwrap(), &mk_a).unwrap();
+        let conn_a = crate::db::schema::open_encrypted(db_path_a.to_str().unwrap(), &mk_a).unwrap();
         crate::db::storage::import_document(
             &conn_a,
             dir_a.path(),
@@ -717,8 +693,7 @@ hash_length = 32
         let dir_b = tempfile::tempdir().unwrap();
         let mk_b = create_test_vault(dir_b.path(), "otherpass");
         let db_path_b = dir_b.path().join("databases").join("librecrate.db");
-        let conn_b =
-            crate::db::schema::open_encrypted(db_path_b.to_str().unwrap(), &mk_b).unwrap();
+        let conn_b = crate::db::schema::open_encrypted(db_path_b.to_str().unwrap(), &mk_b).unwrap();
         crate::db::storage::import_document(
             &conn_b,
             dir_b.path(),
@@ -738,14 +713,9 @@ hash_length = 32
         let backup_b = export_vault_dir(dir_b.path(), "otherpass").unwrap();
 
         // Merge into vault A's open connection, re-encrypting with A's key
-        let stats = merge_backup_to_vault(
-            dir_a.path(),
-            &conn_a,
-            Some(&mk_a),
-            &backup_b,
-            "otherpass",
-        )
-        .unwrap();
+        let stats =
+            merge_backup_to_vault(dir_a.path(), &conn_a, Some(&mk_a), &backup_b, "otherpass")
+                .unwrap();
 
         assert_eq!(stats.documents_added, 1);
         assert_eq!(stats.documents_updated, 0);

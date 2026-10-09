@@ -4,23 +4,29 @@ use std::sync::{Arc, Mutex};
 // DbHandle — managed SQLCipher connection
 // ---------------------------------------------------------------------------
 
+/// Atomically-held vault state. On `lock()` the connection is closed and the
+/// master key zeroized, satisfying the invariant "a locked vault has no usable
+/// DB encryption key and no open encrypted connection".
+struct DbState {
+    conn: Option<rusqlite::Connection>,
+    encryption_key: Option<crate::crypto::secrets::MasterKey>,
+}
+
 #[derive(uniffi::Object)]
 pub struct DbHandle {
-    inner: Arc<Mutex<rusqlite::Connection>>,
-    encryption_key: Option<Vec<u8>>,
+    inner: Arc<Mutex<DbState>>,
 }
 
 #[uniffi::export]
 impl DbHandle {
     #[uniffi::constructor]
-    pub fn open_encrypted(
-        path: String,
-        master_key: Vec<u8>,
-    ) -> Result<Self, crate::error::Error> {
+    pub fn open_encrypted(path: String, master_key: Vec<u8>) -> Result<Self, crate::error::Error> {
         let conn = crate::db::schema::open_encrypted(&path, &master_key)?;
         Ok(Self {
-            inner: Arc::new(Mutex::new(conn)),
-            encryption_key: Some(master_key),
+            inner: Arc::new(Mutex::new(DbState {
+                conn: Some(conn),
+                encryption_key: Some(crate::crypto::secrets::MasterKey(master_key)),
+            })),
         })
     }
 
@@ -28,8 +34,10 @@ impl DbHandle {
     pub fn open_plain(path: String) -> Result<Self, crate::error::Error> {
         let conn = crate::db::schema::open_plain(&path)?;
         Ok(Self {
-            inner: Arc::new(Mutex::new(conn)),
-            encryption_key: None,
+            inner: Arc::new(Mutex::new(DbState {
+                conn: Some(conn),
+                encryption_key: None,
+            })),
         })
     }
 
@@ -40,63 +48,103 @@ impl DbHandle {
     ) -> Result<Self, crate::error::Error> {
         let conn = crate::db::schema::create_encrypted_db(&path, &master_key)?;
         Ok(Self {
-            inner: Arc::new(Mutex::new(conn)),
-            encryption_key: Some(master_key),
+            inner: Arc::new(Mutex::new(DbState {
+                conn: Some(conn),
+                encryption_key: Some(crate::crypto::secrets::MasterKey(master_key)),
+            })),
         })
+    }
+
+    /// Lock the vault: close the SQLCipher connection and zeroize the master
+    /// key. Idempotent — safe to call on an already-locked handle.
+    pub fn lock(&self) -> Result<(), crate::error::Error> {
+        let mut state = self
+            .inner
+            .lock()
+            .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        if let Some(conn) = state.conn.take() {
+            let _ = conn.close();
+        }
+        if let Some(mut key) = state.encryption_key.take() {
+            use zeroize::Zeroize;
+            key.zeroize();
+        }
+        Ok(())
+    }
+
+    pub fn is_locked(&self) -> bool {
+        self.inner.lock().map(|s| s.conn.is_none()).unwrap_or(true)
     }
 
     pub fn list_documents(
         &self,
     ) -> Result<Vec<crate::db::queries::DocumentRow>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::list_documents(&conn)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::list_documents(conn)?)
     }
 
     pub fn get_document(
         &self,
         id: String,
     ) -> Result<Option<crate::db::queries::DocumentRow>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::get_document(&conn, &id)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::get_document(conn, &id)?)
     }
 
     pub fn find_document_by_hash(
         &self,
         hash: String,
     ) -> Result<Option<crate::db::queries::DocumentRow>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::find_document_by_hash(&conn, &hash)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::find_document_by_hash(conn, &hash)?)
     }
 
     pub fn add_document(
         &self,
         doc: crate::db::queries::DocumentRow,
     ) -> Result<(), crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::add_document(&conn, &doc)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::add_document(conn, &doc)?)
     }
 
-    pub fn delete_document(
-        &self,
-        id: String,
-    ) -> Result<bool, crate::error::Error> {
-        let conn = self
+    pub fn delete_document(&self, id: String) -> Result<bool, crate::error::Error> {
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::delete_document(&conn, &id)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::delete_document(conn, &id)?)
     }
 
     pub fn update_document(
@@ -105,12 +153,16 @@ impl DbHandle {
         title: String,
         is_favorite: bool,
     ) -> Result<bool, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::queries::update_document(
-            &conn,
+            conn,
             &id,
             &title,
             is_favorite,
@@ -122,14 +174,18 @@ impl DbHandle {
         id: String,
         new_title: String,
     ) -> Result<bool, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        let existing = crate::db::queries::get_document(&conn, &id)?
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        let existing = crate::db::queries::get_document(conn, &id)?
             .ok_or_else(|| crate::error::Error::Database(format!("Document {} not found", id)))?;
         Ok(crate::db::queries::update_document(
-            &conn,
+            conn,
             &id,
             &new_title,
             existing.is_favorite,
@@ -141,12 +197,16 @@ impl DbHandle {
         doc: crate::db::queries::DocumentRow,
         text_content: Option<String>,
     ) -> Result<(), crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::queries::add_document_full(
-            &conn,
+            conn,
             &doc,
             text_content.as_deref(),
         )?)
@@ -155,21 +215,27 @@ impl DbHandle {
     pub fn list_collections(
         &self,
     ) -> Result<Vec<crate::db::queries::CollectionRow>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::list_collections(&conn)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::list_collections(conn)?)
     }
 
-    pub fn list_tags(
-        &self,
-    ) -> Result<Vec<crate::db::queries::TagRow>, crate::error::Error> {
-        let conn = self
+    pub fn list_tags(&self) -> Result<Vec<crate::db::queries::TagRow>, crate::error::Error> {
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::list_tags(&conn)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::list_tags(conn)?)
     }
 
     /// Backfill/extend a document's indexed text after import. The FTS trigger
@@ -179,12 +245,16 @@ impl DbHandle {
         id: String,
         text_content: Option<String>,
     ) -> Result<bool, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::queries::update_document_text_content(
-            &conn,
+            conn,
             &id,
             text_content.as_deref(),
         )?)
@@ -194,33 +264,45 @@ impl DbHandle {
         &self,
         query: String,
     ) -> Result<Vec<crate::db::fts::FtsResult>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::fts::search(&conn, &query)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::fts::search(conn, &query)?)
     }
 
     pub fn search_documents_with_snippet(
         &self,
         query: String,
     ) -> Result<Vec<crate::db::fts::FtsSnippetResult>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::fts::search_with_snippet(&conn, &query)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::fts::search_with_snippet(conn, &query)?)
     }
 
     pub fn search_documents_with_all_matches(
         &self,
         query: String,
     ) -> Result<Vec<crate::db::fts::MultiMatchResult>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        let results = crate::db::fts::search_with_all_matches(&conn, &query)?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        let results = crate::db::fts::search_with_all_matches(conn, &query)?;
         Ok(results
             .into_iter()
             .map(|r| {
@@ -241,23 +323,31 @@ impl DbHandle {
         document_id: String,
         query: String,
     ) -> Result<Vec<crate::db::fts::FtsSnippetResult>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::fts::search_in_document(
-            &conn,
+            conn,
             &document_id,
             &query,
         )?)
     }
 
     pub fn rebuild_fts_index(&self) -> Result<(), crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::fts::rebuild_index(&conn)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::fts::rebuild_index(conn)?)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -272,13 +362,17 @@ impl DbHandle {
         description: String,
         text_content: Option<String>,
     ) -> Result<String, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         let base = std::path::Path::new(&base_dir);
         Ok(crate::db::storage::import_document(
-            &conn,
+            conn,
             base,
             &id,
             &title,
@@ -287,7 +381,7 @@ impl DbHandle {
             &author,
             &description,
             text_content.as_deref(),
-            self.encryption_key.as_deref(),
+            state.encryption_key.as_ref().map(|k| k.as_slice()),
         )?)
     }
 
@@ -296,19 +390,21 @@ impl DbHandle {
         base_dir: String,
         id: String,
     ) -> Result<Option<Vec<u8>>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         let base = std::path::Path::new(&base_dir);
-        Ok(
-            crate::db::storage::export_document_file(
-                &conn,
-                base,
-                &id,
-                self.encryption_key.as_deref(),
-            ),
-        )
+        Ok(crate::db::storage::export_document_file(
+            conn,
+            base,
+            &id,
+            state.encryption_key.as_ref().map(|k| k.as_slice()),
+        ))
     }
 
     pub fn delete_document_full(
@@ -316,14 +412,16 @@ impl DbHandle {
         base_dir: String,
         id: String,
     ) -> Result<bool, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         let base = std::path::Path::new(&base_dir);
-        Ok(crate::db::storage::delete_document_full(
-            &conn, base, &id,
-        )?)
+        Ok(crate::db::storage::delete_document_full(conn, base, &id)?)
     }
 
     pub fn merge_branch_a(
@@ -335,14 +433,18 @@ impl DbHandle {
         local_key: Option<Vec<u8>>,
         files_dir: String,
     ) -> Result<crate::merge::MergeStats, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         crate::merge::branch_a_merge(
             &backup_db_path,
             &backup_master_key,
-            &conn,
+            conn,
             &files,
             backup_key.as_deref(),
             local_key.as_deref(),
@@ -359,14 +461,18 @@ impl DbHandle {
         backup_data: Vec<u8>,
         backup_password: String,
     ) -> Result<crate::merge::MergeStats, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         crate::vault_ops::merge_backup_to_vault(
             std::path::Path::new(&base_dir),
-            &conn,
-            self.encryption_key.as_deref(),
+            conn,
+            state.encryption_key.as_ref().map(|k| k.as_slice()),
             &backup_data,
             &backup_password,
         )
@@ -380,12 +486,16 @@ impl DbHandle {
         favorite_only: bool,
         tag_id: Option<String>,
     ) -> Result<Vec<crate::db::queries::DocumentRow>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::queries::list_documents_filtered(
-            &conn,
+            conn,
             limit,
             offset,
             collection_id.as_deref(),
@@ -408,12 +518,16 @@ impl DbHandle {
         current_page: i32,
         reading_position: Option<String>,
     ) -> Result<bool, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::queries::update_document_full(
-            &conn,
+            conn,
             &id,
             &title,
             &author,
@@ -432,51 +546,59 @@ impl DbHandle {
         id: String,
         position: String,
     ) -> Result<bool, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::queries::set_reading_position(
-            &conn,
-            &id,
-            &position,
+            conn, &id, &position,
         )?)
     }
 
-    pub fn set_current_page(
-        &self,
-        id: String,
-        page: i32,
-    ) -> Result<bool, crate::error::Error> {
-        let conn = self
+    pub fn set_current_page(&self, id: String, page: i32) -> Result<bool, crate::error::Error> {
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::set_current_page(
-            &conn, &id, page,
-        )?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::set_current_page(conn, &id, page)?)
     }
 
     pub fn add_collection(
         &self,
         col: crate::db::queries::CollectionRow,
     ) -> Result<(), crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::add_collection(&conn, &col)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::add_collection(conn, &col)?)
     }
 
     pub fn get_collection(
         &self,
         id: String,
     ) -> Result<Option<crate::db::queries::CollectionRow>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::get_collection(&conn, &id)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::get_collection(conn, &id)?)
     }
 
     pub fn update_collection(
@@ -487,12 +609,16 @@ impl DbHandle {
         sort_order: i32,
         parent_id: Option<String>,
     ) -> Result<bool, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::queries::update_collection(
-            &conn,
+            conn,
             &id,
             &name,
             &icon,
@@ -501,28 +627,28 @@ impl DbHandle {
         )?)
     }
 
-    pub fn delete_collection(
-        &self,
-        id: String,
-    ) -> Result<bool, crate::error::Error> {
-        let conn = self
+    pub fn delete_collection(&self, id: String) -> Result<bool, crate::error::Error> {
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::delete_collection(
-            &conn, &id,
-        )?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::delete_collection(conn, &id)?)
     }
 
-    pub fn add_tag(
-        &self,
-        tag: crate::db::queries::TagRow,
-    ) -> Result<(), crate::error::Error> {
-        let conn = self
+    pub fn add_tag(&self, tag: crate::db::queries::TagRow) -> Result<(), crate::error::Error> {
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::add_tag(&conn, &tag)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::add_tag(conn, &tag)?)
     }
 
     pub fn update_tag(
@@ -531,24 +657,27 @@ impl DbHandle {
         name: String,
         color: i64,
     ) -> Result<bool, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::update_tag(
-            &conn, &id, &name, color,
-        )?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::update_tag(conn, &id, &name, color)?)
     }
 
-    pub fn delete_tag(
-        &self,
-        id: String,
-    ) -> Result<bool, crate::error::Error> {
-        let conn = self
+    pub fn delete_tag(&self, id: String) -> Result<bool, crate::error::Error> {
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::delete_tag(&conn, &id)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::delete_tag(conn, &id)?)
     }
 
     pub fn link_document_tag(
@@ -556,12 +685,16 @@ impl DbHandle {
         document_id: String,
         tag_id: String,
     ) -> Result<(), crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::queries::link_document_tag(
-            &conn,
+            conn,
             &document_id,
             &tag_id,
         )?)
@@ -572,12 +705,16 @@ impl DbHandle {
         document_id: String,
         tag_id: String,
     ) -> Result<bool, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::queries::unlink_document_tag(
-            &conn,
+            conn,
             &document_id,
             &tag_id,
         )?)
@@ -587,12 +724,16 @@ impl DbHandle {
         &self,
         document_id: String,
     ) -> Result<Vec<crate::db::queries::TagRow>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
         Ok(crate::db::queries::get_tags_for_document(
-            &conn,
+            conn,
             &document_id,
         )?)
     }
@@ -601,13 +742,15 @@ impl DbHandle {
         &self,
         tag_id: String,
     ) -> Result<Vec<crate::db::queries::DocumentRow>, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::queries::get_documents_for_tag(
-            &conn, &tag_id,
-        )?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::queries::get_documents_for_tag(conn, &tag_id)?)
     }
 
     pub fn store_thumbnail(
@@ -616,12 +759,14 @@ impl DbHandle {
         id: String,
         data: Vec<u8>,
     ) -> Result<(), crate::error::Error> {
-        Ok(crate::db::storage::store_thumbnail(
-            std::path::Path::new(&base_dir),
-            &id,
-            &data,
-            self.encryption_key.as_deref(),
-        )?)
+        let state = self
+            .inner
+            .lock()
+            .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let key = state.encryption_key.as_ref().map(|k| k.as_slice());
+        crate::db::storage::store_thumbnail(std::path::Path::new(&base_dir), &id, &data, key)?;
+        drop(state);
+        Ok(())
     }
 
     pub fn load_thumbnail(
@@ -629,11 +774,14 @@ impl DbHandle {
         base_dir: String,
         id: String,
     ) -> Result<Option<Vec<u8>>, crate::error::Error> {
-        Ok(crate::db::storage::load_thumbnail(
-            std::path::Path::new(&base_dir),
-            &id,
-            self.encryption_key.as_deref(),
-        ))
+        let state = self
+            .inner
+            .lock()
+            .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+        let key = state.encryption_key.as_ref().map(|k| k.as_slice());
+        let result = crate::db::storage::load_thumbnail(std::path::Path::new(&base_dir), &id, key);
+        drop(state);
+        Ok(result)
     }
 
     pub fn generate_thumbnail_for_document(
@@ -644,24 +792,41 @@ impl DbHandle {
         let data = self.export_document_file(base_dir.clone(), id.clone())?;
         match data {
             Some(file_data) => {
-                let conn = self
-                    .inner
-                    .lock()
-                    .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-                let doc = crate::db::queries::get_document(&conn, &id)?
-                    .ok_or_else(|| crate::error::Error::Database("document not found".into()))?;
-                let mime = &doc.mime_type;
-                drop(conn);
-                if let Some(thumb) = crate::db::storage::generate_thumbnail(&file_data, mime) {
-                    crate::db::storage::store_thumbnail(
-                        std::path::Path::new(&base_dir),
-                        &id,
-                        &thumb,
-                        self.encryption_key.as_deref(),
-                    )?;
-                    Ok(true)
-                } else {
-                    Ok(false)
+                let thumb = {
+                    let state = self
+                        .inner
+                        .lock()
+                        .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+                    let conn = state
+                        .conn
+                        .as_ref()
+                        .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+                    let doc = crate::db::queries::get_document(conn, &id)?.ok_or_else(|| {
+                        crate::error::Error::Database("document not found".into())
+                    })?;
+                    let mime = doc.mime_type.clone();
+                    drop(state);
+                    crate::db::storage::generate_thumbnail(&file_data, &mime)
+                };
+                match thumb {
+                    Some(thumb) => {
+                        let result = {
+                            let state = self
+                                .inner
+                                .lock()
+                                .map_err(|e| crate::error::Error::Database(e.to_string()))?;
+                            let key = state.encryption_key.as_ref().map(|k| k.as_slice());
+                            crate::db::storage::store_thumbnail(
+                                std::path::Path::new(&base_dir),
+                                &id,
+                                &thumb,
+                                key,
+                            )
+                        };
+                        result?;
+                        Ok(true)
+                    }
+                    None => Ok(false),
                 }
             }
             None => Ok(false),
@@ -669,21 +834,35 @@ impl DbHandle {
     }
 
     pub fn get_schema_version(&self) -> Result<i64, crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::schema::get_schema_version(&conn)?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::schema::get_schema_version(conn)?)
     }
 
     pub fn set_schema_version(&self, version: i64) -> Result<(), crate::error::Error> {
-        let conn = self
+        let state = self
             .inner
             .lock()
             .map_err(|e| crate::error::Error::Database(e.to_string()))?;
-        Ok(crate::db::schema::set_schema_version(
-            &conn, version,
-        )?)
+        let conn = state
+            .conn
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::Database("vault is locked".into()))?;
+        Ok(crate::db::schema::set_schema_version(conn, version)?)
+    }
+}
+
+impl Drop for DbHandle {
+    fn drop(&mut self) {
+        // Close the encrypted connection and zeroize the master key even if
+        // the caller forgot to call lock() explicitly.
+        let _ = self.lock();
     }
 }
 
@@ -704,8 +883,11 @@ pub fn derive_key(
     iterations: u32,
     parallelism: u32,
 ) -> Result<Vec<u8>, crate::error::Error> {
-    let params =
-        crate::crypto::argon2::Argon2Params::new(memory_cost, iterations, parallelism, 32);
+    let params = crate::crypto::argon2::Argon2Params::new(memory_cost, iterations, parallelism, 32);
+    crate::crypto::argon2::validate_kdf_params(
+        &params,
+        &crate::crypto::argon2::KdfPolicy::default(),
+    )?;
     crate::crypto::argon2::derive_key(&password, &salt, &params)
         .ok_or(crate::error::Error::Kdf("key derivation failed".into()))
 }
@@ -717,9 +899,7 @@ pub fn encrypt_bytes(
 ) -> Result<crate::types::EncryptedData, crate::error::Error> {
     crate::crypto::aes_gcm::encrypt_bytes(&data, &key)
         .map(|(iv, ciphertext)| crate::types::EncryptedData { iv, ciphertext })
-        .ok_or(crate::error::Error::Crypto(
-            "encryption failed".into(),
-        ))
+        .ok_or(crate::error::Error::Crypto("encryption failed".into()))
 }
 
 #[uniffi::export]
@@ -728,9 +908,7 @@ pub fn decrypt_bytes(
     key: Vec<u8>,
 ) -> Result<Vec<u8>, crate::error::Error> {
     crate::crypto::aes_gcm::decrypt_bytes(&data.ciphertext, &key, &data.iv)
-        .ok_or(crate::error::Error::Crypto(
-            "decryption failed".into(),
-        ))
+        .ok_or(crate::error::Error::Crypto("decryption failed".into()))
 }
 
 #[uniffi::export]
@@ -739,23 +917,15 @@ pub fn generate_master_key() -> Vec<u8> {
 }
 
 #[uniffi::export]
-pub fn wrap_key(
-    kek: Vec<u8>,
-    plaintext: Vec<u8>,
-) -> Result<Vec<u8>, crate::error::Error> {
+pub fn wrap_key(kek: Vec<u8>, plaintext: Vec<u8>) -> Result<Vec<u8>, crate::error::Error> {
     crate::crypto::aes_kw::wrap(&kek, &plaintext)
         .ok_or(crate::error::Error::Crypto("key wrap failed".into()))
 }
 
 #[uniffi::export]
-pub fn unwrap_key(
-    wrapped: Vec<u8>,
-    kek: Vec<u8>,
-) -> Result<Vec<u8>, crate::error::Error> {
+pub fn unwrap_key(wrapped: Vec<u8>, kek: Vec<u8>) -> Result<Vec<u8>, crate::error::Error> {
     crate::crypto::aes_kw::unwrap(&wrapped, &kek)
-        .ok_or(crate::error::Error::Crypto(
-            "key unwrap failed".into(),
-        ))
+        .ok_or(crate::error::Error::Crypto("key unwrap failed".into()))
 }
 
 #[uniffi::export]
@@ -776,8 +946,17 @@ pub fn verify_password(
     iterations: u32,
     parallelism: u32,
 ) -> bool {
-    let params =
-        crate::crypto::argon2::Argon2Params::new(memory_cost, iterations, parallelism, 32);
+    let params = crate::crypto::argon2::Argon2Params::new(memory_cost, iterations, parallelism, 32);
+    // A password can never be verified if its parameters would be rejected at
+    // derivation time — refuse rather than spend CPU on hostile inputs.
+    if crate::crypto::argon2::validate_kdf_params(
+        &params,
+        &crate::crypto::argon2::KdfPolicy::default(),
+    )
+    .is_err()
+    {
+        return false;
+    }
     crate::kdf::verify_password(&password, &salt, &wrapped_key, &params)
 }
 
@@ -790,8 +969,11 @@ pub fn derive_backup_master_key(
     iterations: u32,
     parallelism: u32,
 ) -> Result<Vec<u8>, crate::error::Error> {
-    let params =
-        crate::crypto::argon2::Argon2Params::new(memory_cost, iterations, parallelism, 32);
+    let params = crate::crypto::argon2::Argon2Params::new(memory_cost, iterations, parallelism, 32);
+    crate::crypto::argon2::validate_kdf_params(
+        &params,
+        &crate::crypto::argon2::KdfPolicy::default(),
+    )?;
     crate::kdf::derive_backup_master_key(&wrapped_key, &password, &salt, &params)
 }
 
@@ -868,10 +1050,7 @@ pub fn restore_backup_to_dir(
 }
 
 #[uniffi::export]
-pub fn create_vault_layout(
-    dir: String,
-    password: String,
-) -> Result<Vec<u8>, crate::error::Error> {
+pub fn create_vault_layout(dir: String, password: String) -> Result<Vec<u8>, crate::error::Error> {
     crate::format::export::create_vault_layout(std::path::Path::new(&dir), &password)
 }
 

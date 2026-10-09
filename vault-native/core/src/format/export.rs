@@ -1,13 +1,13 @@
-use base64::Engine;
 use crate::crypto::aes_gcm;
 use crate::crypto::argon2::{self, Argon2Params};
 use crate::error::{Error, Result};
 use crate::format::manifest::VaultManifest;
 use crate::format::package;
-use std::io::Write;
-use zip::ZipWriter;
-use zip::write::FileOptions;
 use crate::types::KeyValue;
+use base64::Engine;
+use std::io::Write;
+use zip::write::FileOptions;
+use zip::ZipWriter;
 
 pub struct ExportedVault {
     pub data: Vec<u8>,
@@ -21,10 +21,8 @@ pub fn export(
     kdf_params: &Argon2Params,
 ) -> Result<ExportedVault> {
     let salt = argon2::generate_salt();
-    let container_key =
-        argon2::derive_key(vault_password, &salt, kdf_params).ok_or(Error::Kdf(
-            "container key derivation failed".into(),
-        ))?;
+    let container_key = argon2::derive_key(vault_password, &salt, kdf_params)
+        .ok_or(Error::Kdf("container key derivation failed".into()))?;
 
     // Build ZIP entries
     let mut zip_entries: Vec<(String, Vec<u8>)> = Vec::new();
@@ -44,14 +42,9 @@ pub fn export(
     // Create plain ZIP blob
     let plain_zip = create_zip_blob(&zip_entries)?;
 
-    // Encrypt ZIP with container key
-    let (iv, ciphertext) =
-        aes_gcm::encrypt_bytes(&plain_zip, &container_key).ok_or(Error::Crypto("encryption failed".into()))?;
-    let encrypted_blob: Vec<u8> = iv.into_iter().chain(ciphertext).collect();
-
     let document_count = files.len() as u32;
     let manifest = VaultManifest {
-        version: 1,
+        version: package::FORMAT_VERSION,
         kdf: "argon2id".into(),
         salt: base64::engine::general_purpose::STANDARD.encode(&salt),
         argon2_memory: kdf_params.memory_cost,
@@ -59,6 +52,14 @@ pub fn export(
         argon2_parallelism: kdf_params.parallelism,
         document_count,
     };
+
+    // Backup v2 authenticated envelope: the plaintext header (KDF info, salt,
+    // counts) is bound as AAD to the AES-256-GCM payload, so tampering with
+    // any security-sensitive metadata breaks authentication.
+    let aad = manifest.to_json().into_bytes();
+    let (iv, ciphertext) = aes_gcm::encrypt_bytes_with_aad(&plain_zip, &container_key, &aad)
+        .ok_or(Error::Crypto("encryption failed".into()))?;
+    let encrypted_blob: Vec<u8> = iv.into_iter().chain(ciphertext).collect();
 
     let data = package::write(&manifest, &encrypted_blob);
     Ok(ExportedVault { data })
@@ -91,12 +92,10 @@ pub fn create_vault_layout(dir: &std::path::Path, password: &str) -> Result<Vec<
     let master_key = aes_kw::generate_master_key();
     let salt = argon2::generate_salt();
     let params = Argon2Params::default();
-    let user_key =
-        argon2::derive_key(password, &salt, &params)
-            .ok_or(Error::Kdf("user key derivation failed".into()))?;
-    let wrapped_master_key =
-        aes_kw::wrap(&user_key, &master_key)
-            .ok_or(Error::Crypto("master key wrap failed".into()))?;
+    let user_key = argon2::derive_key(password, &salt, &params)
+        .ok_or(Error::Kdf("user key derivation failed".into()))?;
+    let wrapped_master_key = aes_kw::wrap(&user_key, &master_key)
+        .ok_or(Error::Crypto("master key wrap failed".into()))?;
 
     let enc_dir = dir.join("encryption");
     std::fs::create_dir_all(&enc_dir)?;
@@ -135,20 +134,27 @@ mod tests {
         let master_key = crate::crypto::aes_gcm::generate_key();
         let salted = b"test-salt-1234567";
 
-        let user_key =
-            crate::crypto::argon2::derive_key(password, salted, &kdf_params).unwrap();
-        let wrapped_master_key =
-            crate::crypto::aes_kw::wrap(&user_key, &master_key).unwrap();
+        let user_key = crate::crypto::argon2::derive_key(password, salted, &kdf_params).unwrap();
+        let wrapped_master_key = crate::crypto::aes_kw::wrap(&user_key, &master_key).unwrap();
         let db_data = b"fake-db-content".to_vec();
         let file_data = b"hello-world".to_vec();
 
         let exported = export(
-            &[KeyValue { key: "test.txt".into(), value: file_data.clone() }],
+            &[KeyValue {
+                key: "test.txt".into(),
+                value: file_data.clone(),
+            }],
             Some(&db_data),
             password,
             &[
-                KeyValue { key: "wrapped_master_key".into(), value: wrapped_master_key.clone() },
-                KeyValue { key: "salt".into(), value: salted.to_vec() },
+                KeyValue {
+                    key: "wrapped_master_key".into(),
+                    value: wrapped_master_key.clone(),
+                },
+                KeyValue {
+                    key: "salt".into(),
+                    value: salted.to_vec(),
+                },
             ],
             &kdf_params,
         )
@@ -171,8 +177,7 @@ mod tests {
             .map(|kv| kv.value.clone())
             .unwrap();
 
-        let unwrapped =
-            crate::crypto::aes_kw::unwrap(&imported_wmk, &user_key).unwrap();
+        let unwrapped = crate::crypto::aes_kw::unwrap(&imported_wmk, &user_key).unwrap();
         assert_eq!(unwrapped, master_key);
     }
 

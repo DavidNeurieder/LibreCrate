@@ -23,9 +23,11 @@ class RustKeyManager(
             val (memory, iterations, parallelism) = kdfParams()
             val derivedKey = deriveKey(password, salt, memory, iterations, parallelism)
             val wrappedKey = wrapKey(derivedKey, masterKey)
+            zeroize(derivedKey)
             keyStore.write(SALT_FILE, salt)
             keyStore.write(WRAPPED_KEY_FILE, wrappedKey)
             ensureParamsToml()
+            sessionMasterKey?.let { if (it !== masterKey) it.fill(0) }
             sessionMasterKey = masterKey
             true
         } catch (e: Exception) {
@@ -42,13 +44,15 @@ class RustKeyManager(
             val salt = keyStore.read(SALT_FILE) ?: return false
             val wrappedKey = keyStore.read(WRAPPED_KEY_FILE) ?: return false
             val (memory, iterations, parallelism) = kdfParams()
-            val result = verifyPassword(password, salt, wrappedKey, memory, iterations, parallelism)
-            if (result) {
-                val derivedKey = deriveKey(password, salt, memory, iterations, parallelism)
-                sessionMasterKey = unwrapKey(wrappedKey, derivedKey)
-                ensureParamsToml()
-            }
-            result
+            // Single-pass verify: one Argon2 derivation + AES-KW unwrap. A wrong
+            // password throws AuthenticationFailed, so we never run Argon2 twice.
+            val masterKey = deriveBackupMasterKey(
+                wrappedKey, password, salt, memory, iterations, parallelism,
+            )
+            sessionMasterKey?.let { if (it !== masterKey) it.fill(0) }
+            sessionMasterKey = masterKey
+            ensureParamsToml()
+            true
         } catch (e: Exception) {
             ErrorLogger.logException(null, TAG, "verifyPassword failed", e)
             sessionMasterKey = null; false
@@ -61,14 +65,16 @@ class RustKeyManager(
             val wrappedKey = keyStore.read(WRAPPED_KEY_FILE)
             val masterKey = if (wrappedKey != null && oldPassword.isNotEmpty()) {
                 val oldDerivedKey = deriveKey(oldPassword, keyStore.read(SALT_FILE)!!, memory, iterations, parallelism)
-                unwrapKey(wrappedKey, oldDerivedKey)
+                unwrapKey(wrappedKey, oldDerivedKey).also { zeroize(oldDerivedKey) }
             } else {
                 generateMasterKey()
             }
             val newDerivedKey = deriveKey(newPassword, salt, memory, iterations, parallelism)
             val newWrappedKey = wrapKey(newDerivedKey, masterKey)
+            zeroize(newDerivedKey)
             keyStore.write(WRAPPED_KEY_FILE, newWrappedKey)
             ensureParamsToml()
+            sessionMasterKey?.let { if (it !== masterKey) it.fill(0) }
             sessionMasterKey = masterKey
             true
         } catch (e: Exception) {
@@ -77,9 +83,13 @@ class RustKeyManager(
     }
     override fun disablePassword(): Boolean {
         keyStore.delete(SALT_FILE); keyStore.delete(WRAPPED_KEY_FILE); keyStore.delete(DEVICE_WRAPPED_KEY_FILE); keyStore.delete(PARAMS_TOML_FILE)
+        sessionMasterKey?.fill(0)
         sessionMasterKey = null; return true
     }
-    override fun lock() { sessionMasterKey = null }
+    override fun lock() {
+        sessionMasterKey?.fill(0)
+        sessionMasterKey = null
+    }
     override fun ensureParamsToml() {
         if (keyStore.read(PARAMS_TOML_FILE) == null) {
             keyStore.write(PARAMS_TOML_FILE, buildParamsToml(MEMORY_COST, ITERATIONS, PARALLELISM).toByteArray(Charsets.UTF_8))
@@ -116,6 +126,11 @@ class RustKeyManager(
         private const val MEMORY_COST: UInt = 16_384u
         private const val ITERATIONS: UInt = 3u
         private const val PARALLELISM: UInt = 2u
+
+        /// Wipe temporary key material ByteArrays once they've been used.
+        private fun zeroize(vararg arrays: ByteArray?) {
+            for (a in arrays) a?.fill(0)
+        }
     }
 }
 

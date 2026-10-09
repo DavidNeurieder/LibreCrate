@@ -26,6 +26,15 @@ pub enum Error {
 
     #[error("Compression error: {0}")]
     Compression(String),
+
+    #[error("Invalid KDF parameters: {0}")]
+    InvalidKdfParameters(String),
+
+    #[error("Invalid archive path: {0}")]
+    InvalidArchivePath(String),
+
+    #[error("Backup resource limit exceeded: {0}")]
+    ResourceLimit(String),
 }
 
 impl From<rusqlite::Error> for Error {

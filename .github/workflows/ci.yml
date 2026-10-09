@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Rust core: the encrypted vault library. Everything here runs on pinned
+  # stable 1.94.0 (see vault-native/rust-toolchain.toml).
+  # -------------------------------------------------------------------------
+  rust-core:
+    name: Rust core (fmt, clippy -D warnings, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.94.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vault-native
+      - name: Formatting (vault-native core)
+        run: cargo fmt --manifest-path vault-native/Cargo.toml -p vault-native -- --check
+      - name: Clippy (deny warnings, all targets incl. tests/benches/examples)
+        run: cargo clippy --manifest-path vault-native/Cargo.toml -p vault-native --all-targets -- -D warnings
+      - name: Test vault-native (incl. security regression suite)
+        run: cargo test --manifest-path vault-native/Cargo.toml -p vault-native
+      - name: Test CLI (librecrate)
+        run: cargo test --manifest-path vault-native/Cargo.toml -p librecrate
+
+  # -------------------------------------------------------------------------
+  # CLI + desktop GUI binaries (GUI needs X11/GTK system packages).
+  # -------------------------------------------------------------------------
+  rust-cli-gui:
+    name: Rust CLI + GUI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.94.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vault-native
+      - name: Install GUI system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev
+      - name: Clippy CLI + GUI (deny warnings)
+        run: cargo clippy --manifest-path vault-native/Cargo.toml -p librecrate -p librecrate-gui -- -D warnings
+      - name: Build CLI + GUI (release)
+        run: cargo build --manifest-path vault-native/Cargo.toml -p librecrate -p librecrate-gui --release
+
+  # -------------------------------------------------------------------------
+  # Supply-chain audit of the Rust crate graph (cargo-audit against the
+  # pinned Cargo.lock).
+  # -------------------------------------------------------------------------
+  audit:
+    name: cargo-audit (dependency vulnerabilities)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/audit@v2
+        with:
+          working-directory: vault-native
+          deny: true
+
+  # -------------------------------------------------------------------------
+  # Android app: builds the UniFFI bindings + aarch64 Rust core, assembles the
+  # debug APK, runs JVM unit tests and lint.
+  # -------------------------------------------------------------------------
+  android:
+    name: Android (assembleDebug + unit tests + lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: dtolnay/rust-toolchain@1.94.0
+        with:
+          targets: aarch64-linux-android
+      - uses: android-actions/setup-android@v3
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vault-native
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses >/dev/null || true
+      - name: Assemble debug APK
+        run: ./gradlew assembleDebug --stacktrace
+      - name: JVM unit tests
+        run: ./gradlew testDebugUnitTest
+      - name: Lint (debug variant)
+        run: ./gradlew lintDebug

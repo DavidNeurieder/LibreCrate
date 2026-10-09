@@ -13,18 +13,44 @@ pub fn generate_key() -> Vec<u8> {
 }
 
 pub fn encrypt_bytes(data: &[u8], key: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+    encrypt_bytes_with_aad(data, key, &[])
+}
+
+pub fn decrypt_bytes(encrypted: &[u8], key: &[u8], iv: &[u8]) -> Option<Vec<u8>> {
+    decrypt_bytes_with_aad(encrypted, key, iv, &[])
+}
+
+/// AES-256-GCM encrypt with associated data (AAD). Used by the Backup v2
+/// envelope so that header/KDF metadata is authenticated before the payload
+/// is trusted.
+pub fn encrypt_bytes_with_aad(data: &[u8], key: &[u8], aad: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+    use aes_gcm::aead::Payload;
     let cipher = Aes256Gcm::new_from_slice(key).ok()?;
     let mut iv = vec![0u8; IV_LENGTH];
     OsRng.fill_bytes(&mut iv);
     let nonce = Nonce::from_slice(&iv);
-    let ciphertext = cipher.encrypt(nonce, data).ok()?;
+    let ciphertext = cipher.encrypt(nonce, Payload { msg: data, aad }).ok()?;
     Some((iv, ciphertext))
 }
 
-pub fn decrypt_bytes(encrypted: &[u8], key: &[u8], iv: &[u8]) -> Option<Vec<u8>> {
+pub fn decrypt_bytes_with_aad(
+    encrypted: &[u8],
+    key: &[u8],
+    iv: &[u8],
+    aad: &[u8],
+) -> Option<Vec<u8>> {
+    use aes_gcm::aead::Payload;
     let cipher = Aes256Gcm::new_from_slice(key).ok()?;
     let nonce = Nonce::from_slice(iv);
-    cipher.decrypt(nonce, encrypted).ok()
+    cipher
+        .decrypt(
+            nonce,
+            Payload {
+                msg: encrypted,
+                aad,
+            },
+        )
+        .ok()
 }
 
 #[cfg(test)]

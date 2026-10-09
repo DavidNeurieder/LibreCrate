@@ -1,9 +1,9 @@
 use vault_native::crypto::aes_gcm;
 use vault_native::crypto::aes_kw;
 use vault_native::crypto::argon2::{self, Argon2Params};
-use vault_native::db::schema::{create_all_tables, open_encrypted};
 use vault_native::db::fts;
 use vault_native::db::queries::{self, DocumentRow};
+use vault_native::db::schema::{create_all_tables, open_encrypted};
 use vault_native::format::export;
 use vault_native::format::import;
 use vault_native::types::KeyValue;
@@ -76,7 +76,11 @@ fn test_fts_search_e2e() {
     create_all_tables(&conn).unwrap();
 
     for (id, title, content) in &[
-        ("d1", "Quick brown fox", "The quick brown fox jumps over the lazy dog"),
+        (
+            "d1",
+            "Quick brown fox",
+            "The quick brown fox jumps over the lazy dog",
+        ),
         ("d2", "Lazy dog", "The lazy dog sleeps on the rug"),
         ("d3", "Red fox", "A red fox runs through the forest"),
     ] {
@@ -143,12 +147,21 @@ fn test_vault_roundtrip_with_db() {
 
     // Export vault
     let exported = export::export(
-        &[KeyValue { key: "hello.txt".into(), value: encrypted_file }],
+        &[KeyValue {
+            key: "hello.txt".into(),
+            value: encrypted_file,
+        }],
         Some(&db_data),
         password,
         &[
-            KeyValue { key: "wrapped_master_key".into(), value: wrapped_mk.clone() },
-            KeyValue { key: "salt".into(), value: salt.to_vec() },
+            KeyValue {
+                key: "wrapped_master_key".into(),
+                value: wrapped_mk.clone(),
+            },
+            KeyValue {
+                key: "salt".into(),
+                value: salt.to_vec(),
+            },
         ],
         &kdf_params,
     )
@@ -161,7 +174,10 @@ fn test_vault_roundtrip_with_db() {
     // Import vault back
     let imported = import::import(&exported.data, password, &kdf_params).unwrap();
     assert!(imported.db_file.is_some());
-    assert_eq!(imported.db_file.as_ref().unwrap().len() as u64, db_data.len() as u64);
+    assert_eq!(
+        imported.db_file.as_ref().unwrap().len() as u64,
+        db_data.len() as u64
+    );
 
     // Verify keys
     let imported_wmk = imported
@@ -257,7 +273,10 @@ fn test_compat4_raw_key_format() {
         let _ = stmt.query([]).unwrap();
 
         // Verify
-        conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok::<_, rusqlite::Error>(())).unwrap();
+        conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| {
+            Ok::<_, rusqlite::Error>(())
+        })
+        .unwrap();
         create_all_tables(&conn).unwrap();
         conn.execute(
             "INSERT INTO documents (id, title, file_name, mime_type, file_path, file_size, page_count, author, description, imported_at, last_opened_at, modified_at, is_favorite, is_conflict, current_page)

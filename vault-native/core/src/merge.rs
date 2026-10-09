@@ -29,7 +29,8 @@ pub fn branch_b_fresh_install(
     // Write key files from the vault
     std::fs::create_dir_all(encryption_dir)?;
     for kv in &contents.keys {
-        std::fs::write(encryption_dir.join(&kv.key), &kv.value)?;
+        let safe = crate::format::path::safe_archive_path(&kv.key)?;
+        std::fs::write(encryption_dir.join(&safe), &kv.value)?;
     }
 
     // Write the DB
@@ -43,7 +44,8 @@ pub fn branch_b_fresh_install(
     // Write files from the vault
     std::fs::create_dir_all(files_dir)?;
     for kv in &contents.files {
-        let target = files_dir.join(&kv.key);
+        let safe = crate::format::path::safe_archive_path(&kv.key)?;
+        let target = files_dir.join(&safe);
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -65,8 +67,7 @@ pub fn branch_a_merge(
     files_dir: &Path,
 ) -> Result<MergeStats> {
     // Open backup DB
-    let backup_conn =
-        crate::db::schema::open_encrypted(backup_path, backup_master_key)?;
+    let backup_conn = crate::db::schema::open_encrypted(backup_path, backup_master_key)?;
 
     // Read documents from backup
     let backup_docs = crate::db::queries::list_documents(&backup_conn)?;
@@ -83,8 +84,7 @@ pub fn branch_a_merge(
     };
 
     // Use a transaction for the merge
-    current_conn
-        .execute_batch("BEGIN TRANSACTION")?;
+    current_conn.execute_batch("BEGIN TRANSACTION")?;
 
     let merge_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         // Merge collections
@@ -143,16 +143,21 @@ pub fn branch_a_merge(
             match existing_row {
                 Err(_) => {
                     // No existing document — add backup doc
-                    crate::db::queries::add_document(current_conn, doc)
-                        .ok();
+                    crate::db::queries::add_document(current_conn, doc).ok();
                     copy_text_content(&backup_conn, current_conn, &doc.id);
                     stats.documents_added += 1;
                 }
                 Ok(existing) => {
                     // Detect conflict: file content differs
-                    let content_differs = match (existing.content_hash.as_deref(), doc.content_hash.as_deref()) {
+                    let content_differs = match (
+                        existing.content_hash.as_deref(),
+                        doc.content_hash.as_deref(),
+                    ) {
                         (Some(a), Some(b)) => a != b,
-                        _ => existing.file_size != doc.file_size || existing.mime_type != doc.mime_type,
+                        _ => {
+                            existing.file_size != doc.file_size
+                                || existing.mime_type != doc.mime_type
+                        }
                     };
 
                     if content_differs {
@@ -162,15 +167,18 @@ pub fn branch_a_merge(
                             rusqlite::params![doc.modified_at, doc.id],
                         );
                         // Insert backup doc as conflict copy
-                        let conflict_id = format!("{}-conflict-{}", doc.id, std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_millis());
+                        let conflict_id = format!(
+                            "{}-conflict-{}",
+                            doc.id,
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_millis()
+                        );
                         let mut conflict_doc = doc.clone();
                         conflict_doc.id = conflict_id;
                         conflict_doc.conflict_with = Some(doc.id.clone());
-                        crate::db::queries::add_document(current_conn, &conflict_doc)
-                            .ok();
+                        crate::db::queries::add_document(current_conn, &conflict_doc).ok();
                         copy_text_content(&backup_conn, current_conn, &conflict_doc.id);
                         stats.documents_conflicted += 1;
                     } else if doc.modified_at > 0 {
@@ -190,34 +198,21 @@ pub fn branch_a_merge(
 
         // Re-encrypt files if keys provided
         if let (Some(bk), Some(lk)) = (backup_key, local_key) {
-            reencrypt_files(
-                current_conn,
-                &backup_docs,
-                files,
-                bk,
-                lk,
-                files_dir,
-            );
+            reencrypt_files(current_conn, &backup_docs, files, bk, lk, files_dir);
         }
     }));
 
     if merge_result.is_ok() {
-        current_conn
-            .execute_batch("COMMIT")?;
+        current_conn.execute_batch("COMMIT")?;
     } else {
-        current_conn
-            .execute_batch("ROLLBACK")?;
+        current_conn.execute_batch("ROLLBACK")?;
         return Err(Error::Format("merge failed".into()));
     }
 
     Ok(stats)
 }
 
-fn copy_text_content(
-    backup_conn: &Connection,
-    current_conn: &Connection,
-    doc_id: &str,
-) {
+fn copy_text_content(backup_conn: &Connection, current_conn: &Connection, doc_id: &str) {
     // DocumentRow omits text_content, so pull the indexed text straight from
     // the backup DB. update_document_text_content fires fts_after_update, which
     // repopulates the FTS row — without this, merged docs are not searchable.
@@ -227,11 +222,7 @@ fn copy_text_content(
         |row| row.get(0),
     );
     if let Ok(Some(text)) = content {
-        let _ = crate::db::queries::update_document_text_content(
-            current_conn,
-            doc_id,
-            Some(&text),
-        );
+        let _ = crate::db::queries::update_document_text_content(current_conn, doc_id, Some(&text));
     }
 }
 
@@ -243,8 +234,10 @@ fn reencrypt_files(
     local_key: &[u8],
     files_dir: &Path,
 ) {
-    let file_map: HashMap<&str, &[u8]> =
-        files.iter().map(|kv| (kv.key.as_str(), kv.value.as_slice())).collect();
+    let file_map: HashMap<&str, &[u8]> = files
+        .iter()
+        .map(|kv| (kv.key.as_str(), kv.value.as_slice()))
+        .collect();
 
     for doc in docs {
         let iv = match &doc.encryption_iv {
@@ -253,6 +246,9 @@ fn reencrypt_files(
         };
 
         let file_name = doc.file_path.rsplit('/').next().unwrap_or("");
+        if crate::format::path::safe_archive_path(file_name).is_err() {
+            continue;
+        }
         let file_bytes = match file_map.get(file_name) {
             Some(b) => b,
             None => continue,
@@ -265,9 +261,7 @@ fn reencrypt_files(
         let target = files_dir.join(file_name);
         if target.exists() {
             // Already restored, update IV in DB
-            if let Ok(iv_bytes) = std::fs::read(&target)
-                .map(|b| b[..aes_gcm::IV_LENGTH].to_vec())
-            {
+            if let Ok(iv_bytes) = std::fs::read(&target).map(|b| b[..aes_gcm::IV_LENGTH].to_vec()) {
                 let _ = conn.execute(
                     "UPDATE documents SET encryption_iv = ?1 WHERE file_path = ?2",
                     rusqlite::params![iv_bytes, doc.file_path],
@@ -300,8 +294,8 @@ fn reencrypt_files(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::schema::{create_all_tables, open_encrypted};
     use crate::crypto::aes_kw;
+    use crate::db::schema::{create_all_tables, open_encrypted};
     use tempfile::TempDir;
 
     fn make_master_key() -> Vec<u8> {
@@ -336,11 +330,20 @@ mod tests {
 
         let contents = ImportedContents {
             keys: vec![
-                crate::types::KeyValue { key: "wrapped_master_key".into(), value: aes_kw::wrap(&master_key, &master_key).unwrap() },
-                crate::types::KeyValue { key: "salt".into(), value: b"test-salt-12345678".to_vec() },
+                crate::types::KeyValue {
+                    key: "wrapped_master_key".into(),
+                    value: aes_kw::wrap(&master_key, &master_key).unwrap(),
+                },
+                crate::types::KeyValue {
+                    key: "salt".into(),
+                    value: b"test-salt-12345678".to_vec(),
+                },
             ],
             db_file: Some(db_data),
-            files: vec![crate::types::KeyValue { key: "test.txt".into(), value: encrypted_file }],
+            files: vec![crate::types::KeyValue {
+                key: "test.txt".into(),
+                value: encrypted_file,
+            }],
         };
 
         branch_b_fresh_install(
@@ -366,7 +369,12 @@ mod tests {
 
         // Create existing DB
         let existing_path = tmp.path().join("existing.db");
-        make_test_db(&mk, existing_path.to_str().unwrap(), "existing", "Existing Doc");
+        make_test_db(
+            &mk,
+            existing_path.to_str().unwrap(),
+            "existing",
+            "Existing Doc",
+        );
         let existing_conn = open_encrypted(existing_path.to_str().unwrap(), &mk).unwrap();
 
         // Create backup DB

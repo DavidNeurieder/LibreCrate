@@ -135,9 +135,8 @@ pub fn set_schema_version(conn: &Connection, version: i64) -> rusqlite::Result<(
 /// Creates parent directories if they don't exist.
 pub fn create_encrypted_db(path: &str, master_key: &[u8]) -> rusqlite::Result<Connection> {
     if let Some(parent) = std::path::Path::new(path).parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(e))
-        })?;
+        std::fs::create_dir_all(parent)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
     }
     let conn = open_encrypted(path, master_key)?;
     create_all_tables(&conn)?;
@@ -179,8 +178,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         let hex_key = hex::encode(&master_key);
         set_pragma(&conn, "PRAGMA cipher_compatibility = 4").unwrap();
-        set_pragma(&conn, &format!("PRAGMA key = \"x'{hex_key}'\""))
-            .unwrap();
+        set_pragma(&conn, &format!("PRAGMA key = \"x'{hex_key}'\"")).unwrap();
         conn.execute("CREATE TABLE t (id INTEGER)", []).unwrap();
         conn.execute("INSERT INTO t VALUES (42)", []).unwrap();
         let val: i32 = conn

@@ -27,6 +27,7 @@ base64 = "0.22"
 rand = "0.8"
 thiserror = "1"
 uniffi = "0.28"
+zeroize = { version = "1", features = ["derive"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
 tempfile = "3"
 toml = "0.8"
@@ -40,3 +41,10 @@ tempfile = "3"
 uniffi_bindgen = "0.28"
 camino = "1"
 rusqlite = "0.31"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+hex = "0.4"
+base64 = "0.22"
+
+[[bench]]
+name = "kdf"
+harness = false

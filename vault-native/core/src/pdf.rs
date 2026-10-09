@@ -46,7 +46,10 @@ impl PdfHandle {
 
     pub fn page_count(&self) -> Result<i32, PdfError> {
         let guard = self.doc.lock().map_err(|_| PdfError::LockFailed)?;
-        guard.0.page_count().map_err(|e| PdfError::QueryFailed { msg: e.to_string() })
+        guard
+            .0
+            .page_count()
+            .map_err(|e| PdfError::QueryFailed { msg: e.to_string() })
     }
 
     pub fn metadata(&self, key: String) -> Result<String, PdfError> {
@@ -62,15 +65,29 @@ impl PdfHandle {
             "mod_date" => MetadataName::ModDate,
             "subject" => MetadataName::Subject,
             "keywords" => MetadataName::Keywords,
-            _ => return Err(PdfError::QueryFailed { msg: format!("Unknown metadata key: {key}") }),
+            _ => {
+                return Err(PdfError::QueryFailed {
+                    msg: format!("Unknown metadata key: {key}"),
+                })
+            }
         };
-        guard.0.metadata(name).map_err(|e| PdfError::QueryFailed { msg: e.to_string() })
+        guard
+            .0
+            .metadata(name)
+            .map_err(|e| PdfError::QueryFailed { msg: e.to_string() })
     }
 
-    pub fn render_page(&self, page_index: i32, target_width: i32) -> Result<PdfPageRender, PdfError> {
+    pub fn render_page(
+        &self,
+        page_index: i32,
+        target_width: i32,
+    ) -> Result<PdfPageRender, PdfError> {
         let guard = self.doc.lock().map_err(|_| PdfError::LockFailed)?;
 
-        let page_count = guard.0.page_count().map_err(|e| PdfError::QueryFailed { msg: e.to_string() })?;
+        let page_count = guard
+            .0
+            .page_count()
+            .map_err(|e| PdfError::QueryFailed { msg: e.to_string() })?;
         if page_index < 0 || page_index >= page_count {
             return Err(PdfError::LoadPageFailed {
                 msg: format!("Page index {page_index} out of range (0..{page_count})"),
@@ -82,7 +99,9 @@ impl PdfHandle {
             .load_page(page_index)
             .map_err(|e| PdfError::LoadPageFailed { msg: e.to_string() })?;
 
-        let bounds = page.bounds().map_err(|e| PdfError::QueryFailed { msg: e.to_string() })?;
+        let bounds = page
+            .bounds()
+            .map_err(|e| PdfError::QueryFailed { msg: e.to_string() })?;
         let page_width = bounds.width();
         let _page_height = bounds.height();
 
@@ -102,7 +121,11 @@ impl PdfHandle {
         let height = pixmap.height() as i32;
         let data = pixmap.samples().to_vec();
 
-        Ok(PdfPageRender { data, width, height })
+        Ok(PdfPageRender {
+            data,
+            width,
+            height,
+        })
     }
 
     pub fn extract_text(&self, page_index: i32) -> Result<String, PdfError> {
@@ -184,7 +207,10 @@ mod tests {
         let path = dir.path().join("photo.png");
         std::fs::write(&path, [0u8; 32]).unwrap();
         assert!(extract_document_text(&path.to_string_lossy(), "image/png").is_none());
-        assert!(extract_document_text(&path.to_string_lossy(), "application/vnd.comicbook+zip").is_none());
+        assert!(
+            extract_document_text(&path.to_string_lossy(), "application/vnd.comicbook+zip")
+                .is_none()
+        );
     }
 
     #[test]

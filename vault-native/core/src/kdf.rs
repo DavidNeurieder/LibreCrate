@@ -1,10 +1,15 @@
 use crate::crypto::aes_kw;
 use crate::crypto::argon2::{self, Argon2Params};
+use crate::crypto::secrets::DerivedKey;
 use crate::error::{Error, Result};
 
 /// Derive a user key from the vault password and salt (Argon2id).
 /// This is used to wrap/unwrap the master key via AES-KW.
-pub fn derive_user_key(password: &str, salt: &[u8], params: &Argon2Params) -> Option<Vec<u8>> {
+///
+/// Returns a `DerivedKey` whose heap buffer is zeroized when dropped, so call
+/// sites that only need the key transiently (unwrap, verify) don't leave
+/// password-derived bytes in memory.
+pub fn derive_user_key(password: &str, salt: &[u8], params: &Argon2Params) -> Option<DerivedKey> {
     argon2::derive_key_and_zero(password, salt, params)
 }
 
@@ -15,9 +20,8 @@ pub fn derive_backup_master_key(
     salt: &[u8],
     params: &Argon2Params,
 ) -> Result<Vec<u8>> {
-    let user_key =
-        derive_user_key(password, salt, params).ok_or(Error::AuthenticationFailed)?;
-    aes_kw::unwrap(wrapped_key, &user_key).ok_or(Error::AuthenticationFailed)
+    let user_key = derive_user_key(password, salt, params).ok_or(Error::AuthenticationFailed)?;
+    aes_kw::unwrap(wrapped_key, &user_key.0).ok_or(Error::AuthenticationFailed)
 }
 
 /// Verify that a password can successfully unwrap the stored master key.
@@ -57,7 +61,7 @@ mod tests {
         let params = Argon2Params::default();
 
         let user_key = derive_user_key(password, salt, &params).unwrap();
-        let wrapped = aes_kw::wrap(&user_key, &master_key).unwrap();
+        let wrapped = aes_kw::wrap(&user_key.0, &master_key).unwrap();
         let unwrapped = derive_backup_master_key(&wrapped, password, salt, &params).unwrap();
         assert_eq!(unwrapped, master_key);
     }
@@ -71,7 +75,7 @@ mod tests {
         let params = Argon2Params::default();
 
         let user_key = derive_user_key(password, salt, &params).unwrap();
-        let wrapped = aes_kw::wrap(&user_key, &master_key).unwrap();
+        let wrapped = aes_kw::wrap(&user_key.0, &master_key).unwrap();
         assert!(derive_backup_master_key(&wrapped, wrong, salt, &params).is_err());
         assert!(!verify_password(wrong, salt, &wrapped, &params));
         assert!(verify_password(password, salt, &wrapped, &params));

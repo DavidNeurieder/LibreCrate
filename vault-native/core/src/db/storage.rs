@@ -1,6 +1,5 @@
 use crate::crypto::aes_gcm;
 use crate::db::queries::{self, DocumentRow};
-use image::GenericImageView;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 use std::io::Read;
@@ -9,13 +8,62 @@ use std::path::Path;
 /// Maximum width for generated thumbnails (in pixels).
 const THUMBNAIL_MAX_WIDTH: u32 = 200;
 
-/// Resize raw image bytes to a JPEG thumbnail capped at `max_width`.
-fn resize_image_to_jpeg(data: &[u8], max_width: u32) -> Option<Vec<u8>> {
-    let img = image::load_from_memory(data).ok()?;
-    let (w, h) = img.dimensions();
-    if w == 0 || h == 0 {
+// ---------------------------------------------------------------------------
+// Parser hardening limits (PR 11)
+//
+// Thumbnail generation is reachable from *untrusted* document contents
+// (backups, imported files). Every read and decode below is bounded so a
+// hostile EPUB/CBZ/image/PDF cannot exhaust memory or CPU.
+// ---------------------------------------------------------------------------
+
+/// Hard ceiling on the raw source bytes handed to any thumbnail generator.
+const MAX_THUMBNAIL_SOURCE_SIZE: u64 = 64 * 1024 * 1024; // 64 MiB
+
+/// Cap on decoded image dimensions (pixels per axis). Blocks decompression
+/// bombs: a tiny PNG/JPEG would otherwise decode into gigabytes of pixels.
+const MAX_THUMBNAIL_SOURCE_DIMENSION: u32 = 8192;
+
+/// Cap on XML/metadata entries read from document archives (bytes).
+const MAX_ARCHIVE_METADATA_SIZE: u64 = 1024 * 1024; // 1 MiB
+
+/// Cap on cover/first-page images pulled from document archives (bytes).
+const MAX_ARCHIVE_IMAGE_SIZE: u64 = 16 * 1024 * 1024; // 16 MiB
+
+/// Cap on entries scanned inside an archive for cover/page discovery.
+const MAX_ARCHIVE_ENTRY_SCAN: usize = 20_000;
+
+/// Read a ZIP entry, refusing entries that exceed `cap` (bytes actually read).
+fn read_entry_limited(reader: &mut impl Read, cap: u64) -> Option<Vec<u8>> {
+    let mut content = Vec::new();
+    let mut limited = reader.take(cap + 1);
+    limited.read_to_end(&mut content).ok()?;
+    if content.len() as u64 > cap {
         return None;
     }
+    Some(content)
+}
+
+/// Resize raw image bytes to a JPEG thumbnail capped at `max_width`.
+/// Dimensions are checked BEFORE decoding so pixel-bomb images are skipped
+/// without allocating their full decoded buffer.
+fn resize_image_to_jpeg(data: &[u8], max_width: u32) -> Option<Vec<u8>> {
+    // Header-only dimension pass: refuses pixel-bomb images before any raster
+    // allocation. A second reader then decodes (re-reading the header is
+    // cheap).
+    let (w, h) = {
+        let probe = image::ImageReader::new(std::io::Cursor::new(data))
+            .with_guessed_format()
+            .ok()?;
+        probe.into_dimensions().ok()?
+    };
+    if w == 0 || h == 0 || w > MAX_THUMBNAIL_SOURCE_DIMENSION || h > MAX_THUMBNAIL_SOURCE_DIMENSION
+    {
+        return None;
+    }
+    let reader = image::ImageReader::new(std::io::Cursor::new(data))
+        .with_guessed_format()
+        .ok()?;
+    let img = reader.decode().ok()?;
     let new_w = max_width.min(w);
     let new_h = (h as f64 * new_w as f64 / w as f64).round() as u32;
     let thumb = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
@@ -67,6 +115,9 @@ fn parse_opf_cover(opf: &str) -> Option<String> {
 
 /// Render page 1 of a PDF to JPEG using the Rust MuPDF wrapper.
 fn generate_thumbnail_pdf(data: &[u8]) -> Option<Vec<u8>> {
+    if data.len() as u64 > MAX_THUMBNAIL_SOURCE_SIZE {
+        return None;
+    }
     let tmp_dir = tempfile::tempdir().ok()?;
     let pdf_path = tmp_dir.path().join("input.pdf");
     std::fs::write(&pdf_path, data).ok()?;
@@ -74,7 +125,8 @@ fn generate_thumbnail_pdf(data: &[u8]) -> Option<Vec<u8>> {
     let handle = crate::pdf::PdfHandle::open(pdf_path.to_str()?.to_string()).ok()?;
     let rendered = handle.render_page(0, 200).ok()?;
 
-    let img = image::RgbaImage::from_raw(rendered.width as u32, rendered.height as u32, rendered.data)?;
+    let img =
+        image::RgbaImage::from_raw(rendered.width as u32, rendered.height as u32, rendered.data)?;
     let mut jpeg_buf = std::io::Cursor::new(Vec::new());
     let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg_buf, 90);
     img.write_with_encoder(encoder).ok()?;
@@ -85,20 +137,21 @@ fn generate_thumbnail_pdf(data: &[u8]) -> Option<Vec<u8>> {
 fn generate_thumbnail_epub(data: &[u8]) -> Option<Vec<u8>> {
     let cursor = std::io::Cursor::new(data);
     let mut archive = zip::ZipArchive::new(cursor).ok()?;
+    if archive.len() > MAX_ARCHIVE_ENTRY_SCAN {
+        return None;
+    }
 
     let container_xml = {
         let mut f = archive.by_name("META-INF/container.xml").ok()?;
-        let mut s = String::new();
-        f.read_to_string(&mut s).ok()?;
-        s
+        let bytes = read_entry_limited(&mut f, MAX_ARCHIVE_METADATA_SIZE)?;
+        String::from_utf8(bytes).ok()?
     };
     let rootfile_path = parse_container_rootfile(&container_xml)?;
 
     let opf_content = {
         let mut f = archive.by_name(&rootfile_path).ok()?;
-        let mut s = String::new();
-        f.read_to_string(&mut s).ok()?;
-        s
+        let bytes = read_entry_limited(&mut f, MAX_ARCHIVE_METADATA_SIZE)?;
+        String::from_utf8(bytes).ok()?
     };
     let cover_href = parse_opf_cover(&opf_content)?;
 
@@ -107,10 +160,15 @@ fn generate_thumbnail_epub(data: &[u8]) -> Option<Vec<u8>> {
         .unwrap_or(std::path::Path::new(""));
     let cover_path = opf_dir.join(&cover_href).to_string_lossy().to_string();
 
+    // The target is attacker-controlled XML content — keep it a normal
+    // relative archive name (the ZIP lookup is literal, but reject anything
+    // with `..`/absolute components defensively before using it).
+    if crate::format::path::safe_archive_path(&cover_path).is_err() {
+        return None;
+    }
+
     let mut f = archive.by_name(&cover_path).ok()?;
-    let mut img = Vec::new();
-    f.read_to_end(&mut img).ok()?;
-    Some(img)
+    read_entry_limited(&mut f, MAX_ARCHIVE_IMAGE_SIZE)
 }
 
 /// Extract the first page image from a CBZ (comic ZIP) archive.
@@ -121,20 +179,22 @@ fn generate_thumbnail_cbz(data: &[u8]) -> Option<Vec<u8>> {
     let image_exts = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
     let mut images: Vec<String> = archive
         .file_names()
+        .take(MAX_ARCHIVE_ENTRY_SCAN)
         .filter(|name| {
             let lower = name.to_lowercase();
-            !lower.starts_with("__MACOSX")
-                && image_exts.iter().any(|ext| lower.ends_with(ext))
+            !lower.starts_with("__MACOSX") && image_exts.iter().any(|ext| lower.ends_with(ext))
         })
         .map(|s| s.to_string())
         .collect();
+    if archive.len() > MAX_ARCHIVE_ENTRY_SCAN {
+        // Reached the scan cap — too many entries to trust the cover pick.
+        return None;
+    }
     images.sort();
 
     let first = images.first()?;
     let mut f = archive.by_name(first).ok()?;
-    let mut img = Vec::new();
-    f.read_to_end(&mut img).ok()?;
-    Some(img)
+    read_entry_limited(&mut f, MAX_ARCHIVE_IMAGE_SIZE)
 }
 
 /// Generate a JPEG thumbnail for a document.
@@ -147,12 +207,14 @@ fn generate_thumbnail_cbz(data: &[u8]) -> Option<Vec<u8>> {
 ///
 /// Returns `None` when the format is unsupported or generation fails.
 pub fn generate_thumbnail(data: &[u8], mime_type: &str) -> Option<Vec<u8>> {
+    // PR 11: never feed unbounded source bytes to any decoder.
+    if data.len() as u64 > MAX_THUMBNAIL_SOURCE_SIZE {
+        return None;
+    }
     let raw = match mime_type {
         "application/pdf" => generate_thumbnail_pdf(data)?,
         "application/epub+zip" => generate_thumbnail_epub(data)?,
-        "application/vnd.comicbook+zip" | "application/x-cbr" => {
-            generate_thumbnail_cbz(data)?
-        }
+        "application/vnd.comicbook+zip" | "application/x-cbr" => generate_thumbnail_cbz(data)?,
         mt if mt.starts_with("image/") => data.to_vec(),
         _ => return None,
     };
@@ -160,14 +222,21 @@ pub fn generate_thumbnail(data: &[u8], mime_type: &str) -> Option<Vec<u8>> {
 }
 
 /// Save a thumbnail blob at `base_dir/files/<id>.thumb`.
-pub fn store_thumbnail(base_dir: &Path, id: &str, data: &[u8], key: Option<&[u8]>) -> std::io::Result<()> {
+pub fn store_thumbnail(
+    base_dir: &Path,
+    id: &str,
+    data: &[u8],
+    key: Option<&[u8]>,
+) -> std::io::Result<()> {
     let path = base_dir.join("files").join(format!("{id}.thumb"));
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let blob = if let Some(k) = key {
         let (iv, ct) = aes_gcm::encrypt_bytes(data, k).unwrap_or_else(|| (vec![], vec![]));
-        if iv.is_empty() { return Err(std::io::Error::other("encryption failed")); }
+        if iv.is_empty() {
+            return Err(std::io::Error::other("encryption failed"));
+        }
         let mut out = iv;
         out.extend_from_slice(&ct);
         out
@@ -180,9 +249,15 @@ pub fn store_thumbnail(base_dir: &Path, id: &str, data: &[u8], key: Option<&[u8]
 /// Load a thumbnail blob from `base_dir/files/<id>.thumb`.
 pub fn load_thumbnail(base_dir: &Path, id: &str, key: Option<&[u8]>) -> Option<Vec<u8>> {
     let path = base_dir.join("files").join(format!("{id}.thumb"));
-    let raw = if path.exists() { std::fs::read(&path).ok()? } else { return None };
+    let raw = if path.exists() {
+        std::fs::read(&path).ok()?
+    } else {
+        return None;
+    };
     if let Some(k) = key {
-        if raw.len() < aes_gcm::IV_LENGTH { return None; }
+        if raw.len() < aes_gcm::IV_LENGTH {
+            return None;
+        }
         let iv = &raw[..aes_gcm::IV_LENGTH];
         let ct = &raw[aes_gcm::IV_LENGTH..];
         aes_gcm::decrypt_bytes(ct, k, iv)
@@ -277,16 +352,19 @@ pub fn import_document(
     }
 
     let (stored_data, iv): (Vec<u8>, Vec<u8>) = if let Some(k) = key {
-        let (real_iv, ct) = aes_gcm::encrypt_bytes(file_data, k)
-            .ok_or_else(|| rusqlite::Error::ToSqlConversionFailure(
-                Box::new(std::io::Error::other("encryption failed"))
-            ))?;
+        let (real_iv, ct) = aes_gcm::encrypt_bytes(file_data, k).ok_or_else(|| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
+                "encryption failed",
+            )))
+        })?;
         let mut out = real_iv.clone();
         out.extend_from_slice(&ct);
         (out, real_iv)
     } else {
         // No key — store plaintext with random garbage IV (legacy behavior)
-        let dummy_iv: Vec<u8> = (0..aes_gcm::IV_LENGTH).map(|_| rand::random::<u8>()).collect();
+        let dummy_iv: Vec<u8> = (0..aes_gcm::IV_LENGTH)
+            .map(|_| rand::random::<u8>())
+            .collect();
         (file_data.to_vec(), dummy_iv)
     };
 
@@ -315,9 +393,8 @@ pub fn import_document(
 
     queries::add_document_full(conn, &doc, text_content)?;
 
-    save_file(base_dir, id, &stored_data).map_err(|e| {
-        rusqlite::Error::ToSqlConversionFailure(Box::new(e))
-    })?;
+    save_file(base_dir, id, &stored_data)
+        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
     if let Some(thumb_data) = generate_thumbnail(file_data, mime_type) {
         let _ = store_thumbnail(base_dir, id, &thumb_data, key);
@@ -327,12 +404,19 @@ pub fn import_document(
 }
 
 /// Export a document's file blob from storage (decrypted if key is provided).
-pub fn export_document_file(conn: &Connection, base_dir: &Path, id: &str, key: Option<&[u8]>) -> Option<Vec<u8>> {
+pub fn export_document_file(
+    conn: &Connection,
+    base_dir: &Path,
+    id: &str,
+    key: Option<&[u8]>,
+) -> Option<Vec<u8>> {
     let doc = queries::get_document(conn, id).ok()??;
     let raw = load_file(base_dir, &doc.id)?;
     if let Some(k) = key {
         let iv = doc.encryption_iv.as_deref()?;
-        if raw.len() < aes_gcm::IV_LENGTH { return None; }
+        if raw.len() < aes_gcm::IV_LENGTH {
+            return None;
+        }
         let ct = &raw[aes_gcm::IV_LENGTH..];
         aes_gcm::decrypt_bytes(ct, k, iv)
     } else {
@@ -342,7 +426,11 @@ pub fn export_document_file(conn: &Connection, base_dir: &Path, id: &str, key: O
 
 /// Delete a document: remove file blob, delete DB row.
 /// FTS index is cleaned up automatically by the fts_after_delete trigger.
-pub fn delete_document_full(conn: &Connection, base_dir: &Path, id: &str) -> rusqlite::Result<bool> {
+pub fn delete_document_full(
+    conn: &Connection,
+    base_dir: &Path,
+    id: &str,
+) -> rusqlite::Result<bool> {
     delete_file(base_dir, id);
     queries::delete_document(conn, id)
 }
@@ -351,6 +439,7 @@ pub fn delete_document_full(conn: &Connection, base_dir: &Path, id: &str) -> rus
 mod tests {
     use super::*;
     use crate::db::schema::create_encrypted_db;
+    use std::io::Write;
 
     #[test]
     fn test_import_export_roundtrip_with_key() {
@@ -363,11 +452,18 @@ mod tests {
 
         let data = b"Hello, world!".to_vec();
         let doc_id = import_document(
-            &conn, tmp.path(), "test-doc-1",
-            "Test Doc", &data, "text/plain",
-            "Author", "Description", Some("hello world content"),
+            &conn,
+            tmp.path(),
+            "test-doc-1",
+            "Test Doc",
+            &data,
+            "text/plain",
+            "Author",
+            "Description",
+            Some("hello world content"),
             Some(&mk),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(doc_id, "test-doc-1");
 
         // Verify file exists (as encrypted blob)
@@ -376,7 +472,10 @@ mod tests {
         let raw = std::fs::read(&file_path).unwrap();
         assert!(raw.len() > data.len()); // iv + ciphertext > plaintext
         let db_doc = queries::get_document(&conn, "test-doc-1").unwrap().unwrap();
-        assert_eq!(&raw[..aes_gcm::IV_LENGTH], db_doc.encryption_iv.as_deref().unwrap());
+        assert_eq!(
+            &raw[..aes_gcm::IV_LENGTH],
+            db_doc.encryption_iv.as_deref().unwrap()
+        );
 
         // Verify list
         let docs = queries::list_documents(&conn).unwrap();
@@ -412,11 +511,18 @@ mod tests {
 
         let data = b"Hello, plaintext!".to_vec();
         let _doc_id = import_document(
-            &conn, tmp.path(), "test-plain",
-            "Test Doc", &data, "text/plain",
-            "Author", "Description", None,
+            &conn,
+            tmp.path(),
+            "test-plain",
+            "Test Doc",
+            &data,
+            "text/plain",
+            "Author",
+            "Description",
             None,
-        ).unwrap();
+            None,
+        )
+        .unwrap();
 
         // File stored as plaintext
         let raw = std::fs::read(tmp.path().join("files/test-plain")).unwrap();
@@ -425,5 +531,92 @@ mod tests {
         // Export back
         let exported = export_document_file(&conn, tmp.path(), "test-plain", None).unwrap();
         assert_eq!(exported, data);
+    }
+
+    // -----------------------------------------------------------------------
+    // PR 11 — thumbnail parser hardening
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn thumbnail_rejects_oversized_source() {
+        // 65 MiB source is refused without touching a decoder.
+        let big = vec![0u8; (MAX_THUMBNAIL_SOURCE_SIZE + 1) as usize];
+        assert!(generate_thumbnail(&big, "image/png").is_none());
+        assert!(generate_thumbnail(&big, "application/pdf").is_none());
+        assert!(generate_thumbnail(&big, "application/epub+zip").is_none());
+    }
+
+    #[test]
+    fn thumbnail_rejects_pixel_bomb_dimensions() {
+        // 9000 px wide — past the 8192 axis cap. Decoding this would allocate
+        // ~240 MB if it reached the raster; the header-only dimension check
+        // must stop it before then.
+        let mut png = image::RgbaImage::new(9000, 20);
+        for px in png.pixels_mut() {
+            *px = image::Rgba([0, 0, 0, 255]);
+        }
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgba8(png)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        assert_eq!(MAX_THUMBNAIL_SOURCE_DIMENSION, 8192);
+        assert!(generate_thumbnail(&bytes, "image/png").is_none());
+    }
+
+    #[test]
+    fn thumbnail_small_image_still_works() {
+        let mut img = image::RgbaImage::new(120, 80);
+        for (x, y, px) in img.enumerate_pixels_mut() {
+            *px = image::Rgba([(x % 256) as u8, (y % 256) as u8, 128, 255]);
+        }
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgba8(img)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        let thumb = generate_thumbnail(&bytes, "image/png").expect("valid small png");
+        assert_eq!(thumb[..2], [0xff, 0xd8]); // JPEG magic
+    }
+
+    #[test]
+    fn thumbnail_epub_rejects_oversized_metadata() {
+        // A container.xml larger than the metadata cap must abort thumbnail
+        // generation (bounds the XML string read).
+        let mut zip = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut zip));
+            let huge = vec![b'x'; (MAX_ARCHIVE_METADATA_SIZE + 1) as usize];
+            writer
+                .start_file::<&str, ()>(
+                    "META-INF/container.xml",
+                    zip::write::FileOptions::default(),
+                )
+                .unwrap();
+            writer.write_all(&huge).unwrap();
+            writer.finish().unwrap();
+        }
+        assert!(generate_thumbnail(&zip, "application/epub+zip").is_none());
+    }
+
+    #[test]
+    fn thumbnail_cbz_rejects_oversized_page() {
+        // A first-page image larger than the cap must abort generation
+        // instead of ballooning memory.
+        let mut zip = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut zip));
+            let huge = vec![0u8; (MAX_ARCHIVE_IMAGE_SIZE + 1) as usize];
+            writer
+                .start_file::<&str, ()>("0001.png", zip::write::FileOptions::default())
+                .unwrap();
+            writer.write_all(&huge).unwrap();
+            writer.finish().unwrap();
+        }
+        assert!(generate_thumbnail(&zip, "application/vnd.comicbook+zip").is_none());
     }
 }
