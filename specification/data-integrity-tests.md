@@ -1,7 +1,8 @@
 # LibreCrate Data-Integrity Regression Test Plan
 
-Status: **In progress — PRs 1–5 landed (legacy fixtures, encryption/tamper,
-backup/restore round trips, migration + all-or-nothing merge). PRs 6–7 pending.**
+Status: **In progress — PRs 1–6 landed (legacy fixtures, encryption/tamper,
+backup/restore round trips, migration + all-or-nothing merge, malformed-import
+regressions + CI gate). PR 7 (fuzzing & release validation) pending.**
 Source proposal: `ideas/new_test_plan.txt`.
 Author: test-infrastructure review.
 Last updated: 2026-10-12
@@ -285,12 +286,15 @@ Export → restore into a fresh dir (branch B) and merge into an existing vault
 Wrong password and corrupted archives must fail **without replacing a working
 destination** (snapshot the destination before, assert equal after).
 
-✅ Landed in `backup_roundtrip.rs` (5 tests): full branch-B round trip over the
+✅ Landed in `backup_roundtrip.rs` (7 tests): full branch-B round trip over the
 Unicode/binary/empty/large set; branch-A merge via `merge_backup_to_vault` from a
 **differently-keyed** vault (asserts attachments are re-encrypted to the local
 key and existing docs untouched); failed restore (wrong password / truncated /
-tampered tag) leaves the destination unchanged; and both frozen `legacy-v1`/`v2`
-fixtures restore into a fresh vault with contents matching `expected.json`.
+tampered tag) leaves the destination unchanged; both frozen `legacy-v1`/`v2`
+fixtures restore into a fresh vault with contents matching `expected.json`; and
+two merge-failure tests (a truncated backup, and an injected mid-merge insert
+failure) that assert the vault is unchanged **and** no `.backup_merge_*` scratch
+file is left behind.
 
 Note: `merge_vault_dir` (the CLI path) passes `None` keys and only re-encrypts
 when keys are supplied, so it is correct only for plaintext vaults; the encrypted
@@ -333,6 +337,13 @@ assert `safe_archive_path` containment, that failures do not mutate the existing
 vault, and that temp files (e.g. `.backup_merge_*` in `vault_ops.rs`) are cleaned
 up after errors.
 
+✅ Landed (PR 6): `security_backup_limits.rs` (+4: truncated ZIP, stray entries
+ignored, writer rejects duplicate names, traversal rejected at the extract seam);
+`security_archive_path.rs` (+2: truncated container refused before crypto, stray
+entries ignored with the document-count cross-check); `backup_roundtrip.rs` (+2:
+truncated backup and injected mid-merge failure both leave the vault unchanged and
+leave no `.backup_merge_*` scratch file).
+
 ---
 
 ## 6. Phase 5 — CI integration
@@ -350,6 +361,12 @@ Gates: CI must fail if a required fixture is missing/altered (the guard test),
 if a migration silently changes expected content, or if a tier-1/2 test is
 skipped. Keep tests network-free. Document the local commands in the fixture
 `README.md` and this file.
+
+✅ Implemented (PR 6): the fixture guard (`fixtures_present_and_unmodified`) runs
+in `rust-core`; a new `Ensure no regression test is silently skipped` step fails
+unless the *only* `#[ignore]`d test is the fixture generator. The Tier-3
+`nightly.yml` job remains deferred to PR 7 (it lands with the seed corpus it
+replays).
 
 ---
 
@@ -384,8 +401,10 @@ deterministic test in the Tier-1/2 suites.
 - [x] **PR 5 — Migration & interruption.** ✅ Fixed `migrate_schema` (finding B),
   made `branch_a_merge` all-or-nothing and routed `merge_vault_dir` through the
   re-encrypting path (finding E); added `migration.rs` + unit tests.
-- [ ] **PR 6 — Malformed imports & CI gates.** Extend the `security_*` suites;
-  add the nightly workflow and the "skipped test" gate.
+- [x] **PR 6 — Malformed imports & CI gates.** ✅ Extended the `security_*` suites
+  (truncated ZIP, stray/duplicate names, traversal at the extract seam, truncated
+  container), added merge-failure/scratch-cleanup tests, and the
+  "no skipped test" CI gate. The nightly workflow is deferred to PR 7.
 - [ ] **PR 7 — Fuzzing & release validation.** Seed corpus, corpus replay job,
   release-candidate checklist.
 
@@ -398,13 +417,13 @@ exact expected data. That fixture is the baseline every future dependency bump
 
 ## 9. Definition of done
 
-- [ ] Every supported legacy vault and backup format has a committed fixture.
-- [ ] Successful backup/restore tests verify exact logical data + attachment bytes.
-- [ ] Corrupt inputs / wrong credentials fail without exposing plaintext.
-- [ ] Failed migrations and restores leave a valid, recoverable state.
-- [ ] Malformed archives cannot modify unrelated files or the existing vault.
-- [ ] Tests run in CI with clear diagnostics and **no secrets in logs**.
-- [ ] Local procedure and fixture-update policy documented.
+- [x] Every supported legacy vault and backup format has a committed fixture.
+- [x] Successful backup/restore tests verify exact logical data + attachment bytes.
+- [x] Corrupt inputs / wrong credentials fail without exposing plaintext.
+- [x] Failed migrations and restores leave a valid, recoverable state.
+- [x] Malformed archives cannot modify unrelated files or the existing vault.
+- [x] Tests run in CI with clear diagnostics and **no secrets in logs**.
+- [x] Local procedure and fixture-update policy documented.
 - [ ] Full suite passes on the release candidate.
 
 ---

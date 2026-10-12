@@ -219,3 +219,72 @@ fn legacy_v1_backup_restores_into_fresh_vault() {
 fn legacy_v2_backup_restores_into_fresh_vault() {
     restore_fixture_and_compare(V2_BACKUP, V2_EXPECTED);
 }
+
+/// Assert no `.backup_merge_*` scratch database was left behind.
+fn assert_no_merge_scratch(vault_dir: &std::path::Path) {
+    let leftovers: Vec<String> = std::fs::read_dir(vault_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with(".backup_merge_"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "leftover scratch files: {leftovers:?}"
+    );
+}
+
+/// A malformed backup handed to the merge path must fail (before its scratch DB
+/// is even written), leaving the vault untouched and the directory clean.
+#[test]
+fn malformed_backup_does_not_mutate_vault() {
+    let a = tempfile::tempdir().unwrap();
+    let mk = create_empty_vault(a.path(), "a-pass");
+    add_document(a.path(), &mk, "keep", "Keep", "text/plain", b"keep me");
+    let before = snapshot_vault(a.path(), "a-pass");
+
+    // A real container, truncated so decryption/import fails.
+    let b = tempfile::tempdir().unwrap();
+    create_vault(b.path(), "b-pass");
+    let valid = export_vault_dir(b.path(), "b-pass").unwrap();
+    let truncated = &valid[..valid.len() / 2];
+
+    let (conn_a, _) = open_vault(a.path(), "a-pass");
+    assert!(
+        merge_backup_to_vault(a.path(), &conn_a, Some(&mk), truncated, "b-pass").is_err(),
+        "a truncated backup must fail the merge"
+    );
+    drop(conn_a);
+
+    let after = snapshot_vault(a.path(), "a-pass");
+    assert_snapshot_eq(&before, &after);
+    assert_no_merge_scratch(a.path());
+}
+
+/// A merge that fails *after* its scratch DB is written must roll back
+/// (all-or-nothing) and remove the scratch file.
+#[test]
+fn failed_merge_rolls_back_and_cleans_scratch_files() {
+    let a = tempfile::tempdir().unwrap();
+    let mk = create_empty_vault(a.path(), "a-pass");
+    add_document(a.path(), &mk, "keep", "Keep", "text/plain", b"keep me");
+    let before = snapshot_vault(a.path(), "a-pass");
+
+    let b = tempfile::tempdir().unwrap();
+    create_vault(b.path(), "b-pass");
+    let backup = export_vault_dir(b.path(), "b-pass").unwrap();
+
+    // Force the merge to fail once it starts inserting: without the FTS table
+    // the insert trigger errors, so the transaction must roll back.
+    let (conn_a, _) = open_vault(a.path(), "a-pass");
+    conn_a.execute_batch("DROP TABLE documents_fts").unwrap();
+    assert!(
+        merge_backup_to_vault(a.path(), &conn_a, Some(&mk), &backup, "b-pass").is_err(),
+        "merge must surface the mid-merge failure"
+    );
+    drop(conn_a);
+
+    let after = snapshot_vault(a.path(), "a-pass");
+    assert_snapshot_eq(&before, &after);
+    assert_no_merge_scratch(a.path());
+}

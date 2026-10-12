@@ -204,3 +204,70 @@ fn import_rejects_unknown_version() {
     let result = import(&data, "pw", &kdf);
     assert!(matches!(result, Err(Error::Format(_))));
 }
+
+/// A ZIP cut off mid-stream is refused cleanly — no panic, no partial content.
+#[test]
+fn extract_zip_rejects_truncated_zip() {
+    let zip = make_zip(&[
+        ("db/librecrate.db", b"database-bytes"),
+        ("files/a.bin", b"payload"),
+    ]);
+    // Cut into the middle so the central directory is never reached; an
+    // attacker-controlled prefix must not be partially trusted.
+    let truncated = &zip[..zip.len() / 2];
+    let result = extract_zip(truncated, &tight_limits());
+    assert!(
+        matches!(result, Err(Error::Compression(_))),
+        "truncated zip must be a compression error, got {result:?}"
+    );
+}
+
+/// Entries whose names are outside `keys/`, `db/librecrate.db` and `files/`
+/// are ignored: they never become vault content and never reach the filesystem.
+#[test]
+fn extract_zip_ignores_stray_entry_names() {
+    let zip = make_zip(&[
+        ("keys/ok.bin", b"k"),
+        ("db/librecrate.db", b"db"),
+        ("files/ok.txt", b"hello"),
+        ("secrets/passwd", b"root:x:0:0"),
+        ("metadata.json", b"{}"),
+    ]);
+    let contents = extract_zip(&zip, &tight_limits()).unwrap();
+    assert_eq!(contents.keys.len(), 1);
+    assert_eq!(contents.keys[0].key, "ok.bin");
+    assert_eq!(contents.files.len(), 1);
+    assert_eq!(contents.files[0].key, "ok.txt");
+    // Nothing from the stray namespaces leaked into the extracted contents.
+    assert!(contents.keys.iter().all(|kv| !kv.key.contains("secret")));
+    assert!(contents.files.iter().all(|kv| !kv.key.contains("secret")));
+}
+
+/// Duplicate entry names cannot occur in an archive we emit: the ZIP writer
+/// rejects them, so the reader never sees an ambiguous duplicate document id.
+#[test]
+fn zip_writer_rejects_duplicate_entry_names() {
+    use std::io::Write;
+    let mut buf = Vec::new();
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+    writer
+        .start_file::<&str, ()>("files/dup.txt", zip::write::FileOptions::default())
+        .unwrap();
+    writer.write_all(b"first").unwrap();
+    let second = writer.start_file::<&str, ()>("files/dup.txt", zip::write::FileOptions::default());
+    assert!(
+        second.is_err(),
+        "the writer must reject a duplicate entry name"
+    );
+}
+
+/// A traversal entry is refused at the extraction seam (zip-slip defense).
+#[test]
+fn extract_zip_rejects_traversal_entry() {
+    let zip = make_zip(&[("files/ok.txt", b"ok"), ("files/../../evil", b"x")]);
+    let result = extract_zip(&zip, &tight_limits());
+    assert!(
+        matches!(result, Err(Error::InvalidArchivePath(_))),
+        "traversal entry must be rejected, got {result:?}"
+    );
+}

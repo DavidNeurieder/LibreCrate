@@ -198,3 +198,70 @@ fn restore_refuses_hostile_names_and_stays_in_dirs() {
     // The safe key file still landed where it belongs.
     assert!(encryption_dir.join("key.bin").exists());
 }
+
+/// A container truncated below the header length is refused before any crypto
+/// is attempted, and never panics.
+#[test]
+fn import_of_truncated_container_is_refused() {
+    use vault_native::crypto::argon2::Argon2Params;
+    use vault_native::format::package;
+
+    let kdf = Argon2Params::default();
+    // Shorter than MAGIC + version + manifest-length.
+    assert!(matches!(
+        import(&[0u8; 8], "pw", &kdf),
+        Err(Error::Format(_))
+    ));
+    // Magic only — no version/manifest follows.
+    assert!(matches!(
+        import(&package::MAGIC, "pw", &kdf),
+        Err(Error::Format(_))
+    ));
+}
+
+/// Stray archive entries (anything outside `keys/`, `db/librecrate.db` and
+/// `files/`) are ignored, and the manifest document count must match the number
+/// of extracted files.
+#[test]
+fn import_ignores_stray_entries_and_checks_document_count() {
+    use vault_native::crypto::aes_gcm;
+    use vault_native::crypto::argon2::{self, Argon2Params};
+    use vault_native::format::manifest::VaultManifest;
+    use vault_native::format::package;
+
+    let password = "pw";
+    let kdf = Argon2Params::default();
+    let salt = argon2::generate_salt();
+    let zip_bytes = make_zip(&[
+        ("keys/salt", &salt),
+        ("db/librecrate.db", b"db"),
+        ("files/ok.txt", b"hello"),
+        ("secrets/passwd", b"root:x:0:0"),
+        ("metadata.json", b"{}"),
+    ]);
+
+    let container_key = argon2::derive_key(password, &salt, &kdf).unwrap();
+    let (iv, ct) = aes_gcm::encrypt_bytes(&zip_bytes, &container_key).unwrap();
+    let blob: Vec<u8> = iv.into_iter().chain(ct).collect();
+
+    let manifest = VaultManifest {
+        version: package::FORMAT_VERSION_V1,
+        kdf: "argon2id".into(),
+        salt: base64::engine::general_purpose::STANDARD.encode(&salt),
+        argon2_memory: kdf.memory_cost,
+        argon2_iterations: kdf.iterations,
+        argon2_parallelism: kdf.parallelism,
+        document_count: 1,
+    };
+    let v1 = package::write_with_version(package::FORMAT_VERSION_V1, &manifest, &blob);
+
+    let contents = import(&v1, password, &kdf).expect("stray entries must not break import");
+    assert_eq!(
+        contents.files.len(),
+        1,
+        "only files/ entries count as documents"
+    );
+    assert_eq!(contents.files[0].key, "ok.txt");
+    assert!(contents.keys.iter().all(|kv| !kv.key.contains("secret")));
+    assert!(contents.files.iter().all(|kv| !kv.key.contains("secret")));
+}

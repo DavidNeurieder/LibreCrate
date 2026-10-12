@@ -31,6 +31,20 @@ jobs:
         run: cargo clippy --manifest-path vault-native/Cargo.toml -p vault-native --all-targets -- -D warnings
       - name: Test vault-native (incl. security regression suite)
         run: cargo test --manifest-path vault-native/Cargo.toml -p vault-native
+      - name: Ensure no regression test is silently skipped
+        run: |
+          # Tier-1/2 data-integrity tests must never be #[ignore]d: a skipped
+          # test is a missing guarantee. The only ignored test allowed is the
+          # frozen-fixture generator, which runs explicitly (never in CI).
+          ignored="$(cargo test --manifest-path vault-native/Cargo.toml -p vault-native -- --ignored --list \
+            | grep ': test$' | sort)"
+          expected="generate_data_integrity_fixtures: test"
+          if [ "$ignored" != "$expected" ]; then
+            echo "Unexpected ignored tests (expected only '$expected'):"
+            echo "$ignored"
+            exit 1
+          fi
+          echo "Only the fixture generator is ignored: OK"
       - name: Test CLI (librecrate)
         run: cargo test --manifest-path vault-native/Cargo.toml -p librecrate
 
