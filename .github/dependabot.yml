@@ -1,10 +1,16 @@
+# Dependabot is intentionally limited to *security* updates only.
+#
+# `open-pull-requests-limit: 0` disables the scheduled version-update PRs for
+# each ecosystem. Dependabot security updates are not subject to this limit and
+# keep flowing through repository-level alerts (Settings -> Code security).
+# To re-enable routine version updates, raise the limit (default is 5).
 version: 2
 updates:
   - package-ecosystem: cargo
     directory: /vault-native
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - dependencies
       - security
@@ -13,7 +19,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - dependencies
       - security
@@ -22,4 +28,4 @@ updates:
     directory: /
     schedule:
       interval: monthly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
