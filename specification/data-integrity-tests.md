@@ -1,7 +1,8 @@
 # LibreCrate Data-Integrity Regression Test Plan
 
-Status: **In progress — PR 1 + PR 2 landed (`legacy-v1`/`legacy-v2` fixtures +
-`compat_legacy.rs`). PRs 3–7 pending.**
+Status: **In progress — PRs 1–4 landed (legacy fixtures + `compat_legacy.rs`,
+encryption/tamper regressions, backup/restore round trips + shared snapshot
+helper). PRs 5–7 pending.**
 Source proposal: `ideas/new_test_plan.txt`.
 Author: test-infrastructure review.
 Last updated: 2026-10-12
@@ -15,7 +16,7 @@ Guiding principle (from the proposal): **existing user data must stay readable,
 and a failed or interrupted operation must never silently corrupt or destroy
 it.** This plan adds tests and test infrastructure; it does not change encryption
 formats or production behavior — except where a test exposes a real gap (see
-§ 3, findings B and C).
+§ 3, findings B, C, and E).
 
 ---
 
@@ -153,6 +154,17 @@ will fail until this is tightened — treat that as a real defect, not a test bu
 they exercise, and the "failed restore must not replace a working vault" test
 targets branch B specifically.
 
+**E. CLI merge (`merge_vault_dir`) does not re-encrypt attachments.** It always
+calls `branch_a_merge` with `backup_key=None, local_key=None`, then copies the
+backup's file blobs verbatim into the target `files/` dir. For an **encrypted**
+vault those blobs stay encrypted with the *backup's* master key while the local
+DB references them with the backup's IV, so the merged attachments are not
+readable with the local key. The correct encrypted cross-key path is
+`merge_backup_to_vault` (used by FFI/GUI), which passes both keys and re-encrypts.
+PR 4's branch-A test therefore exercises `merge_backup_to_vault`; PR 5 should
+either route `merge_vault_dir`/`cli restore` through the re-encrypting path (when
+the local master key is available) or explicitly document/guard the limitation.
+
 ---
 
 ## 4. Phase 2 — Versioned fixtures
@@ -206,15 +218,22 @@ generator exists only to document provenance.
 ## 5. Phases 3–4 — Tests, mapped to concrete files
 
 Shared helper: `vault-native/core/tests/common/mod.rs` (a Rust integration-test
-support module — not compiled as its own binary). Contains:
+support module — not compiled as its own binary; `#![allow(dead_code)]` because
+suites use different subsets). Contains:
 
-- `build_vault(root, password) -> master_key` and phone/desktop layout builders.
-- `snapshot(conn, files_dir, key) -> VaultSnapshot` where `VaultSnapshot` holds
-  sorted record ids + counts, canonicalized metadata/relationships, `user_version`,
-  and SHA-256 of each decrypted document/attachment byte string.
+- `create_vault(root, password) -> master_key` / `create_empty_vault` and
+  `add_document(...)`, plus `fixture_documents()` (Unicode / binary / empty /
+  large payload set).
+- `open_vault(root, password) -> (Connection, master_key)` — unlocks exactly like
+  the CLI/GUI (`encryption/{salt,wrapped_master_key,params.toml}` + SQLCipher).
+- `snapshot_vault(root, password) -> VaultSnapshot` where `VaultSnapshot` holds
+  `schema_version` (`PRAGMA user_version`) plus `DocSnapshot`s sorted by id:
+  id / title / mime_type / file_name / file_size and the **SHA-256 of each
+  decrypted attachment** (via `export_document_file`).
 - `assert_snapshot_eq(before, after)` using **logical** comparison (never
   byte-for-byte SQLite files).
-- Secret hygiene: never print passwords/keys/plaintext in failure output.
+- Secret hygiene: snapshots hash decrypted bytes; they never print
+  passwords/keys/plaintext in failure output.
 
 ### A. Legacy compatibility — `core/tests/compat_legacy.rs` (new)
 
@@ -246,6 +265,19 @@ Export → restore into a fresh dir (branch B) and merge into an existing vault
 (branch A); compare via `assert_snapshot_eq`. Include the legacy backup fixture.
 Wrong password and corrupted archives must fail **without replacing a working
 destination** (snapshot the destination before, assert equal after).
+
+✅ Landed in `backup_roundtrip.rs` (5 tests): full branch-B round trip over the
+Unicode/binary/empty/large set; branch-A merge via `merge_backup_to_vault` from a
+**differently-keyed** vault (asserts attachments are re-encrypted to the local
+key and existing docs untouched); failed restore (wrong password / truncated /
+tampered tag) leaves the destination unchanged; and both frozen `legacy-v1`/`v2`
+fixtures restore into a fresh vault with contents matching `expected.json`.
+
+Note: `merge_vault_dir` (the CLI path) passes `None` keys and only re-encrypts
+when keys are supplied, so it is correct only for plaintext vaults; the encrypted
+cross-key path is `merge_backup_to_vault` (FFI/GUI), which is what this suite
+exercises. The plaintext-only constraint of `merge_vault_dir` is recorded as a
+finding for PR 5.
 
 ### D. Migration & interruption — `core/tests/migration.rs` (new)
 
@@ -317,8 +349,10 @@ deterministic test in the Tier-1/2 suites.
   `security_corruption.rs` to 17 tests (IV/tag/body tamper, sub-IV blob, invalid
   salt, bad KDF, version mismatch, zeroed KDF params, unknown version, corrupt /
   partial DB).
-- [ ] **PR 4 — Backup/restore round trips.** Add `tests/common/mod.rs` snapshot
-  helper + `backup_roundtrip.rs` + legacy backup fixture.
+- [x] **PR 4 — Backup/restore round trips.** ✅ Added `tests/common/mod.rs`
+  (logical snapshot + unlock helpers) and `backup_roundtrip.rs` (round trip,
+  cross-key branch-A merge, failed-restore-keeps-destination, legacy v1/v2
+  fixture restores).
 - [ ] **PR 5 — Migration & interruption.** Resolve finding B, tighten finding C,
   add `migration.rs` with deterministic fault injection.
 - [ ] **PR 6 — Malformed imports & CI gates.** Extend the `security_*` suites;
