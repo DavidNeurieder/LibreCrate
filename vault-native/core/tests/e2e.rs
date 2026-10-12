@@ -222,9 +222,15 @@ fn test_compat4_pragma_page_size() {
     let conn = open_encrypted(path, &mk).unwrap();
     create_all_tables(&conn).unwrap();
 
-    // Verify page_size pragma is 4096 as set
+    // Verify page_size pragma is 4096 as set. SQLCipher 4.8+/SQLite 3.51
+    // reports `PRAGMA page_size` as text (aliased cipher_page_size), so read
+    // it as a string and parse.
     let page_size: i32 = conn
-        .query_row("PRAGMA page_size", [], |row| row.get(0))
+        .query_row("PRAGMA page_size", [], |row| {
+            row.get::<_, String>(0).map(|s| s.trim().to_string())
+        })
+        .unwrap()
+        .parse()
         .unwrap();
     assert_eq!(
         page_size, 4096,

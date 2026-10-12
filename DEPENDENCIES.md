@@ -13,12 +13,12 @@ versions come from `vault-native/Cargo.lock` and the Gradle version catalog
 | `aes` | 0.8.4 | AES block primitive for AES Key Wrap (RFC 3394) |
 | `aes-gcm` | 0.10.3 | AES-256-GCM envelope encryption (v1/v2 backup format, file blobs) |
 | `zip` | 2.4.2 | Backup payload container (deflate) |
-| `rusqlite` | 0.31.0 | SQLCipher-encrypted SQLite database (see bundled natives below) |
-| `serde` / `serde_json` | 1 / 1.0.150 | Manifest (JSON) serialization / parsing |
+| `rusqlite` | 0.40.2 | SQLCipher-encrypted SQLite database (see bundled natives below) |
+| `serde` / `serde_json` | 1 / 1.0.154 | Manifest (JSON) serialization / parsing |
 | `base64` | 0.22.1 | Manifest salt/base64 encoding |
 | `hex` | 0.4.3 | Hashing / diagnostics |
 | `sha2` | 0.10.9 | Content hashing for deduplication |
-| `rand` | 0.8.7 | Salt / IV generation (RNG sources per use site) |
+| `rand` | 0.8.8 | Salt / IV generation (RNG sources per use site) |
 | `zeroize` | 1.9.1 | Key material scrubbing (`MasterKey`, `DerivedKey`) |
 | `uniffi` | 0.28.3 | Kotlin/Swift bindings for the native core |
 | `image` | 0.25.10 | Thumbnail decode/resize (JPEG/PNG/GIF/WebP/BMP) |
@@ -31,7 +31,7 @@ versions come from `vault-native/Cargo.lock` and the Gradle version catalog
 
 | Component | Version | Notes |
 | --------- | ------- | ----- |
-| **SQLCipher** | **4.5.3** (SQLite 3.39.4 amalgamation) | Bundled via `libsqlite3-sys` 0.28.0 with the `bundled-sqlcipher-vendored-openssl` feature; OpenSSL is vendored into the build. |
+| **SQLCipher** | **4.14.0** (SQLite 3.51.3 amalgamation) | Bundled via `libsqlite3-sys` 0.38.2 with the `bundled-sqlcipher-vendored-openssl` feature; OpenSSL is vendored into the build. |
 | OpenSSL | vendored | Cryptographic backend for SQLCipher (from the libsqlite3-sys build). |
 | MuPDF | 0.8.0 | Document rendering (EPUB/CBZ/PDF); sources vendored in `vault-native/vendor`. |
 
@@ -56,7 +56,6 @@ paths today):
 | RUSTSEC-2024-0436 | `paste` 1.0.15 | unmaintained | Transitive macro dep |
 | RUSTSEC-2026-0206 | `rustybuzz` 0.20.1 | unmaintained | Transitive text shaping |
 | RUSTSEC-2026-0192 | `ttf-parser` 0.25.1 | unmaintained | Font parsing (shaping) |
-| RUSTSEC-2026-0221 | `event-listener` 5.4.1 | unsound | Transitive (async runtime paths) |
 | RUSTSEC-2026-0253 | `lru` 0.16.4 | unsound | Transitive cache; panic-safety issue |
 
 These are addressed as upstream replacements land; Dependabot keeps the pin

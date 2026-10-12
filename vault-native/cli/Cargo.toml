@@ -18,7 +18,7 @@ mime_guess = "2"
 tempfile = "3"
 toml = "0.8"
 open = "5"
-rusqlite = { version = "0.31", default-features = false, features = ["bundled-sqlcipher"] }
+rusqlite = { version = "0.40", default-features = false, features = ["bundled-sqlcipher"] }
 rustyline = "15"
 shlex = "1"
 rpassword = "7"
