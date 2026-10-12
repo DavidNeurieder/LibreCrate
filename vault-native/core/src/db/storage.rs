@@ -180,6 +180,7 @@ fn generate_thumbnail_cbz(data: &[u8]) -> Option<Vec<u8>> {
     let mut images: Vec<String> = archive
         .file_names()
         .take(MAX_ARCHIVE_ENTRY_SCAN)
+        .filter_map(|name| name.ok())
         .filter(|name| {
             let lower = name.to_lowercase();
             !lower.starts_with("__MACOSX") && image_exts.iter().any(|ext| lower.ends_with(ext))

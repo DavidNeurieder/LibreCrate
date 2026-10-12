@@ -1,13 +1,13 @@
-use aes::cipher::generic_array::GenericArray;
-use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
+use aes::cipher::typenum::U16;
+use aes::cipher::{Array, BlockCipherDecrypt, BlockCipherEncrypt, KeyInit};
 use aes::{Aes128, Aes192, Aes256};
 
 const DEFAULT_IV: [u8; 8] = [0xA6; 8];
 
 pub fn generate_master_key() -> Vec<u8> {
-    use rand::RngCore;
+    use rand::Rng;
     let mut key = vec![0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut key);
+    rand::rng().fill_bytes(&mut key);
     key
 }
 
@@ -27,7 +27,7 @@ enum AesCipher {
 }
 
 impl AesCipher {
-    fn encrypt_block(&self, block: &mut GenericArray<u8, aes::cipher::typenum::U16>) {
+    fn encrypt_block(&self, block: &mut Array<u8, U16>) {
         match self {
             Self::Aes128(c) => c.encrypt_block(block),
             Self::Aes192(c) => c.encrypt_block(block),
@@ -35,7 +35,7 @@ impl AesCipher {
         }
     }
 
-    fn decrypt_block(&self, block: &mut GenericArray<u8, aes::cipher::typenum::U16>) {
+    fn decrypt_block(&self, block: &mut Array<u8, U16>) {
         match self {
             Self::Aes128(c) => c.decrypt_block(block),
             Self::Aes192(c) => c.decrypt_block(block),
@@ -58,14 +58,14 @@ pub fn wrap(kek: &[u8], plaintext: &[u8]) -> Option<Vec<u8>> {
     for j in 0..6 {
         for i in 0..n {
             let offset = (i + 1) * 8;
-            let mut block = GenericArray::default();
-            block.as_mut_slice()[..8].copy_from_slice(&buf[..8]);
-            block.as_mut_slice()[8..].copy_from_slice(&buf[offset..offset + 8]);
+            let mut block = Array::<u8, U16>::default();
+            block[..8].copy_from_slice(&buf[..8]);
+            block[8..].copy_from_slice(&buf[offset..offset + 8]);
             cipher.encrypt_block(&mut block);
 
             let t = j * n + i + 1;
-            buf[..8].copy_from_slice(&block.as_slice()[..8]);
-            buf[offset..offset + 8].copy_from_slice(&block.as_slice()[8..]);
+            buf[..8].copy_from_slice(&block[..8]);
+            buf[offset..offset + 8].copy_from_slice(&block[8..]);
 
             for (k, byte) in buf.iter_mut().take(8).enumerate() {
                 *byte ^= ((t >> (56 - k * 8)) & 0xFF) as u8;
@@ -93,13 +93,13 @@ pub fn unwrap(wrapped: &[u8], kek: &[u8]) -> Option<Vec<u8>> {
                 *byte ^= ((t >> (56 - k * 8)) & 0xFF) as u8;
             }
 
-            let mut block = GenericArray::default();
-            block.as_mut_slice()[..8].copy_from_slice(&buf[..8]);
-            block.as_mut_slice()[8..].copy_from_slice(&buf[offset..offset + 8]);
+            let mut block = Array::<u8, U16>::default();
+            block[..8].copy_from_slice(&buf[..8]);
+            block[8..].copy_from_slice(&buf[offset..offset + 8]);
             cipher.decrypt_block(&mut block);
 
-            buf[..8].copy_from_slice(&block.as_slice()[..8]);
-            buf[offset..offset + 8].copy_from_slice(&block.as_slice()[8..]);
+            buf[..8].copy_from_slice(&block[..8]);
+            buf[offset..offset + 8].copy_from_slice(&block[8..]);
         }
     }
 

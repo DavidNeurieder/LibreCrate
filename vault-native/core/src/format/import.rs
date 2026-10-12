@@ -162,7 +162,10 @@ pub fn extract_zip(data: &[u8], limits: &BackupLimits) -> Result<ImportedContent
         let mut entry = archive
             .by_index(i)
             .map_err(|e| Error::Compression(e.to_string()))?;
-        let name = entry.name().to_string();
+        let name = entry
+            .name()
+            .map_err(|e| Error::Compression(e.to_string()))?
+            .to_string();
 
         // PR 1/backup hardening: never trust ZIP metadata for sizes. Wrap the
         // reader in a bounded `Read` so we count actual bytes consumed and cap

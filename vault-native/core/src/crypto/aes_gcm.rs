@@ -1,6 +1,6 @@
-use aes_gcm::aead::{Aead, KeyInit, OsRng};
+use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
-use rand::RngCore;
+use rand::Rng;
 
 pub const IV_LENGTH: usize = 12;
 pub const GCM_TAG_LENGTH: usize = 16;
@@ -8,7 +8,7 @@ pub const KEY_LENGTH: usize = 32;
 
 pub fn generate_key() -> Vec<u8> {
     let mut key = vec![0u8; KEY_LENGTH];
-    OsRng.fill_bytes(&mut key);
+    rand::rng().fill_bytes(&mut key);
     key
 }
 
@@ -27,8 +27,8 @@ pub fn encrypt_bytes_with_aad(data: &[u8], key: &[u8], aad: &[u8]) -> Option<(Ve
     use aes_gcm::aead::Payload;
     let cipher = Aes256Gcm::new_from_slice(key).ok()?;
     let mut iv = vec![0u8; IV_LENGTH];
-    OsRng.fill_bytes(&mut iv);
-    let nonce = Nonce::from_slice(&iv);
+    rand::rng().fill_bytes(&mut iv);
+    let nonce = <&Nonce<_>>::try_from(&iv[..]).ok()?;
     let ciphertext = cipher.encrypt(nonce, Payload { msg: data, aad }).ok()?;
     Some((iv, ciphertext))
 }
@@ -41,7 +41,7 @@ pub fn decrypt_bytes_with_aad(
 ) -> Option<Vec<u8>> {
     use aes_gcm::aead::Payload;
     let cipher = Aes256Gcm::new_from_slice(key).ok()?;
-    let nonce = Nonce::from_slice(iv);
+    let nonce = <&Nonce<_>>::try_from(iv).ok()?;
     cipher
         .decrypt(
             nonce,

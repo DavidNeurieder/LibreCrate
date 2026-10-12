@@ -1,5 +1,5 @@
 use argon2::{Algorithm, Argon2, Params, Version};
-use rand::rngs::OsRng;
+use rand::Rng;
 
 pub const DEFAULT_MEMORY_COST: u32 = 19456;
 pub const DEFAULT_ITERATIONS: u32 = 2;
@@ -100,9 +100,8 @@ impl Argon2Params {
 }
 
 pub fn generate_salt() -> Vec<u8> {
-    use rand::RngCore;
     let mut salt = vec![0u8; 16];
-    OsRng.fill_bytes(&mut salt);
+    rand::rng().fill_bytes(&mut salt);
     salt
 }
 

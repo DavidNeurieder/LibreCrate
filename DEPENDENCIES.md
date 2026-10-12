@@ -9,23 +9,32 @@ versions come from `vault-native/Cargo.lock` and the Gradle version catalog
 
 | Crate | Version | Purpose |
 | ----- | ------- | ------- |
-| `argon2` | 0.5.3 | Argon2id key derivation (password → vault/backup key) |
-| `aes` | 0.8.4 | AES block primitive for AES Key Wrap (RFC 3394) |
-| `aes-gcm` | 0.10.3 | AES-256-GCM envelope encryption (v1/v2 backup format, file blobs) |
-| `zip` | 2.4.2 | Backup payload container (deflate) |
+| `argon2` | 0.6.0 | Argon2id key derivation (password → vault/backup key) |
+| `aes` | 0.9.3 | AES block primitive for AES Key Wrap (RFC 3394) |
+| `aes-gcm` | 0.11.1 | AES-256-GCM envelope encryption (v1/v2 backup format, file blobs) |
+| `zip` | 9.0.2 | Backup payload container (deflate) |
 | `rusqlite` | 0.40.2 | SQLCipher-encrypted SQLite database (see bundled natives below) |
 | `serde` / `serde_json` | 1 / 1.0.154 | Manifest (JSON) serialization / parsing |
-| `base64` | 0.22.1 | Manifest salt/base64 encoding |
+| `base64` | 0.23.1 | Manifest salt/base64 encoding |
 | `hex` | 0.4.3 | Hashing / diagnostics |
-| `sha2` | 0.10.9 | Content hashing for deduplication |
-| `rand` | 0.8.8 | Salt / IV generation (RNG sources per use site) |
+| `sha2` | 0.11.0 | Content hashing for deduplication |
+| `rand` | 0.10.3 | Salt / IV generation (RNG sources per use site) |
 | `zeroize` | 1.9.1 | Key material scrubbing (`MasterKey`, `DerivedKey`) |
 | `uniffi` | 0.28.3 | Kotlin/Swift bindings for the native core |
 | `image` | 0.25.10 | Thumbnail decode/resize (JPEG/PNG/GIF/WebP/BMP) |
 | `mupdf` | 0.8.0 | PDF/EPUB/CBZ rendering for thumbnails (vendored) |
-| `thiserror` | 1.0.69 | Error types |
+| `thiserror` | 2.0.21 | Error types |
 | `tempfile` | 3.27.0 | Temp directories (PDF render staging) |
-| `toml` | 0.8 | `params.toml` (instance KDF parameters) |
+| `toml` | 1.1.8 | `params.toml` (instance KDF parameters) |
+
+The RustCrypto crates (`argon2`, `aes`, `aes-gcm`, `sha2`) were bumped as a
+coordinated group onto the `hybrid-array` / `cipher` 0.5 generation, and `rand`
+moved to 0.10 in the same pass. Correctness is pinned by in-tree Known-Answer
+Tests (RFC 3394 §4 AES-KW vectors, Argon2 vectors) plus the security suites.
+
+`uniffi` (0.28) and the Android version catalog are intentionally held back:
+both need separate migrations (generated Kotlin bindings; Kotlin 2.x). They are
+tracked here until those land, rather than being bumped piecemeal.
 
 ## Bundled native libraries
 
