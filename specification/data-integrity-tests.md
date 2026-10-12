@@ -233,6 +233,12 @@ required DB fields. Pass = controlled `Error` (`AuthenticationFailed` /
 `InvalidData` / `Format` / `InvalidKdfParameters`), no plaintext returned, and the
 **source fixture bytes are unchanged after the attempt**.
 
+✅ Landed in `security_corruption.rs` (17 tests): IV / auth-tag / ciphertext-body
+tamper, sub-IV blob, non-base64 salt, unsupported KDF, manifest/container version
+mismatch, zeroed KDF params, unknown container version, and corrupt/partial
+SQLCipher DB (failed open must not rewrite the file). Destination-level
+"failed restore leaves the existing vault unchanged" is asserted in PR 4.
+
 ### C. Backup & restore — `core/tests/backup_roundtrip.rs` (new)
 
 Synthetic vault with Unicode text, binary attachments, empty and large files.
@@ -307,7 +313,10 @@ deterministic test in the Tier-1/2 suites.
   no AAD) and `legacy-v2/` (v2, manifest-as-AAD) bytes with `expected.json`;
   added `core/tests/compat_legacy.rs` (import + exact read-back) and the
   `fixtures_present_and_unmodified` guard test.
-- [ ] **PR 3 — Encryption/tamper regressions.** Extend `security_corruption.rs`.
+- [x] **PR 3 — Encryption/tamper regressions.** ✅ Extended
+  `security_corruption.rs` to 17 tests (IV/tag/body tamper, sub-IV blob, invalid
+  salt, bad KDF, version mismatch, zeroed KDF params, unknown version, corrupt /
+  partial DB).
 - [ ] **PR 4 — Backup/restore round trips.** Add `tests/common/mod.rs` snapshot
   helper + `backup_roundtrip.rs` + legacy backup fixture.
 - [ ] **PR 5 — Migration & interruption.** Resolve finding B, tighten finding C,
