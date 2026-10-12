@@ -1,8 +1,8 @@
 # LibreCrate Data-Integrity Regression Test Plan
 
-Status: **In progress — PRs 1–6 landed (legacy fixtures, encryption/tamper,
+Status: **Complete — PRs 1–7 landed (legacy fixtures, encryption/tamper,
 backup/restore round trips, migration + all-or-nothing merge, malformed-import
-regressions + CI gate). PR 7 (fuzzing & release validation) pending.**
+regressions + CI gate, fuzz seed corpus + nightly job + release checklist).**
 Source proposal: `ideas/new_test_plan.txt`.
 Author: test-infrastructure review.
 Last updated: 2026-10-12
@@ -364,9 +364,13 @@ skipped. Keep tests network-free. Document the local commands in the fixture
 
 ✅ Implemented (PR 6): the fixture guard (`fixtures_present_and_unmodified`) runs
 in `rust-core`; a new `Ensure no regression test is silently skipped` step fails
-unless the *only* `#[ignore]`d test is the fixture generator. The Tier-3
-`nightly.yml` job remains deferred to PR 7 (it lands with the seed corpus it
-replays).
+unless the *only* `#[ignore]`d test is the fixture generator.
+
+✅ Implemented (PR 7): the Tier-3 job is `.github/workflows/nightly.yml`
+(daily `schedule:` + `workflow_dispatch`), which runs each libFuzzer target for a
+bounded time seeded from the committed `fuzz/seeds/` corpus. Because scheduled
+workflows run from the default branch, the job is inert until this lands on
+`main`.
 
 ---
 
@@ -378,6 +382,24 @@ corpus (currently `/corpus` is gitignored — commit a curated `seeds/` dir),
 assertions for unbounded allocation / escaping panics / path traversal, and a
 nightly job that replays the corpus. Every discovered crash becomes a permanent
 deterministic test in the Tier-1/2 suites.
+
+✅ Landed (PR 7):
+
+- **Committed seed corpus** under `fuzz/seeds/<target>/` (31 curated inputs:
+  the frozen v1/v2 containers, valid/malformed manifest JSON, valid/zip-slip/
+  truncated ZIPs, sanitizer vectors, tiny images and a minimal PDF). Regenerated
+  by `fuzz/scripts/make_seeds.sh`; `corpus/` and `artifacts/` stay gitignored.
+- **Stable corpus replay** — `core/tests/fuzz_seed_corpus.rs` (7 tests) feeds the
+  same seeds through the same entry points on the pinned toolchain, so the corpus
+  runs in normal `rust-core` CI even though `fuzz/` itself needs nightly.
+- **Stronger oracles** — `fuzz_archive_path` now asserts an accepted name only
+  decomposes into `Normal` components; `fuzz_extract_zip` asserts every extracted
+  key is a safe relative archive path.
+- **Nightly job** — `.github/workflows/nightly.yml` runs every target for a
+  bounded time seeded from `seeds/` and uploads crash reproducers; the promotion
+  path (artifact → `seeds/` → stable regression) is documented in `fuzz/README.md`.
+- **Release-candidate checklist** — the data-integrity gates are folded into the
+  pre-release checklist in `RELEASING.md`.
 
 ---
 
@@ -405,8 +427,9 @@ deterministic test in the Tier-1/2 suites.
   (truncated ZIP, stray/duplicate names, traversal at the extract seam, truncated
   container), added merge-failure/scratch-cleanup tests, and the
   "no skipped test" CI gate. The nightly workflow is deferred to PR 7.
-- [ ] **PR 7 — Fuzzing & release validation.** Seed corpus, corpus replay job,
-  release-candidate checklist.
+- [x] **PR 7 — Fuzzing & release validation.** ✅ Committed seed corpus
+  (`fuzz/seeds/`), a stable corpus-replay suite (`fuzz_seed_corpus.rs`), stronger
+  fuzz oracles, the Tier-3 `nightly.yml` job, and the release-candidate checklist.
 
 Recommended first step (matches the proposal): land **PR 1 + PR 2 together** as
 one small change — document the formats and add one known-good v1 fixture with
@@ -424,7 +447,8 @@ exact expected data. That fixture is the baseline every future dependency bump
 - [x] Malformed archives cannot modify unrelated files or the existing vault.
 - [x] Tests run in CI with clear diagnostics and **no secrets in logs**.
 - [x] Local procedure and fixture-update policy documented.
-- [ ] Full suite passes on the release candidate.
+- [ ] Full suite passes on the release candidate — run the pre-release checklist
+  in `RELEASING.md` (data-integrity gates) before tagging.
 
 ---
 

@@ -13,6 +13,24 @@ This document covers how to cut a new release of LibreCrate across all targets.
 3. `CHANGELOG.md` is updated with the new version
 4. `F-DROID.md` recipe is updated with the new version/commit
 5. `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt` exists
+6. Data-integrity gates pass (see `specification/data-integrity-tests.md`):
+   - `cd vault-native && cargo test -p vault-native && cargo test -p librecrate`
+     is green on the pinned toolchain — this covers the legacy-fixture guard, the
+     encryption/tamper regressions, the backup/restore round trips, the migration
+     tests, the malformed-import suite and the fuzz-seed corpus replay.
+   - `cargo test -p vault-native -- --ignored --list` lists **only**
+     `generate_data_integrity_fixtures`. CI enforces this; a skipped regression is
+     a missing guarantee.
+   - `git status --porcelain vault-native/core/tests/fixtures` is empty. Frozen
+     fixtures are never regenerated to make a failing test pass.
+   - If the container format, KDF defaults or SQLite schema changed this cycle,
+     new frozen fixtures for the **previous** format were minted *before* the
+     writer changed (procedure in
+     `vault-native/core/tests/fixtures/data-integrity/README.md`).
+   - Nightly fuzzing (`.github/workflows/nightly.yml`) has been green for ≥7 days,
+     or every crash reproducer has been promoted into `fuzz/seeds/<target>/` and
+     fixed.
+   - `./gradlew connectedDebugAndroidTest` passes on the AVD (record device/API).
 
 ## Step 1: Tag the release
 
