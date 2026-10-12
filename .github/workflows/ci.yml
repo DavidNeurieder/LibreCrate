@@ -45,6 +45,8 @@ jobs:
             exit 1
           fi
           echo "Only the fixture generator is ignored: OK"
+      - name: Test fuzz-duration validator (nightly workflow input)
+        run: bash fuzz/scripts/test_validate_seconds.sh
       - name: Test CLI (librecrate)
         run: cargo test --manifest-path vault-native/Cargo.toml -p librecrate
 

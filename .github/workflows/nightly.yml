@@ -9,6 +9,11 @@ name: Nightly fuzz
 # a permanent regression by copying it into `fuzz/seeds/<target>/` (it will then
 # be replayed on stable by core/tests/fuzz_seed_corpus.rs) and, where it
 # corresponds to a real invariant, adding a focused test in `security_*.rs`.
+#
+# The manual `seconds` input is untrusted: it is injected into a step *env* var
+# (never into shell source) and validated by fuzz/scripts/validate_seconds.sh
+# before it is used, so it cannot inject shell commands or request an excessive
+# run. Scheduled runs use the same default (180s).
 
 on:
   schedule:
@@ -16,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       seconds:
-        description: Per-target fuzz time in seconds
+        description: Per-target fuzz time in seconds (1-600)
         required: false
         default: "180"
 
@@ -57,15 +62,43 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: fuzz
-      - name: Seed the run corpus (seeds are committed, corpus/ is gitignored)
+      - name: Validate fuzz duration
+        id: duration
+        env:
+          # `github.event.inputs` is empty for scheduled runs, so this resolves
+          # to the provided value (or the input default) for manual runs and to
+          # 180 for the nightly schedule. It is interpolated into an env var,
+          # not shell source; validate_seconds.sh rejects anything that is not a
+          # 1-600 integer and echoes the canonical value.
+          FUZZ_SECONDS: ${{ github.event.inputs.seconds || '180' }}
         run: |
-          mkdir -p "fuzz/corpus/${{ matrix.target }}"
-          cp -n "fuzz/seeds/${{ matrix.target }}/." "fuzz/corpus/${{ matrix.target }}/" || true
+          set -euo pipefail
+          # Explicit check (not just `set -e`): if validation fails the job must
+          # stop here, before any fuzzing starts.
+          if ! seconds="$(bash fuzz/scripts/validate_seconds.sh)"; then
+            exit 1
+          fi
+          echo "seconds=${seconds}" >> "$GITHUB_OUTPUT"
+          echo "Fuzzing each target for ${seconds}s"
+      - name: Seed the run corpus (seeds are committed, corpus/ is gitignored)
+        env:
+          FUZZ_TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          mkdir -p "fuzz/corpus/${FUZZ_TARGET}"
+          cp -n "fuzz/seeds/${FUZZ_TARGET}/." "fuzz/corpus/${FUZZ_TARGET}/" || true
       - name: Fuzz ${{ matrix.target }}
         working-directory: fuzz
+        env:
+          FUZZ_TARGET: ${{ matrix.target }}
+          # Only the validated, integer-only value from the step above is used.
+          FUZZ_SECONDS: ${{ steps.duration.outputs.seconds }}
         run: |
-          cargo +nightly fuzz run ${{ matrix.target }} "corpus/${{ matrix.target }}" \
-            -max_total_time=${{ github.event.inputs.seconds || 180 }}
+          set -euo pipefail
+          # No pipeline: a fuzz failure/crash must fail the step so the artifact
+          # upload below still runs.
+          cargo +nightly fuzz run "$FUZZ_TARGET" "corpus/$FUZZ_TARGET" \
+            -max_total_time="$FUZZ_SECONDS"
       - name: Upload crash reproducer
         if: failure()
         uses: actions/upload-artifact@v4

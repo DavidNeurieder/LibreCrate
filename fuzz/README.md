@@ -54,10 +54,18 @@ stay gitignored; the nightly workflow copies `seeds/` into a fresh `corpus/`.
 
 ## Nightly CI
 
-`.github/workflows/nightly.yml` runs every target for a bounded time
-(`workflow_dispatch` input `seconds`, default 180) seeded from `seeds/`, and
-uploads any crash reproducer. Scheduled workflows only run from the default
-branch, so the job is inert until this lands on `main`.
+`.github/workflows/nightly.yml` runs every target for a bounded time seeded from
+`seeds/` and uploads any crash reproducer. The per-target duration is the
+`workflow_dispatch` input `seconds` (default **180**): it is passed to the shell
+only through an environment variable and validated by
+`fuzz/scripts/validate_seconds.sh` to an integer in **1–600** before it reaches
+`cargo fuzz`, so it cannot inject shell commands or request an excessive run.
+Scheduled runs use the same 180 s default. The validator's accept/reject rules
+are covered by `fuzz/scripts/test_validate_seconds.sh`, which runs in the
+`rust-core` CI job.
+
+Scheduled workflows only run from the default branch, so the job is inert until
+this lands on `main`.
 
 ## Notes
 

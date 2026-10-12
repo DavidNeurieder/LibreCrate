@@ -398,6 +398,10 @@ deterministic test in the Tier-1/2 suites.
 - **Nightly job** — `.github/workflows/nightly.yml` runs every target for a
   bounded time seeded from `seeds/` and uploads crash reproducers; the promotion
   path (artifact → `seeds/` → stable regression) is documented in `fuzz/README.md`.
+  The manual `seconds` input is treated as untrusted: it reaches the shell only
+  via an env var and is validated (`fuzz/scripts/validate_seconds.sh`, 1–600) to
+  a bare integer before `cargo fuzz` sees it. Validator rules are tested in the
+  `rust-core` CI job.
 - **Release-candidate checklist** — the data-integrity gates are folded into the
   pre-release checklist in `RELEASING.md`.
 
