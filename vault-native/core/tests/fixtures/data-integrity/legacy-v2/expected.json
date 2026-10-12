@@ -1,0 +1,32 @@
+{
+  "container": "backup",
+  "documents": [
+    {
+      "file_name": "legacy-doc-1.md",
+      "file_size": 16,
+      "id": "legacy-doc-1",
+      "mime_type": "text/plain",
+      "sha256": "e7fff95bdb7366ef687e27cde1d84bf0bbac1070a3f29f1220e846fb5f69058f",
+      "title": "Legacy Doc One"
+    },
+    {
+      "file_name": "legacy-doc-2",
+      "file_size": 9,
+      "id": "legacy-doc-2",
+      "mime_type": "application/octet-stream",
+      "sha256": "339efd8cc857a5bfa758df902652e27d3719408234369ea7af0bbd9556090eed",
+      "title": "Legacy Doc Two"
+    }
+  ],
+  "fixture": "legacy-v2/vault.librecrate-backup",
+  "format_version": 2,
+  "kdf": {
+    "iterations": 2,
+    "memory_cost": 19456,
+    "parallelism": 2
+  },
+  "librecrate_version": "0.5.6",
+  "manifest_document_count": 2,
+  "password": "fixture-password-v2",
+  "schema_version": 0
+}

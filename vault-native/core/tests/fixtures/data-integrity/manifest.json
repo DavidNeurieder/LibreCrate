@@ -1,0 +1,22 @@
+{
+  "fixtures": [
+    {
+      "container": "backup",
+      "expected": "legacy-v1/expected.json",
+      "format_version": 1,
+      "path": "legacy-v1/vault.librecrate-backup",
+      "purpose": "v1 container: AES-GCM payload with NO AAD (legacy envelope)",
+      "sha256": "ef34f43be35425f06cdeb83de940879bd6c82831f2171e92fe1adcabb223a1f2"
+    },
+    {
+      "container": "backup",
+      "expected": "legacy-v2/expected.json",
+      "format_version": 2,
+      "path": "legacy-v2/vault.librecrate-backup",
+      "purpose": "v2 container: manifest authenticated as GCM AAD",
+      "sha256": "c9bd7955695cd7ad54b6f2082771a937354acf513ec33e280e3a9a954e43cddc"
+    }
+  ],
+  "generated_by": "vault-native 0.5.6 (tests/make_fixtures.rs)",
+  "schema": 1
+}
