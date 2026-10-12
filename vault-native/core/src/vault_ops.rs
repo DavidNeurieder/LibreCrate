@@ -254,6 +254,10 @@ pub fn merge_vault_dir(
 
     let files_dir = vault_a_dir.join("files");
 
+    // Re-encrypt the backup's file blobs from the backup master key to vault A's
+    // master key so merged attachments stay readable locally (finding E).
+    // `branch_a_merge` writes the blobs itself — re-encrypting ciphertext and
+    // copying plaintext blobs verbatim — so there is no separate copy here.
     let stats = crate::merge::branch_a_merge(
         backup_db_path
             .to_str()
@@ -261,23 +265,12 @@ pub fn merge_vault_dir(
         &backup_master_key,
         &conn,
         &contents.files,
-        None,
-        None,
+        Some(&backup_master_key),
+        Some(&mk_a),
         &files_dir,
     )?;
 
     drop(conn);
-
-    // Copy B's file blobs into A's files dir
-    for kv in &contents.files {
-        let safe = crate::format::path::safe_archive_path(&kv.key)?;
-        let target = files_dir.join(&safe);
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&target, &kv.value)?;
-    }
-
     Ok(stats)
 }
 

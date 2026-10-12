@@ -89,17 +89,65 @@ pub fn create_all_tables(conn: &Connection) -> rusqlite::Result<()> {
 
 /// Schema version history:
 ///   0 — initial
-///   1 — add content_hash column
+///   1 — add `content_hash` column
 ///
-/// Migrate the schema from an older version to the current version.
+/// The version written by [`create_all_tables`].
+pub const CURRENT_SCHEMA_VERSION: i64 = 1;
+
+/// Migrate the schema from an older version up to [`CURRENT_SCHEMA_VERSION`].
+///
+/// Runs in a single `BEGIN IMMEDIATE … COMMIT` transaction: either every step
+/// commits, or the database is left exactly as it was. Idempotent — calling it
+/// on an up-to-date database is a no-op.
 pub fn migrate_schema(conn: &Connection) -> rusqlite::Result<()> {
-    let version = get_schema_version(conn)?;
-    if version < 1 {
-        conn.execute_batch("ALTER TABLE documents ADD COLUMN content_hash TEXT")?;
-        set_schema_version(conn, 1)?;
+    let from = get_schema_version(conn)?;
+    if from >= CURRENT_SCHEMA_VERSION {
+        return Ok(());
     }
-    migrate_schema(conn)?;
+
+    conn.execute_batch("BEGIN IMMEDIATE")?;
+    match apply_migrations(conn, from) {
+        Ok(()) => conn.execute_batch("COMMIT"),
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
+
+/// Apply each step from `from` up to the current version (inside a transaction).
+fn apply_migrations(conn: &Connection, mut version: i64) -> rusqlite::Result<()> {
+    while version < CURRENT_SCHEMA_VERSION {
+        match version {
+            // v0 -> v1: add `content_hash` to pre-existing databases.
+            0 => {
+                if !column_exists(conn, "documents", "content_hash")? {
+                    conn.execute_batch("ALTER TABLE documents ADD COLUMN content_hash TEXT")?;
+                }
+            }
+            other => {
+                return Err(rusqlite::Error::InvalidParameterName(format!(
+                    "no migration path from schema version {other} to {CURRENT_SCHEMA_VERSION}"
+                )));
+            }
+        }
+        version += 1;
+        set_schema_version(conn, version)?;
+    }
     Ok(())
+}
+
+/// True if `table` has a column named `column` (keeps migrations idempotent).
+fn column_exists(conn: &Connection, table: &str, column: &str) -> rusqlite::Result<bool> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Open a SQLCipher-encrypted database.
@@ -231,5 +279,45 @@ mod tests {
             let result = open_encrypted(&path, &wrong_key);
             assert!(result.is_err());
         }
+    }
+
+    #[test]
+    fn test_migrate_schema_adds_content_hash_and_is_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        // Minimal v0 schema: `documents` without content_hash, user_version 0.
+        conn.execute_batch(
+            "CREATE TABLE documents (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL);
+             INSERT INTO documents (id, title) VALUES ('d1', 'Doc');",
+        )
+        .unwrap();
+        assert_eq!(get_schema_version(&conn).unwrap(), 0);
+        assert!(!column_exists(&conn, "documents", "content_hash").unwrap());
+
+        migrate_schema(&conn).unwrap();
+
+        assert_eq!(get_schema_version(&conn).unwrap(), CURRENT_SCHEMA_VERSION);
+        assert!(column_exists(&conn, "documents", "content_hash").unwrap());
+        let title: String = conn
+            .query_row("SELECT title FROM documents WHERE id = 'd1'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(title, "Doc", "migration must preserve existing rows");
+
+        // Idempotent: re-running is a no-op, not a recursion.
+        migrate_schema(&conn).unwrap();
+        assert_eq!(get_schema_version(&conn).unwrap(), CURRENT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_migrate_schema_noop_on_current_db() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_all_tables(&conn).unwrap();
+        set_schema_version(&conn, CURRENT_SCHEMA_VERSION).unwrap();
+
+        migrate_schema(&conn).unwrap();
+
+        assert_eq!(get_schema_version(&conn).unwrap(), CURRENT_SCHEMA_VERSION);
+        assert!(column_exists(&conn, "documents", "content_hash").unwrap());
     }
 }

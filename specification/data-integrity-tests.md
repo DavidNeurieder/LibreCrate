@@ -1,8 +1,7 @@
 # LibreCrate Data-Integrity Regression Test Plan
 
-Status: **In progress — PRs 1–4 landed (legacy fixtures + `compat_legacy.rs`,
-encryption/tamper regressions, backup/restore round trips + shared snapshot
-helper). PRs 5–7 pending.**
+Status: **In progress — PRs 1–5 landed (legacy fixtures, encryption/tamper,
+backup/restore round trips, migration + all-or-nothing merge). PRs 6–7 pending.**
 Source proposal: `ideas/new_test_plan.txt`.
 Author: test-infrastructure review.
 Last updated: 2026-10-12
@@ -138,16 +137,29 @@ pub fn migrate_schema(conn: &Connection) -> rusqlite::Result<()> {
 }
 ```
 
-It is currently **never called** (the FFI exposes `get_schema_version` /
-`set_schema_version` only), so nothing exercises it. PR 5 must first decide its
-fate (fix with a loop + base case, or delete + document that migrations are
-handled elsewhere). Either way the decision is captured by a test.
+It is **never called** by the app (the FFI exposes `get_schema_version` /
+`set_schema_version` only), so nothing exercised it.
+
+✅ **Resolved (PR 5):** rewritten as a bounded loop (`apply_migrations`) with a
+base case and an idempotent `column_exists` guard, wrapped in a single
+`BEGIN IMMEDIATE … COMMIT` with `ROLLBACK` on error. `CURRENT_SCHEMA_VERSION`
+(= 1) is now exported. Unit tests cover add-column + preserve-row + idempotency;
+`migration.rs` covers a real v0 vault and a failing migration.
+
+Note: new vaults are still created at `user_version = 0` (stamping them would
+change `getSchemaVersion()` semantics on Android and the frozen fixtures), but
+the idempotent `column_exists` guard makes migrating such vaults a harmless
+stamp to 1.
 
 **C. Branch-A merge swallows per-statement errors.** `branch_a_merge` wraps the
 work in `BEGIN TRANSACTION` + `catch_unwind`, but several `execute(...)` calls
-are `.ok()`. A mid-merge failure could therefore commit a partial merge. The
-interruption tests (PR 5) will assert the intended all-or-nothing behavior and
-will fail until this is tightened — treat that as a real defect, not a test bug.
+are `.ok()`. A mid-merge failure could therefore commit a partial merge.
+
+✅ **Resolved (PR 5):** `branch_a_merge` now runs under `BEGIN IMMEDIATE` and
+propagates every fallible statement (no swallowed `.ok()`); the closure returns
+`Result<MergeStats>` and a failure `ROLLBACK`s and returns the error. Covered by
+`merge::tests::test_branch_a_merge_rolls_back_on_error` (an injected mid-merge
+failure leaves no partial document).
 
 **D. "Restore" has two meanings.** `cli restore` merges (branch A);
 `restore_backup_to_dir` fully replaces (branch B). Tests must name which path
@@ -164,6 +176,13 @@ readable with the local key. The correct encrypted cross-key path is
 PR 4's branch-A test therefore exercises `merge_backup_to_vault`; PR 5 should
 either route `merge_vault_dir`/`cli restore` through the re-encrypting path (when
 the local master key is available) or explicitly document/guard the limitation.
+
+✅ **Resolved (PR 5):** `merge_vault_dir` now calls `branch_a_merge` with
+`Some(backup_key), Some(mk_a)` and re-encrypts; the separate verbatim copy was
+removed. `reencrypt_files` re-encrypts IV‖ciphertext blobs and copies
+non-decryptable (plaintext) blobs verbatim, so both encrypted and legacy
+plaintext vaults merge correctly, and blobs for pre-existing documents are left
+untouched.
 
 ---
 
@@ -298,6 +317,15 @@ with **deterministic hooks, no sleeps**:
 Prefer injecting failures through a test-only trait/`cfg(test)` hook or by
 supplying a read-only target dir; avoid killing processes at random instants.
 
+✅ Landed in `migration.rs` (3 tests): v0→current preserves every document +
+attachment (`ALTER TABLE … DROP COLUMN content_hash` + `user_version = 0` then
+migrate, verified with `integrity_check` / `foreign_key_check`); a fresh DB is
+stamped to the current version and re-migrating is harmless; and a migration that
+cannot complete (missing target table) returns a controlled error without bumping
+the version, leaving the DB openable. Together with the PR-4
+`failed_restore_does_not_replace_destination` test this covers "restore archive
+truncated → fails, existing data intact".
+
 ### E. Malformed imports — extend `security_archive_path.rs` / `security_backup_limits.rs`
 
 Truncated ZIP, invalid/duplicate entry names, unexpected paths, oversized inputs;
@@ -353,8 +381,9 @@ deterministic test in the Tier-1/2 suites.
   (logical snapshot + unlock helpers) and `backup_roundtrip.rs` (round trip,
   cross-key branch-A merge, failed-restore-keeps-destination, legacy v1/v2
   fixture restores).
-- [ ] **PR 5 — Migration & interruption.** Resolve finding B, tighten finding C,
-  add `migration.rs` with deterministic fault injection.
+- [x] **PR 5 — Migration & interruption.** ✅ Fixed `migrate_schema` (finding B),
+  made `branch_a_merge` all-or-nothing and routed `merge_vault_dir` through the
+  re-encrypting path (finding E); added `migration.rs` + unit tests.
 - [ ] **PR 6 — Malformed imports & CI gates.** Extend the `security_*` suites;
   add the nightly workflow and the "skipped test" gate.
 - [ ] **PR 7 — Fuzzing & release validation.** Seed corpus, corpus replay job,
@@ -387,8 +416,8 @@ exact expected data. That fixture is the baseline every future dependency bump
    tracks binary PNGs under `docs/`).
 2. **`migrate_schema` (finding B).** ✅ Resolved: **fix it** (bounded loop + base
    case) as part of PR 5.
-3. **Branch-A error handling (finding C).** Open — tighten the swallowed `.ok()`
-   calls as part of this work (small production change), or file it separately and
-   only assert current behavior for now?
-4. **CI tier split.** Open — add the `nightly.yml` Tier-3 job now, or defer until
-   the fuzz corpus exists (PR 7)?
+3. **Branch-A error handling (finding C).** ✅ Resolved — tightened the swallowed
+   `.ok()` calls and routed `merge_vault_dir` through the re-encrypting path in
+   PR 5.
+4. **CI tier split.** ✅ Resolved — defer the `nightly.yml` Tier-3 job to PR 7 so
+   it lands with the fuzz corpus it replays.
