@@ -67,7 +67,9 @@ class EncryptionManagerInstrumentedTest {
     @Test
     fun verifyPasswordRecoversMasterKey() {
         manager.initializeWithPassword("test_password")
-        val originalKey = manager.getMasterKeyForSession()
+        // Copy the session key: lock()/changePassword() zero the internal array
+        // in place, so a captured reference would be clobbered before we compare.
+        val originalKey = manager.getMasterKeyForSession()!!.copyOf()
         manager.lock()
         assertTrue(manager.verifyPassword("test_password"))
         val recoveredKey = manager.getMasterKeyForSession()
@@ -78,7 +80,9 @@ class EncryptionManagerInstrumentedTest {
     @Test
     fun changePasswordWithCorrectOldPassword() {
         manager.initializeWithPassword("old_password")
-        val originalKey = manager.getMasterKeyForSession()
+        // Copy the session key: lock()/changePassword() zero the internal array
+        // in place, so a captured reference would be clobbered before we compare.
+        val originalKey = manager.getMasterKeyForSession()!!.copyOf()
         assertTrue(manager.changePassword("old_password", "new_password"))
         manager.lock()
         assertTrue(manager.verifyPassword("new_password"))
@@ -120,7 +124,9 @@ class EncryptionManagerInstrumentedTest {
     @Test
     fun fullPasswordLifecycle() {
         manager.initializeWithPassword("password123")
-        val originalKey = manager.getMasterKeyForSession()
+        // Copy the session key: lock()/changePassword() zero the internal array
+        // in place, so a captured reference would be clobbered before we compare.
+        val originalKey = manager.getMasterKeyForSession()!!.copyOf()
         assertNotNull(originalKey)
         assertTrue(manager.verifyPassword("password123"))
         manager.lock()
