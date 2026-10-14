@@ -60,6 +60,15 @@ one exception to the held-back catalog: Android 17 (API 37) removed the hidden
 API 37 emulator. Espresso 3.7.0 uses `context.getSystemService(InputManager.class)`
 on API 23+; AGP/Kotlin/Compose are unchanged.
 
+The app and its two bundled `.so` files (`libvault_native.so`, `libjnidispatch.so`)
+are 16 KB page-size compliant (ELF `PT_LOAD` alignment `0x4000`, plus the zip
+alignment AGP applies). The unused `mockk-android` androidTest dependency was
+removed: its JVMTI agent (`libmockkjvmtiagent.so`, from `mockk-agent-android`
+1.13.9) is only 4 KB aligned, so the 16 KB emulator raised `PageSizeMismatchDialog`
+for the instrumented-test package on every test process start. MockK remains on
+`testImplementation` (JVM unit tests, no native agent). Re-adding it to
+`androidTest` needs `mockk-agent-android` ≥ 1.14.11 (16 KB aligned) and Kotlin 2.x.
+
 ## `cargo-audit` status (as of this commit)
 
 `cargo audit` reports **0 vulnerabilities** and the following **informational
