@@ -53,6 +53,13 @@ tracked here until those land, rather than being bumped piecemeal.
 | `net.zetetic:android-database-sqlcipher` | 4.5.4 | App-side SQLCipher database on Android |
 | Kotlin / AGP / Jetpack Compose | per `gradle/libs.versions.toml` | Application stack |
 
+The instrumented-test stack (`androidx.test` 1.7.0, `espresso-core` 3.7.0) is the
+one exception to the held-back catalog: Android 17 (API 37) removed the hidden
+`InputManager.getInstance()` that Espresso ≤ 3.6 resolved reflectively in
+`InputManagerEventInjectionStrategy`, which failed every Compose UI test on the
+API 37 emulator. Espresso 3.7.0 uses `context.getSystemService(InputManager.class)`
+on API 23+; AGP/Kotlin/Compose are unchanged.
+
 ## `cargo-audit` status (as of this commit)
 
 `cargo audit` reports **0 vulnerabilities** and the following **informational
