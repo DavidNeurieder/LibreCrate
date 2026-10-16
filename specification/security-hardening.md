@@ -317,6 +317,13 @@ hook); FFI-boundary temps cleared.
    `VaultRepository.close()` and null+zero `sessionMasterKey`. Wire into the
    existing `ActivityLifecycleLockCallbacks`
    (`LibreCrateApplication.kt:42-59`).
+   Because `MainActivity` is `launchMode="singleTop"`, it is **reused** rather
+   than recreated when the app returns to the foreground — so closing the vault
+   alone would leave the library visible with a closed DB ("No documents"
+   instead of a password prompt). `LibreCrateApplication` therefore exposes a
+   `sessionLocked` state (set by `lockSession()`, cleared by `openVault()`),
+   and `MainActivity` navigates back to the unlock screen when it becomes
+   observable again (`ui/navigation/SessionRouting.kt`).
 3. Document the state machine:
 
    ```

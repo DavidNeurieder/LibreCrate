@@ -16,6 +16,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,7 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.librecrate.app.data.AppPreferencesStore
 import com.librecrate.app.ui.navigation.LibreCrateNavGraph
+import com.librecrate.app.ui.navigation.PromptForPasswordOnRelock
 import com.librecrate.app.ui.navigation.Routes
+import com.librecrate.app.ui.navigation.SessionRouting
 
 
 class MainActivity : ComponentActivity() {
@@ -53,18 +56,29 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     var isReady by remember { mutableStateOf(false) }
                     var startDestination by remember { mutableStateOf(Routes.LIBRARY) }
+                    val sessionLocked by app.sessionLocked.collectAsState()
                     LaunchedEffect(Unit) {
-                        if (app.encryptionManager.isFirstLaunch()) {
-                            startDestination = Routes.PASSWORD_SETUP
-                        } else if (app.encryptionManager.getMasterKeyForSession() != null) {
-                            startDestination = Routes.LIBRARY
-                        } else if (app.encryptionManager.isPasswordSet()) {
-                            startDestination = Routes.UNLOCK
-                        } else {
-                            startDestination = Routes.LIBRARY
-                        }
+                        startDestination = SessionRouting.startDestination(
+                            isPasswordSet = app.encryptionManager.isPasswordSet(),
+                            hasSessionKey = app.encryptionManager.getMasterKeyForSession() != null,
+                        )
                         isReady = true
                     }
+                    // The vault locks when the app leaves the foreground. The
+                    // Activity is reused on return (launchMode="singleTop"), so
+                    // explicitly send the user back to the unlock screen instead
+                    // of leaving the library visible with a closed vault.
+                    PromptForPasswordOnRelock(
+                        isReady = isReady,
+                        sessionLocked = sessionLocked,
+                        isPasswordSet = { app.encryptionManager.isPasswordSet() },
+                        onPrompt = {
+                            navController.navigate(Routes.UNLOCK) {
+                                popUpTo(navController.graph.id)
+                                launchSingleTop = true
+                            }
+                        },
+                    )
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (isReady) {
                             LibreCrateNavGraph(

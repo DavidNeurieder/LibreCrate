@@ -174,10 +174,9 @@ private fun doSetPassword(
             scope.launch(Dispatchers.Default) {
                 val success = app.encryptionManager.initializeWithPassword(password)
                 if (success) {
-                    val masterKey = app.encryptionManager.getMasterKeyForSession()
-                    if (masterKey != null) {
-                        app.vaultRepository.open(masterKey)
-                    }
+                    // Opens the vault and clears the locked flag so the
+                    // library is shown without an extra unlock prompt.
+                    app.openVault()
                 }
                 withContext(Dispatchers.Main) {
                     if (success) {

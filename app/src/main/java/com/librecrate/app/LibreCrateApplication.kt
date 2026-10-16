@@ -8,6 +8,9 @@ import com.librecrate.app.data.vault.VaultRepository
 import com.librecrate.app.domain.BackupManager
 import com.librecrate.app.util.ErrorLogger
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 
 class LibreCrateApplication : Application() {
@@ -21,16 +24,37 @@ class LibreCrateApplication : Application() {
     val backupManager: BackupManager by lazy {
         BackupManager(this, encryptionManager, vaultRepository)
     }
+
+    // True once the session has been locked (the app left the foreground) until
+    // it is opened again. Observed by MainActivity to re-ask for the password:
+    // the Activity is reused on return (launchMode="singleTop"), so it would
+    // otherwise stay on the library screen with a closed vault.
+    private val _sessionLocked = MutableStateFlow(false)
+    val sessionLocked: StateFlow<Boolean> = _sessionLocked.asStateFlow()
+
     suspend fun openVault(): Boolean {
         val masterKey = encryptionManager.getMasterKeyForSession() ?: return false
-        return vaultRepository.open(masterKey)
+        val opened = vaultRepository.open(masterKey)
+        if (opened) _sessionLocked.value = false
+        return opened
+    }
+
+    /**
+     * Locks the session: zeroizes the master key, tears down the open SQLCipher
+     * connection (PR 6) and marks the session as locked so the UI asks for the
+     * password again when the app is brought back to the foreground.
+     */
+    fun lockSession() {
+        encryptionManager.lock()
+        vaultRepository.close()
+        _sessionLocked.value = true
     }
     override fun onCreate() {
         super.onCreate()
         instance = this
         encryptionManager = EncryptionManager(this)
         vaultRepository = VaultRepository(this)
-        registerActivityLifecycleCallbacks(ActivityLifecycleLockCallbacks(encryptionManager, this))
+        registerActivityLifecycleCallbacks(ActivityLifecycleLockCallbacks(this))
         ErrorLogger.installGlobalHandler(this)
     }
     companion object {
@@ -40,7 +64,6 @@ class LibreCrateApplication : Application() {
     }
 }
 private class ActivityLifecycleLockCallbacks(
-    private val encryptionManager: EncryptionManager,
     private val app: LibreCrateApplication,
 ) : Application.ActivityLifecycleCallbacks {
     private val activityCount = AtomicInteger(0)
@@ -49,11 +72,7 @@ private class ActivityLifecycleLockCallbacks(
     }
     override fun onActivityStopped(activity: Activity) {
         if (activityCount.decrementAndGet() <= 0) {
-            encryptionManager.lock()
-            // PR 6: locking must also tear down the open SQLCipher connection
-            // and free the DbHandle so the master key is zeroized and no
-            // decryptable connection survives in the background.
-            app.vaultRepository.close()
+            app.lockSession()
         }
     }
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
