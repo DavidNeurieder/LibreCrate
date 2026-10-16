@@ -130,6 +130,13 @@ class LibraryViewModel @JvmOverloads constructor(application: Application, priva
     fun setFilter(type: DocumentType?) { filterType.value = type }
     fun search(query: String) { searchQuery.value = query }
 
+    /**
+     * False while the vault is locked. Imports have to wait for it: the system
+     * picker backgrounds the app, which locks the vault, so a selection made in
+     * the picker only becomes importable after the password was entered again.
+     */
+    val isVaultOpen: Boolean get() = vault.isOpen()
+
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 

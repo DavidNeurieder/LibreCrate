@@ -84,6 +84,10 @@ fun LibraryScreen(
     pendingImportUris: List<Uri> = emptyList(),
     onPendingImportConsumed: () -> Unit = {},
     viewModel: LibraryViewModel = viewModel(),
+    // Hands the picker selection to the owner of the screen. MainActivity keeps
+    // it in activity-level state so the import survives the vault locking
+    // (the picker backgrounds the app) and happens after the unlock.
+    onImportUrisSelected: (List<Uri>) -> Unit = { viewModel.importDocuments(it) },
 ) {
     val documents by viewModel.documents.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -104,7 +108,7 @@ fun LibraryScreen(
         ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
         if (uris.isNotEmpty()) {
-            viewModel.importDocuments(uris)
+            onImportUrisSelected(uris)
         }
     }
 
@@ -116,7 +120,10 @@ fun LibraryScreen(
     }
 
     LaunchedEffect(pendingImportUris) {
-        if (pendingImportUris.isNotEmpty()) {
+        // While the vault is locked the selection stays pending (the app may
+        // have locked itself because the picker left the foreground); it is
+        // imported as soon as the library is shown with an open vault again.
+        if (pendingImportUris.isNotEmpty() && viewModel.isVaultOpen) {
             viewModel.importDocuments(pendingImportUris)
             onPendingImportConsumed()
         }

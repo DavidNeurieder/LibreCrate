@@ -31,7 +31,7 @@ import com.librecrate.app.ui.navigation.SessionRouting
 
 
 class MainActivity : ComponentActivity() {
-    private val pendingShareUris = mutableStateOf<List<Uri>>(emptyList())
+    private val pendingImportUris = mutableStateOf<List<Uri>>(emptyList())
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
         if (key == "screenshots_enabled") {
             updateScreenCaptureFlag()
@@ -85,8 +85,9 @@ class MainActivity : ComponentActivity() {
                                 navController = navController,
                                 startDestination = startDestination,
                                 onUnlocked = { /* handled in NavGraph */ },
-                                pendingImportUris = pendingShareUris.value,
-                                onPendingImportConsumed = { pendingShareUris.value = emptyList() },
+                                pendingImportUris = pendingImportUris.value,
+                                onPendingImportConsumed = { pendingImportUris.value = emptyList() },
+                                onImportUrisSelected = { pendingImportUris.value = it },
                             )
                         }
                     }
@@ -116,13 +117,13 @@ class MainActivity : ComponentActivity() {
                 if (android.os.Build.VERSION.SDK_INT >= 33) {
                     val uri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
                     if (uri != null && uri.scheme == "content") {
-                        pendingShareUris.value = listOf(uri)
+                        pendingImportUris.value = listOf(uri)
                     }
                 } else {
                     @Suppress("DEPRECATION")
                     val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
                     if (uri != null && uri.scheme == "content") {
-                        pendingShareUris.value = listOf(uri)
+                        pendingImportUris.value = listOf(uri)
                     }
                 }
             }
@@ -135,7 +136,7 @@ class MainActivity : ComponentActivity() {
                     intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
                         ?: emptyList()
                 }
-                pendingShareUris.value = uris.filter { it.scheme == "content" }
+                pendingImportUris.value = uris.filter { it.scheme == "content" }
             }
         }
     }

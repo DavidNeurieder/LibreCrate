@@ -37,6 +37,7 @@ fun LibreCrateNavGraph(
     onUnlocked: () -> Unit,
     pendingImportUris: List<Uri> = emptyList(),
     onPendingImportConsumed: () -> Unit = {},
+    onImportUrisSelected: (List<Uri>) -> Unit,
 ) {
     NavHost(
         navController = navController,
@@ -73,6 +74,7 @@ fun LibreCrateNavGraph(
                 },
                 pendingImportUris = pendingImportUris,
                 onPendingImportConsumed = onPendingImportConsumed,
+                onImportUrisSelected = onImportUrisSelected,
             )
         }
         composable(Routes.COLLECTIONS) {
