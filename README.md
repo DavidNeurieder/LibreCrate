@@ -5,7 +5,7 @@
      alt="Get it on F-Droid"
      height="60">](https://f-droid.org/en/packages/com.librecrate.app/)
 
-**Version 0.5.6** · 
+**Version 0.6.0** · 
 
 Encrypted document vault for Android, Linux, macOS, and Windows — stores, views, organizes, and searches PDFs, EPUBs, PKPass files, comic archives (CBZ), images, and personal notes. All documents are encrypted at rest with optional password protection and zero network access.
 

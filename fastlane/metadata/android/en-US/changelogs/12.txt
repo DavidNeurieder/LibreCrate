@@ -1,0 +1,6 @@
+• Security: key-derivation parameters are validated, archive extraction is path-safe, backups are resource-limited, and secrets are zeroized on lock
+• Backups now use an authenticated v2 format (v1 backups still import)
+• Fixed the library showing an empty vault instead of asking for the password after auto-lock
+• Fixed file imports lost when the document picker locked the vault
+• Updated SQLCipher to 4.14 / SQLite 3.51
+• Version bumped to 0.6.0

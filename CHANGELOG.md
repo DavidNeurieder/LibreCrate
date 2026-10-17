@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.6.0 (2026-10-17)
+
+### Security
+
+- **Key-derivation parameters are validated before use**: Argon2id parameters read from a vault or backup (`params.toml`) are range-checked before key derivation — memory ≤ 64 MiB, iterations ≤ 10, parallelism ≤ 4, none zero. Hostile or corrupted values are rejected with `InvalidKdfParameters` instead of being handed to Argon2, so a tampered `params.toml` can no longer cause unbounded memory or CPU consumption. Normal desktop (19456/2/2) and Android (16384/3/2) parameters are unaffected.
+- **Archive entries can no longer escape the extraction directory**: every path inside an imported ZIP/CBZ/EPUB/backup is validated through a single `format::path` entry point before any write. Absolute paths, `..` traversal, drive prefixes and symlink escapes are rejected with `InvalidArchivePath`; extraction is streamed and bounded per entry and in total.
+- **Backup resource limits**: a backup's declared document count is cross-checked against its contents, and oversized or inconsistent archives fail with `ResourceLimit` instead of exhausting memory.
+- **Secrets are zeroized on drop**: master keys and derived key material now live in zeroizing wrappers and are cleared when the session locks. The desktop GUI and Android drop the session key and close the database on lock, and key bytes handed across UniFFI are zeroed on the Kotlin side.
+- **AES key-wrap is pinned to the RFC 3394 known-answer vectors** and rejects a wrong KEK.
+
+### Backup format v2
+
+- **New backups are written as format v2**, in which the manifest (including the document count) is authenticated as AES-GCM additional authenticated data: the manifest can no longer be modified without the payload failing to decrypt. Version-1 backups remain fully importable.
+
+### Data-integrity regression suite
+
+- **Frozen legacy fixtures**: the v1 and v2 containers produced by 0.5.6 are committed as immutable fixtures with a SHA-256 manifest and expected contents, and are replayed on every build so an old backup can never silently stop importing.
+- **Encryption & tamper tests**: corrupted headers, truncated ciphertext, flipped bits, wrong passwords and tampered metadata all fail closed without panicking or leaking plaintext.
+- **Backup/restore round trips**: a shared logical-snapshot helper (documents, collections, tags, favorites, extracted text) verifies that export → restore and cross-password merges preserve every field.
+- **Migration & interruption**: schema migration is now safe and idempotent, and the backup merge is all-or-nothing. Fixed `migrate_schema` and made `reencrypt_files` fallible so a failed merge can no longer drop documents; a merge always re-encrypts with the local key and never clobbers existing documents.
+- **Malformed-import tests**: hand-crafted zip bombs, duplicate entry names, bad manifests and truncated central directories are rejected cleanly; the ZIP writer now refuses duplicate entry names outright.
+- **Fuzzing**: committed seed corpora for every fuzz target, a corpus-replay test in CI, and a nightly fuzzing workflow.
+- **No silently-skipped tests**: CI fails if a data-integrity regression test is skipped.
+
+### Dependencies
+
+- rusqlite 0.31 → 0.40 / libsqlite3-sys 0.28 → 0.38 (**SQLCipher 4.14.0, SQLite 3.51.3**), plus the RustCrypto group, `zip` 9 and other minor crates. Dependabot is now restricted to security updates, backed by `cargo-audit` running with `deny: true` and GitHub security alerts.
+
+### Android
+
+- **Fixed the library showing "No documents yet" instead of asking for the password after the vault auto-locked**: the vault locks when the app is backgrounded, but the main activity is reused on return, so the library kept rendering against a closed database. The app now returns to the unlock screen (clearing the screens above the navigation root) whenever the session is locked.
+- **Fixed imports being lost when the document picker locked the vault**: opening the system picker backgrounds the app and locks the vault, so the picked file was imported into a closed vault and dropped. Picker selections now wait in the pending-import queue and are imported once the vault is open again.
+- **Compose UI tests pass on Android API 37**: bumped the AndroidX test train (`androidx.test` 1.7.0, Espresso 3.7.0), which no longer uses the `InputManager.getInstance()` API removed on newer releases.
+- **Dropped the unused `mockk-android` test dependency**, removing a 16 KB page-size warning from the test APK.
+
 ## 0.5.6 (2026-09-16)
 
 ### Search

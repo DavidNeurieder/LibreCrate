@@ -39,6 +39,11 @@
     </screenshot>
   </screenshots>
   <releases>
+  <release version="0.6.0" date="2026-10-17">
+    <description>
+      <p>Security hardening: key-derivation parameters are validated before use (bounded memory, iterations and parallelism), archive entries are confined to the extraction root, backups enforce resource limits, secrets are zeroized when the vault locks, and new backups use an authenticated format v2 (v1 backups still import). Adds a data-integrity regression suite (frozen legacy fixtures plus tamper, round-trip, migration and malformed-import tests, and fuzzing). Android: fixed the library appearing empty instead of asking for the password after auto-lock, and fixed imports lost when the document picker locked the vault.</p>
+    </description>
+  </release>
   <release version="0.5.5" date="2026-08-19">
     <description>
       <p>Code quality: fixed all clippy/compiler warnings across the workspace. License changed to AGPL-3.0-only.</p>
