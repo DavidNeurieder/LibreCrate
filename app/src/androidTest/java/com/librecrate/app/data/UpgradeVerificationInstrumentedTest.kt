@@ -35,14 +35,9 @@ class UpgradeVerificationInstrumentedTest {
         assertTrue(runBlocking { app.encryptionManager.verifyPassword(PASSWORD) })
         runBlocking { app.openVault() }
         val docs = runBlocking { app.vaultRepository.documents.first() }
-        val titles = docs.map { it.title }
+        val titles = docs.map { it.title }.toSet()
         for (expected in SEEDED_TITLES) {
-            // Imported titles carry the source filename (extension included);
-            // match on the stem so the assertion holds either way.
-            assertTrue(
-                "missing seeded document: $expected (have: $titles)",
-                titles.any { it == expected || it.startsWith("$expected.") },
-            )
+            assertTrue("missing seeded document: $expected (have: $titles)", expected in titles)
         }
     }
 
@@ -58,7 +53,10 @@ class UpgradeVerificationInstrumentedTest {
     companion object {
         /** Password used when the seed snapshot was generated. */
         const val PASSWORD = "upgrade-test"
-        /** Titles imported into the seed snapshot; keep in sync with the spec. */
-        val SEEDED_TITLES = listOf("test_1page", "test.epub", "test.cbz")
+        /**
+         * Titles written into the seed snapshot by the one-shot seeder in the
+         * v0.5.6 worktree. Keep in sync with that fixture list.
+         */
+        val SEEDED_TITLES = listOf("test_1page.pdf", "test.epub", "test.cbz")
     }
 }
