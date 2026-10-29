@@ -66,18 +66,11 @@ class LibreCrateApplication : Application() {
 private class ActivityLifecycleLockCallbacks(
     private val app: LibreCrateApplication,
 ) : Application.ActivityLifecycleCallbacks {
-    private val activityCount = AtomicInteger(0)
-    override fun onActivityStarted(activity: Activity) {
-        activityCount.incrementAndGet()
-    }
-    override fun onActivityStopped(activity: Activity) {
-        if (activityCount.decrementAndGet() <= 0) {
-            app.lockSession()
-        }
-    }
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+    override fun onActivityStarted(activity: Activity) = Unit
     override fun onActivityResumed(activity: Activity) = Unit
     override fun onActivityPaused(activity: Activity) = Unit
+    override fun onActivityStopped(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
     override fun onActivityDestroyed(activity: Activity) = Unit
 }

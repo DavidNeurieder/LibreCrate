@@ -17,9 +17,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Covers the navigation used when the vault re-locks: the back stack must be
- * cleared so the unlock screen cannot be left behind (a back press would then
- * reveal a library whose vault is closed).
+ * Navigation behavior remains unchanged when an explicit lock/unlock navigation occurs.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -47,8 +45,7 @@ class RelockNavigationTest {
         composeTestRule.runOnIdle { navController.navigate(Routes.SETTINGS) }
         composeTestRule.waitForIdle()
 
-        // The app was backgrounded; on return MainActivity re-prompts for the
-        // password and rebuilds the stack around the unlock screen.
+        // Navigate to unlock and rebuild the stack.
         composeTestRule.runOnIdle {
             navController.navigate(Routes.UNLOCK) {
                 popUpTo(navController.graph.id)
@@ -58,8 +55,6 @@ class RelockNavigationTest {
         composeTestRule.waitForIdle()
 
         assertEquals(Routes.UNLOCK, navController.currentBackStackEntry?.destination?.route)
-        // Nothing else is left on the stack: a back press cannot reveal the
-        // library (or settings) while the vault is closed.
         assertNull(navController.previousBackStackEntry?.destination?.route)
     }
 

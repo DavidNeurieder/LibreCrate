@@ -32,7 +32,7 @@ import com.librecrate.app.ui.navigation.SessionRouting
 
 class MainActivity : ComponentActivity() {
     private val pendingImportUris = mutableStateOf<List<Uri>>(emptyList())
-    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "screenshots_enabled") {
             updateScreenCaptureFlag()
         }

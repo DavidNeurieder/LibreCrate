@@ -10,9 +10,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Regression test for the "library shows no documents instead of the password
- * prompt" bug: backgrounding locks the vault, and `MainActivity` is reused on
- * return, so the session has to explicitly re-ask for the password.
+ * With the new behavior the vault is not locked on background/screen-off;
+ * only when the app is closed (process killed) is authentication required again.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -35,6 +34,7 @@ class SessionPromptTest {
         }
         composeTestRule.runOnIdle { locked.value = true }
         composeTestRule.waitForIdle()
+        // We still want to respect explicit lock state if set; behavior unchanged for the component
         assertEquals(1, prompts.size)
     }
 

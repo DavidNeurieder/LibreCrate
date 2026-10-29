@@ -19,10 +19,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Opening the system document picker backgrounds the app, which locks the
- * vault. A selection made in the picker must therefore survive until the user
- * has unlocked again instead of being imported into — and lost on — a closed
- * vault.
+ * A selection made in the picker should be importable while the vault remains
+ * open (it is no longer locked on background).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
