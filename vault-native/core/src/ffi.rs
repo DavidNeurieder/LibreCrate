@@ -806,7 +806,12 @@ impl DbHandle {
                     })?;
                     let mime = doc.mime_type.clone();
                     drop(state);
-                    crate::db::storage::generate_thumbnail(&file_data, &mime)
+                    let files_dir = std::path::Path::new(&base_dir).join("files");
+                    crate::db::storage::generate_thumbnail_with_scratch(
+                        &file_data,
+                        &mime,
+                        Some(&files_dir),
+                    )
                 };
                 match thumb {
                     Some(thumb) => {

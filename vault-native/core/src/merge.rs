@@ -196,6 +196,7 @@ pub fn branch_a_merge(
             // Re-encrypt files if keys provided
             if let (Some(bk), Some(lk)) = (backup_key, local_key) {
                 reencrypt_files(current_conn, &backup_docs, files, bk, lk, files_dir)?;
+                copy_thumbnails(&backup_docs, files, bk, lk, files_dir);
             }
 
             Ok(stats)
@@ -304,6 +305,70 @@ fn reencrypt_files(
         }
     }
     Ok(())
+}
+
+/// Copy thumbnail blobs from the backup into the local `files/` dir, re-encrypting
+/// each from `backup_key` to `local_key`.
+///
+/// Thumbnails are separate blobs (`<id>.thumb`) that the document-file merge above
+/// does not touch. Preserving them avoids regenerating thumbnails that only the
+/// source platform could produce (for example PKPass/HEIC or platform-specific
+/// EPUB covers). Existing local thumbnails are never overwritten; anything still
+/// missing is generated afterwards by `storage::generate_missing_thumbnails`.
+fn copy_thumbnails(
+    docs: &[crate::db::queries::DocumentRow],
+    files: &[KeyValue],
+    backup_key: &[u8],
+    local_key: &[u8],
+    files_dir: &Path,
+) {
+    let file_map: HashMap<&str, &[u8]> = files
+        .iter()
+        .map(|kv| (kv.key.as_str(), kv.value.as_slice()))
+        .collect();
+
+    for doc in docs {
+        let thumb_name = format!("{}.thumb", doc.id);
+        if crate::format::path::safe_archive_path(&thumb_name).is_err() || thumb_name.contains('/')
+        {
+            continue;
+        }
+        let Some(thumb_bytes) = file_map.get(thumb_name.as_str()).copied() else {
+            continue;
+        };
+
+        let target = files_dir.join(&thumb_name);
+        if target.exists() {
+            continue;
+        }
+
+        // Thumbnails carry their own IV prefix (unlike document blobs, which use
+        // the IV recorded in the DB).
+        let reencrypted = if thumb_bytes.len() > aes_gcm::IV_LENGTH {
+            let iv = &thumb_bytes[..aes_gcm::IV_LENGTH];
+            let ciphertext = &thumb_bytes[aes_gcm::IV_LENGTH..];
+            aes_gcm::decrypt_bytes(ciphertext, backup_key, iv)
+                .and_then(|plaintext| aes_gcm::encrypt_bytes(&plaintext, local_key))
+        } else {
+            None
+        };
+
+        if let Some(parent) = target.parent() {
+            if std::fs::create_dir_all(parent).is_err() {
+                continue;
+            }
+        }
+        let output = match reencrypted {
+            Some((new_iv, new_ct)) => {
+                let mut output = new_iv;
+                output.extend_from_slice(&new_ct);
+                output
+            }
+            // Plaintext (or not encrypted under the backup key): copy verbatim.
+            None => thumb_bytes.to_vec(),
+        };
+        let _ = std::fs::write(&target, output);
+    }
 }
 
 #[cfg(test)]
@@ -455,5 +520,62 @@ mod tests {
         let docs = crate::db::queries::list_documents(&existing_conn).unwrap();
         assert_eq!(docs.len(), 1, "failed merge must not add partial documents");
         assert_eq!(docs[0].id, "existing");
+    }
+
+    #[test]
+    fn test_branch_a_merge_preserves_backup_thumbnails() {
+        let backup_key = make_master_key();
+        let local_key = vec![7u8; 32];
+        let tmp = TempDir::new().unwrap();
+
+        let existing_path = tmp.path().join("existing.db");
+        make_test_db(
+            &local_key,
+            existing_path.to_str().unwrap(),
+            "existing",
+            "Existing Doc",
+        );
+        let existing_conn = open_encrypted(existing_path.to_str().unwrap(), &local_key).unwrap();
+
+        let backup_path = tmp.path().join("backup.db");
+        // text/plain is not a type core can regenerate, so this thumbnail can
+        // only survive if the merge copies and re-encrypts it.
+        make_test_db(
+            &backup_key,
+            backup_path.to_str().unwrap(),
+            "text-doc",
+            "Text Doc",
+        );
+
+        let thumbnail = b"pre-rendered-thumbnail-bytes";
+        let (iv, ct) = aes_gcm::encrypt_bytes(thumbnail, &backup_key).unwrap();
+        let mut blob = iv;
+        blob.extend_from_slice(&ct);
+        let files = vec![KeyValue {
+            key: "text-doc.thumb".into(),
+            value: blob,
+        }];
+        let files_dir = tmp.path().join("files");
+        std::fs::create_dir_all(&files_dir).unwrap();
+
+        let stats = branch_a_merge(
+            backup_path.to_str().unwrap(),
+            &backup_key,
+            &existing_conn,
+            &files,
+            Some(&backup_key),
+            Some(&local_key),
+            &files_dir,
+        )
+        .unwrap();
+        assert_eq!(stats.documents_added, 1);
+
+        let stored = std::fs::read(files_dir.join("text-doc.thumb"))
+            .expect("merged document must keep its backup thumbnail");
+        let stored_iv = &stored[..aes_gcm::IV_LENGTH];
+        let plaintext =
+            aes_gcm::decrypt_bytes(&stored[aes_gcm::IV_LENGTH..], &local_key, stored_iv)
+                .expect("thumbnail must be re-encrypted under the local key");
+        assert_eq!(plaintext, thumbnail);
     }
 }

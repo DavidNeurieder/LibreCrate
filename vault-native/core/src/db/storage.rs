@@ -84,41 +84,171 @@ fn parse_container_rootfile(xml: &str) -> Option<String> {
     Some(xml[start..start + end].to_string())
 }
 
-/// Extract the cover image href from an EPUB OPF manifest.
-fn parse_opf_cover(opf: &str) -> Option<String> {
-    // EPUB 3: <item ... properties="cover-image" .../>
-    if let Some(pos) = opf.find("properties=\"cover-image\"") {
-        let before = &opf[..pos];
-        if let Some(item_start) = before.rfind("<item ") {
-            let item = &opf[item_start..];
-            if let Some(href_start) = item.find("href=\"") {
-                let s = href_start + "href=\"".len();
-                let e = item[s..].find('"')?;
-                return Some(item[s..s + e].to_string());
+/// Read an XML attribute from a single tag body (between `<` and `>`).
+fn xml_attr(tag: &str, name: &str) -> Option<String> {
+    let needle = format!("{name}=");
+    let mut search_from = 0;
+    while let Some(rel) = tag[search_from..].find(&needle) {
+        let pos = search_from + rel;
+        // Ensure this is a whole attribute name, not the tail of e.g. `data-id=`.
+        let boundary = pos == 0
+            || tag[..pos]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_whitespace());
+        if boundary {
+            let after = &tag[pos + needle.len()..];
+            let quote = after.chars().next()?;
+            if quote == '"' || quote == '\'' {
+                let rest = &after[quote.len_utf8()..];
+                let end = rest.find(quote)?;
+                return Some(rest[..end].to_string());
             }
         }
-    }
-    // EPUB 2: <item id="cover-image" ...> or <item id="cover" ...>
-    for id_attr in &["cover-image", "cover", "coverImage"] {
-        let needle = format!("id=\"{id_attr}\"");
-        if let Some(pos) = opf.find(&needle) {
-            let after = &opf[pos..];
-            if let Some(href_start) = after.find("href=\"") {
-                let s = href_start + "href=\"".len();
-                let e = after[s..].find('"')?;
-                return Some(after[s..s + e].to_string());
-            }
-        }
+        search_from = pos + needle.len();
     }
     None
 }
 
+/// Iterate `<item ...>` tags in an OPF manifest.
+fn opf_items(opf: &str) -> Vec<(String, String, String, String)> {
+    let mut items = Vec::new();
+    let mut search_from = 0;
+    while let Some(rel) = opf[search_from..].find("<item") {
+        let start = search_from + rel;
+        let after_name = start + "<item".len();
+        // Do not match `<itemref>` in the spine.
+        let next = opf[after_name..].chars().next();
+        if !matches!(next, Some(c) if c.is_whitespace() || c == '>') {
+            search_from = after_name;
+            continue;
+        }
+        let Some(end_rel) = opf[after_name..].find('>') else {
+            break;
+        };
+        let tag = &opf[after_name..after_name + end_rel];
+        if let (Some(id), Some(href)) = (xml_attr(tag, "id"), xml_attr(tag, "href")) {
+            items.push((
+                id,
+                href,
+                xml_attr(tag, "media-type").unwrap_or_default(),
+                xml_attr(tag, "properties").unwrap_or_default(),
+            ));
+        }
+        search_from = after_name + end_rel + 1;
+    }
+    items
+}
+
+/// Extract the cover image href from an EPUB OPF manifest.
+fn parse_opf_cover(opf: &str) -> Option<String> {
+    let items = opf_items(opf);
+
+    // EPUB 3: <item ... properties="cover-image" .../>
+    if let Some((_, href, _, _)) = items.iter().find(|(_, _, _, properties)| {
+        properties
+            .split_whitespace()
+            .any(|property| property == "cover-image")
+    }) {
+        return Some(href.clone());
+    }
+
+    // EPUB 2: <meta name="cover" content="item-id"/> pointing at a manifest item.
+    let mut search_from = 0;
+    while let Some(rel) = opf[search_from..].find("<meta") {
+        let start = search_from + rel;
+        let after_name = start + "<meta".len();
+        let Some(end_rel) = opf[after_name..].find('>') else {
+            break;
+        };
+        let tag = &opf[after_name..after_name + end_rel];
+        if xml_attr(tag, "name").as_deref() == Some("cover") {
+            if let Some(content) = xml_attr(tag, "content") {
+                if let Some((_, href, _, _)) = items.iter().find(|(id, _, _, _)| id == &content) {
+                    return Some(href.clone());
+                }
+            }
+        }
+        search_from = after_name + end_rel + 1;
+    }
+
+    // Legacy convention: the cover item is simply named "cover".
+    for id in [
+        "cover-image",
+        "cover",
+        "coverImage",
+        "cover-img",
+        "coverimg",
+    ] {
+        if let Some((_, href, _, _)) = items.iter().find(|(item_id, _, _, _)| item_id == id) {
+            return Some(href.clone());
+        }
+    }
+
+    // Last resort, matching the Android EPUB parser: first image in the manifest.
+    items
+        .iter()
+        .find(|(_, _, media_type, _)| media_type.starts_with("image/"))
+        .map(|(_, href, _, _)| href.clone())
+}
+
+/// Decode `%XX` escapes in an EPUB href (ZIP entry names are stored decoded).
+fn percent_decode(input: &str) -> Option<String> {
+    let bytes = input.as_bytes();
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            if index + 2 >= bytes.len() {
+                return None;
+            }
+            let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok()?;
+            output.push(u8::from_str_radix(hex, 16).ok()?);
+            index += 3;
+        } else {
+            output.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(output).ok()
+}
+
+/// Collapse `.`/`..` segments in a ZIP entry path without touching the disk.
+fn normalize_zip_path(path: &Path) -> Option<String> {
+    use std::path::Component;
+    let mut parts: Vec<String> = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(part) => parts.push(part.to_string_lossy().to_string()),
+            Component::ParentDir => {
+                parts.pop()?;
+            }
+            Component::CurDir => {}
+            Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+    Some(parts.join("/"))
+}
+
 /// Render page 1 of a PDF to JPEG using the Rust MuPDF wrapper.
-fn generate_thumbnail_pdf(data: &[u8]) -> Option<Vec<u8>> {
+///
+/// `scratch_dir` must be a writable directory on platforms where the process
+/// temp dir is not (notably Android, where `tempfile::tempdir()` resolves to
+/// `/data/local/tmp`). Callers that have a vault should pass its `files/` dir.
+fn generate_thumbnail_pdf(data: &[u8], scratch_dir: Option<&Path>) -> Option<Vec<u8>> {
     if data.len() as u64 > MAX_THUMBNAIL_SOURCE_SIZE {
         return None;
     }
-    let tmp_dir = tempfile::tempdir().ok()?;
+    let tmp_dir = match scratch_dir {
+        Some(dir) => {
+            std::fs::create_dir_all(dir).ok()?;
+            tempfile::Builder::new()
+                .prefix(".librecrate-thumb-")
+                .tempdir_in(dir)
+                .ok()?
+        }
+        None => tempfile::tempdir().ok()?,
+    };
     let pdf_path = tmp_dir.path().join("input.pdf");
     std::fs::write(&pdf_path, data).ok()?;
 
@@ -127,10 +257,30 @@ fn generate_thumbnail_pdf(data: &[u8]) -> Option<Vec<u8>> {
 
     let img =
         image::RgbaImage::from_raw(rendered.width as u32, rendered.height as u32, rendered.data)?;
+    // The JPEG encoder only accepts L8/RGB8; encoding RGBA fails with
+    // UnsupportedColor, which is why PDF thumbnails silently never appeared.
+    let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
     let mut jpeg_buf = std::io::Cursor::new(Vec::new());
     let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg_buf, 90);
-    img.write_with_encoder(encoder).ok()?;
+    rgb.write_with_encoder(encoder).ok()?;
     Some(jpeg_buf.into_inner())
+}
+
+/// Extract the cover image from a PKPass (ZIP) archive.
+fn generate_thumbnail_pkpass(data: &[u8]) -> Option<Vec<u8>> {
+    let cursor = std::io::Cursor::new(data);
+    let mut archive = zip::ZipArchive::new(cursor).ok()?;
+    if archive.len() > MAX_ARCHIVE_ENTRY_SCAN {
+        return None;
+    }
+    for name in ["thumbnail.png", "icon.png", "logo.png"] {
+        if let Ok(mut f) = archive.by_name(name) {
+            if let Some(bytes) = read_entry_limited(&mut f, MAX_ARCHIVE_IMAGE_SIZE) {
+                return Some(bytes);
+            }
+        }
+    }
+    None
 }
 
 /// Extract the cover image from an EPUB (ZIP) archive.
@@ -154,11 +304,19 @@ fn generate_thumbnail_epub(data: &[u8]) -> Option<Vec<u8>> {
         String::from_utf8(bytes).ok()?
     };
     let cover_href = parse_opf_cover(&opf_content)?;
+    let cover_href = percent_decode(&cover_href)?;
 
     let opf_dir = std::path::Path::new(&rootfile_path)
         .parent()
         .unwrap_or(std::path::Path::new(""));
-    let cover_path = opf_dir.join(&cover_href).to_string_lossy().to_string();
+    let cover_path = if cover_href.starts_with('/') {
+        cover_href.trim_start_matches('/').to_string()
+    } else if opf_dir.as_os_str().is_empty() {
+        cover_href
+    } else {
+        opf_dir.join(&cover_href).to_string_lossy().to_string()
+    };
+    let cover_path = normalize_zip_path(std::path::Path::new(&cover_path))?;
 
     // The target is attacker-controlled XML content — keep it a normal
     // relative archive name (the ZIP lookup is literal, but reject anything
@@ -205,17 +363,33 @@ fn generate_thumbnail_cbz(data: &[u8]) -> Option<Vec<u8>> {
 /// - `application/pdf` — page 1 rendered via Rust MuPDF
 /// - `application/epub+zip` — cover image extracted from the EPUB archive
 /// - `application/vnd.comicbook+zip` — first page image from the CBZ archive
+/// - `application/vnd.apple.pkpass` — pass thumbnail/icon/logo image
 ///
 /// Returns `None` when the format is unsupported or generation fails.
 pub fn generate_thumbnail(data: &[u8], mime_type: &str) -> Option<Vec<u8>> {
+    generate_thumbnail_with_scratch(data, mime_type, None)
+}
+
+/// Like [`generate_thumbnail`], but uses `scratch_dir` for formats that need a
+/// temporary file (currently PDF).
+///
+/// Callers running on Android must pass a writable directory such as the vault's
+/// `files/` dir: the process temp dir resolves to `/data/local/tmp`, which the
+/// app cannot write to.
+pub fn generate_thumbnail_with_scratch(
+    data: &[u8],
+    mime_type: &str,
+    scratch_dir: Option<&Path>,
+) -> Option<Vec<u8>> {
     // PR 11: never feed unbounded source bytes to any decoder.
     if data.len() as u64 > MAX_THUMBNAIL_SOURCE_SIZE {
         return None;
     }
     let raw = match mime_type {
-        "application/pdf" => generate_thumbnail_pdf(data)?,
+        "application/pdf" => generate_thumbnail_pdf(data, scratch_dir)?,
         "application/epub+zip" => generate_thumbnail_epub(data)?,
         "application/vnd.comicbook+zip" | "application/x-cbr" => generate_thumbnail_cbz(data)?,
+        "application/vnd.apple.pkpass" => generate_thumbnail_pkpass(data)?,
         mt if mt.starts_with("image/") => data.to_vec(),
         _ => return None,
     };
@@ -289,7 +463,9 @@ pub fn generate_missing_thumbnails(
         let Some(file_data) = load_document_file(files_dir, &doc, key) else {
             continue;
         };
-        let Some(thumb_data) = generate_thumbnail(&file_data, &doc.mime_type) else {
+        let Some(thumb_data) =
+            generate_thumbnail_with_scratch(&file_data, &doc.mime_type, Some(files_dir))
+        else {
             continue;
         };
         if write_thumbnail_blob(&thumb_path, &thumb_data, key).is_ok() {
@@ -482,7 +658,9 @@ pub fn import_document(
     save_file(base_dir, id, &stored_data)
         .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
-    if let Some(thumb_data) = generate_thumbnail(file_data, mime_type) {
+    if let Some(thumb_data) =
+        generate_thumbnail_with_scratch(file_data, mime_type, Some(&base_dir.join("files")))
+    {
         let _ = store_thumbnail(base_dir, id, &thumb_data, key);
     }
 
@@ -719,6 +897,104 @@ mod tests {
             )
             .unwrap();
         bytes
+    }
+
+    fn zip_with(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut zip = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut zip));
+            for (name, data) in entries {
+                writer
+                    .start_file::<&str, ()>(*name, zip::write::FileOptions::default())
+                    .unwrap();
+                writer.write_all(data).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        zip
+    }
+
+    #[test]
+    fn thumbnail_pdf_uses_supplied_scratch_dir() {
+        // Regression test for Android: the process temp dir is not writable
+        // there, so PDF generation must accept a caller-provided directory.
+        let pdf = include_bytes!("../../../gui/test_resources/search_3page.pdf");
+        let scratch = tempfile::TempDir::new().unwrap();
+
+        let thumb = generate_thumbnail_with_scratch(pdf, "application/pdf", Some(scratch.path()))
+            .expect("PDF thumbnail generation with a writable scratch dir");
+        assert_eq!(thumb[..2], [0xff, 0xd8]); // JPEG magic
+    }
+
+    #[test]
+    fn generate_missing_thumbnails_regenerates_pdf() {
+        let mk = (0..32).collect::<Vec<u8>>();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp.path().join("databases/librecrate.db");
+        std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+        let conn = create_encrypted_db(db_path.to_str().unwrap(), &mk).unwrap();
+
+        let pdf = include_bytes!("../../../gui/test_resources/search_3page.pdf");
+        let doc_id = import_document(
+            &conn,
+            tmp.path(),
+            "pdf-doc",
+            "PDF Doc",
+            pdf,
+            "application/pdf",
+            "",
+            "",
+            None,
+            Some(&mk),
+        )
+        .unwrap();
+
+        // Backfill path used after import: the PDF thumbnail must be creatable
+        // using the vault's writable files/ dir as scratch space.
+        let thumb_path = tmp.path().join("files").join(format!("{doc_id}.thumb"));
+        std::fs::remove_file(&thumb_path).unwrap();
+        assert_eq!(
+            generate_missing_thumbnails(&conn, &tmp.path().join("files"), Some(&mk)),
+            1
+        );
+
+        let thumb = load_thumbnail(tmp.path(), &doc_id, Some(&mk)).unwrap();
+        assert_eq!(&thumb[..2], [0xff, 0xd8]); // JPEG magic
+    }
+
+    #[test]
+    fn thumbnail_pkpass_uses_pass_thumbnail() {
+        let png = tiny_png();
+        let pkpass = zip_with(&[("pass.json", b"{}"), ("thumbnail.png", png.as_slice())]);
+
+        let thumb = generate_thumbnail(&pkpass, "application/vnd.apple.pkpass")
+            .expect("PKPass thumbnail extraction");
+        assert_eq!(thumb[..2], [0xff, 0xd8]); // JPEG magic
+    }
+
+    #[test]
+    fn thumbnail_epub_reads_epub2_meta_cover() {
+        // EPUB 2 declares the cover through <meta name="cover" content="id">,
+        // not through a properties="cover-image" manifest attribute.
+        let png = tiny_png();
+        let container = br#"<?xml version="1.0"?>
+<container><rootfiles>
+<rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+</rootfiles></container>"#;
+        let opf = br#"<?xml version="1.0"?>
+<package><metadata><meta name="cover" content="cover-image"/></metadata>
+<manifest>
+<item id="cover-image" href="images/cover%20art.png" media-type="image/png"/>
+</manifest></package>"#;
+        let epub = zip_with(&[
+            ("META-INF/container.xml", container.as_slice()),
+            ("OEBPS/content.opf", opf.as_slice()),
+            ("OEBPS/images/cover art.png", png.as_slice()),
+        ]);
+
+        let thumb = generate_thumbnail(&epub, "application/epub+zip")
+            .expect("EPUB 2 cover thumbnail extraction");
+        assert_eq!(thumb[..2], [0xff, 0xd8]); // JPEG magic
     }
 
     #[test]
