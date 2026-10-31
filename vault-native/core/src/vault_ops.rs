@@ -270,6 +270,11 @@ pub fn merge_vault_dir(
         &files_dir,
     )?;
 
+    // The merge copies document blobs (and re-encrypts them) but not their
+    // `.thumb` companions, and older backups may not contain thumbnails at all.
+    // Fill in anything missing before the vault is reopened.
+    crate::db::storage::generate_missing_thumbnails(&conn, &files_dir, Some(&mk_a));
+
     drop(conn);
     Ok(stats)
 }
@@ -363,7 +368,17 @@ pub fn merge_backup_to_vault(
             }
         });
     let _ = std::fs::remove_file(&backup_db_path);
-    result
+    let stats = result?;
+
+    // Merges only copy/re-encrypt document blobs, so thumbnails that are
+    // missing locally (or absent from the backup) are generated now.
+    crate::db::storage::generate_missing_thumbnails(
+        current_conn,
+        &vault_dir.join("files"),
+        local_master_key,
+    );
+
+    Ok(stats)
 }
 
 /// Import a backup and restore it to target directories (Branch B — full replace).
@@ -390,7 +405,27 @@ pub fn restore_backup_to_dirs(
         encryption_dir,
         database_dir,
         files_dir,
-    )
+    )?;
+
+    // Backups may predate thumbnail creation or come from a client that did not
+    // write them. Generate missing ones from the restored document blobs. This
+    // is best-effort: if the supplied password only decrypts the backup
+    // container but does not unwrap the restored vault key, skip silently —
+    // the restore itself already succeeded.
+    if let Ok(master_key) = derive_master_key_from_contents(&contents, password) {
+        let db_path = database_dir.join("librecrate.db");
+        if let Some(db_path) = db_path.to_str() {
+            if let Ok(conn) = crate::db::schema::open_encrypted(db_path, &master_key) {
+                crate::db::storage::generate_missing_thumbnails(
+                    &conn,
+                    files_dir,
+                    Some(&master_key),
+                );
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Import a backup and restore it to a target directory (Branch B — full replace).
@@ -411,6 +446,21 @@ mod tests {
 
     fn create_test_vault(dir: &Path, password: &str) -> Vec<u8> {
         export::create_vault_layout(dir, password).unwrap()
+    }
+
+    fn tiny_png() -> Vec<u8> {
+        let mut img = image::RgbaImage::new(40, 30);
+        for (x, y, px) in img.enumerate_pixels_mut() {
+            *px = image::Rgba([(x % 256) as u8, (y % 256) as u8, 100, 255]);
+        }
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgba8(img)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        bytes
     }
 
     #[test]
@@ -607,6 +657,87 @@ hash_length = 32
     }
 
     #[test]
+    fn test_restore_backup_generates_missing_thumbnails() {
+        let dir_a = tempfile::tempdir().unwrap();
+        let mk = create_test_vault(dir_a.path(), "testpass");
+
+        let db_path = dir_a.path().join("databases").join("librecrate.db");
+        let conn = crate::db::schema::open_encrypted(db_path.to_str().unwrap(), &mk).unwrap();
+        crate::db::storage::import_document(
+            &conn,
+            dir_a.path(),
+            "image-doc",
+            "Image Doc",
+            &tiny_png(),
+            "image/png",
+            "",
+            "",
+            None,
+            Some(&mk),
+        )
+        .unwrap();
+        drop(conn);
+
+        // Simulate an older backup that carries documents but no thumbnails.
+        std::fs::remove_file(dir_a.path().join("files/image-doc.thumb")).unwrap();
+
+        let backup_bytes = export_vault_dir(dir_a.path(), "testpass").unwrap();
+
+        let dir_b = tempfile::tempdir().unwrap();
+        restore_backup_to_dir(&backup_bytes, "testpass", dir_b.path()).unwrap();
+
+        let thumb_path = dir_b.path().join("files/image-doc.thumb");
+        assert!(
+            thumb_path.exists(),
+            "restore must create missing thumbnails"
+        );
+        let snapshot_b = serialize_vault_from_disk(dir_b.path()).unwrap();
+        let thumb_entry = snapshot_b
+            .files
+            .iter()
+            .find(|kv| kv.key == "image-doc.thumb")
+            .expect("thumbnail blob must be present");
+        assert!(!thumb_entry.value.is_empty());
+    }
+
+    #[test]
+    fn test_merge_vault_dir_generates_missing_thumbnails() {
+        let dir_a = tempfile::tempdir().unwrap();
+        create_test_vault(dir_a.path(), "testpass");
+
+        let dir_b = tempfile::tempdir().unwrap();
+        let mk_b = create_test_vault(dir_b.path(), "testpass");
+        let db_path_b = dir_b.path().join("databases").join("librecrate.db");
+        let conn_b = crate::db::schema::open_encrypted(db_path_b.to_str().unwrap(), &mk_b).unwrap();
+        crate::db::storage::import_document(
+            &conn_b,
+            dir_b.path(),
+            "image-doc",
+            "Image Doc",
+            &tiny_png(),
+            "image/png",
+            "",
+            "",
+            None,
+            Some(&mk_b),
+        )
+        .unwrap();
+        drop(conn_b);
+
+        // The backup has no thumbnail: a merge must generate one for the
+        // document it imports.
+        std::fs::remove_file(dir_b.path().join("files/image-doc.thumb")).unwrap();
+        let backup_b = export_vault_dir(dir_b.path(), "testpass").unwrap();
+
+        let stats = merge_vault_dir(dir_a.path(), &backup_b, "testpass", "testpass").unwrap();
+        assert_eq!(stats.documents_added, 1);
+        assert!(
+            dir_a.path().join("files/image-doc.thumb").exists(),
+            "merge must create missing thumbnails"
+        );
+    }
+
+    #[test]
     fn test_merge_vault_dir_roundtrip() {
         let dir_a = tempfile::tempdir().unwrap();
         let mk_a = create_test_vault(dir_a.path(), "testpass");
@@ -736,5 +867,45 @@ hash_length = 32
         );
         let hits_a = crate::db::fts::search(&conn_a, "alpha").unwrap();
         assert!(hits_a.iter().any(|h| h.id == "doc_a"));
+    }
+
+    #[test]
+    fn test_merge_backup_to_vault_generates_missing_thumbnails() {
+        let dir_a = tempfile::tempdir().unwrap();
+        let mk_a = create_test_vault(dir_a.path(), "testpass");
+        let db_path_a = dir_a.path().join("databases").join("librecrate.db");
+        let conn_a = crate::db::schema::open_encrypted(db_path_a.to_str().unwrap(), &mk_a).unwrap();
+
+        let dir_b = tempfile::tempdir().unwrap();
+        let mk_b = create_test_vault(dir_b.path(), "otherpass");
+        let db_path_b = dir_b.path().join("databases").join("librecrate.db");
+        let conn_b = crate::db::schema::open_encrypted(db_path_b.to_str().unwrap(), &mk_b).unwrap();
+        crate::db::storage::import_document(
+            &conn_b,
+            dir_b.path(),
+            "image-doc",
+            "Image Doc",
+            &tiny_png(),
+            "image/png",
+            "",
+            "",
+            None,
+            Some(&mk_b),
+        )
+        .unwrap();
+        drop(conn_b);
+
+        // Backup without a thumbnail, as an older client would produce.
+        std::fs::remove_file(dir_b.path().join("files/image-doc.thumb")).unwrap();
+        let backup_b = export_vault_dir(dir_b.path(), "otherpass").unwrap();
+
+        let stats =
+            merge_backup_to_vault(dir_a.path(), &conn_a, Some(&mk_a), &backup_b, "otherpass")
+                .unwrap();
+        assert_eq!(stats.documents_added, 1);
+
+        let thumb = crate::db::storage::load_thumbnail(dir_a.path(), "image-doc", Some(&mk_a))
+            .expect("merged document must get a thumbnail encrypted with the local key");
+        assert_eq!(&thumb[..2], [0xff, 0xd8]); // JPEG magic
     }
 }

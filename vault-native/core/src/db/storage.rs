@@ -230,6 +230,11 @@ pub fn store_thumbnail(
     key: Option<&[u8]>,
 ) -> std::io::Result<()> {
     let path = base_dir.join("files").join(format!("{id}.thumb"));
+    write_thumbnail_blob(&path, data, key)
+}
+
+/// Encrypt (when a key is supplied) and write a thumbnail blob to `path`.
+fn write_thumbnail_blob(path: &Path, data: &[u8], key: Option<&[u8]>) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -244,7 +249,87 @@ pub fn store_thumbnail(
     } else {
         data.to_vec()
     };
-    std::fs::write(&path, blob)
+    std::fs::write(path, blob)
+}
+
+/// Generate thumbnails for documents that do not have one on disk yet.
+///
+/// Import/restore paths call this after document blobs are in place so documents
+/// that arrive without a `.thumb` file (older backups, backups from clients that
+/// did not create thumbnails, or merges that only copied the document blob) get
+/// one. Existing thumbnails are never overwritten.
+///
+/// `files_dir` is the vault's `files/` directory. Generation is best-effort:
+/// unsupported formats, undecodable files and write failures are skipped, and
+/// the number of thumbnails actually written is returned.
+pub fn generate_missing_thumbnails(
+    conn: &Connection,
+    files_dir: &Path,
+    key: Option<&[u8]>,
+) -> usize {
+    let docs = match queries::list_documents(conn) {
+        Ok(docs) => docs,
+        Err(_) => return 0,
+    };
+
+    let mut generated = 0;
+    for doc in docs {
+        // Document ids come from backups, so treat them as untrusted: only
+        // single-component names may be used for a thumbnail file.
+        let thumb_name = format!("{}.thumb", doc.id);
+        if crate::format::path::safe_archive_path(&thumb_name).is_err() || thumb_name.contains('/')
+        {
+            continue;
+        }
+        let thumb_path = files_dir.join(&thumb_name);
+        if thumb_path.exists() {
+            continue;
+        }
+
+        let Some(file_data) = load_document_file(files_dir, &doc, key) else {
+            continue;
+        };
+        let Some(thumb_data) = generate_thumbnail(&file_data, &doc.mime_type) else {
+            continue;
+        };
+        if write_thumbnail_blob(&thumb_path, &thumb_data, key).is_ok() {
+            generated += 1;
+        }
+    }
+    generated
+}
+
+/// Read and decrypt a document blob for thumbnail generation.
+///
+/// Uses the `file_path` recorded in the DB first (it may be absolute after a
+/// merge), then the conventional `files/<file_name>` and `files/<id>` locations.
+fn load_document_file(files_dir: &Path, doc: &DocumentRow, key: Option<&[u8]>) -> Option<Vec<u8>> {
+    let stored_path = Path::new(&doc.file_path);
+    let mut candidates = Vec::new();
+    if stored_path.is_absolute() {
+        candidates.push(stored_path.to_path_buf());
+    }
+    if let Some(name) = stored_path.file_name() {
+        candidates.push(files_dir.join(name));
+    }
+    candidates.push(files_dir.join(&doc.id));
+
+    let raw = candidates
+        .iter()
+        .find_map(|path| std::fs::read(path).ok())?;
+    match key {
+        Some(k) => {
+            let iv = doc.encryption_iv.as_deref()?;
+            if raw.len() > aes_gcm::IV_LENGTH {
+                // Legacy vaults stored plaintext blobs with a dummy IV; fall
+                // back to the raw bytes when decryption fails.
+                aes_gcm::decrypt_bytes(&raw[aes_gcm::IV_LENGTH..], k, iv).or(Some(raw))
+            } else {
+                Some(raw)
+            }
+        }
+        None => Some(raw),
+    }
 }
 
 /// Load a thumbnail blob from `base_dir/files/<id>.thumb`.
@@ -619,5 +704,107 @@ mod tests {
             writer.finish().unwrap();
         }
         assert!(generate_thumbnail(&zip, "application/vnd.comicbook+zip").is_none());
+    }
+
+    fn tiny_png() -> Vec<u8> {
+        let mut img = image::RgbaImage::new(40, 30);
+        for (x, y, px) in img.enumerate_pixels_mut() {
+            *px = image::Rgba([(x % 256) as u8, (y % 256) as u8, 100, 255]);
+        }
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgba8(img)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        bytes
+    }
+
+    #[test]
+    fn generate_missing_thumbnails_fills_missing_and_skips_existing() {
+        let mk = (0..32).collect::<Vec<u8>>();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp.path().join("databases/librecrate.db");
+        std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+        let conn = create_encrypted_db(db_path.to_str().unwrap(), &mk).unwrap();
+
+        let doc_id = import_document(
+            &conn,
+            tmp.path(),
+            "image-doc",
+            "Image Doc",
+            &tiny_png(),
+            "image/png",
+            "",
+            "",
+            None,
+            Some(&mk),
+        )
+        .unwrap();
+
+        // Import already wrote a thumbnail; remove it to simulate a backup that
+        // did not carry one.
+        let thumb_path = tmp.path().join("files").join(format!("{doc_id}.thumb"));
+        assert!(thumb_path.exists());
+        std::fs::remove_file(&thumb_path).unwrap();
+
+        let files_dir = tmp.path().join("files");
+        assert_eq!(generate_missing_thumbnails(&conn, &files_dir, Some(&mk)), 1);
+        assert!(thumb_path.exists());
+
+        let thumb = load_thumbnail(tmp.path(), &doc_id, Some(&mk)).unwrap();
+        assert_eq!(&thumb[..2], [0xff, 0xd8]); // JPEG magic
+
+        // Existing thumbnails are not regenerated.
+        assert_eq!(generate_missing_thumbnails(&conn, &files_dir, Some(&mk)), 0);
+
+        // Unsupported documents without a thumbnail are skipped, not failed.
+        import_document(
+            &conn,
+            tmp.path(),
+            "text-doc",
+            "Text Doc",
+            b"plain text".as_slice(),
+            "text/plain",
+            "",
+            "",
+            None,
+            Some(&mk),
+        )
+        .unwrap();
+        assert_eq!(generate_missing_thumbnails(&conn, &files_dir, Some(&mk)), 0);
+    }
+
+    #[test]
+    fn generate_missing_thumbnails_rejects_unsafe_ids() {
+        let mk = (0..32).collect::<Vec<u8>>();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp.path().join("databases/librecrate.db");
+        std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+        let conn = create_encrypted_db(db_path.to_str().unwrap(), &mk).unwrap();
+
+        // A hostile id must not be able to write outside files/.
+        queries::add_document(
+            &conn,
+            &DocumentRow {
+                id: "../escape".into(),
+                title: "Escape".into(),
+                file_name: "escape".into(),
+                mime_type: "image/png".into(),
+                file_path: "files/escape".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        std::fs::create_dir_all(tmp.path().join("files")).unwrap();
+        std::fs::write(tmp.path().join("files/escape"), tiny_png()).unwrap();
+
+        assert_eq!(
+            generate_missing_thumbnails(&conn, &tmp.path().join("files"), Some(&mk)),
+            0
+        );
+        assert!(!tmp.path().join("escape.thumb").exists());
+        assert!(!tmp.path().join("files/../escape.thumb").exists());
     }
 }
