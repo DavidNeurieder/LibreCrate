@@ -14,6 +14,14 @@
 
 - **New backups are written as format v2**, in which the manifest (including the document count) is authenticated as AES-GCM additional authenticated data: the manifest can no longer be modified without the payload failing to decrypt. Version-1 backups remain fully importable.
 
+### Backup & thumbnails
+
+- **Backup import now creates missing thumbnails**: after a backup is merged or restored, documents without a `<id>.thumb` blob get one generated from the restored file and encrypted with the local key. Existing thumbnails are never overwritten, and generation is best-effort so unsupported or corrupt documents cannot fail the import.
+- **Thumbnails stored in a backup are preserved**: merging now copies the backup's `.thumb` blobs and re-encrypts them with the local key instead of discarding them, keeping covers that only the source platform could produce. Anything still missing is generated afterwards.
+- **Fixed PDF thumbnails never being generated**: the core rendered PDFs successfully but then handed RGBA pixels to the JPEG encoder, which rejects them, so every PDF thumbnail was silently dropped. Pixels are now converted to RGB before encoding.
+- **Fixed PDF thumbnails on Android**: PDF rendering wrote its scratch file to the process temp directory, which resolves to the non-writable `/data/local/tmp` on Android. Import, thumbnail backfill and regeneration now use the vault's own `files/` directory as scratch space.
+- **PKPass thumbnails and more EPUB covers**: the core now extracts PKPass thumbnails/icons/logos, and resolves EPUB covers declared through EPUB 2 `<meta name="cover">`, percent-encoded hrefs, legacy item IDs, or a first-image fallback — matching the Android importer.
+
 ### Data-integrity regression suite
 
 - **Frozen legacy fixtures**: the v1 and v2 containers produced by 0.5.6 are committed as immutable fixtures with a SHA-256 manifest and expected contents, and are replayed on every build so an old backup can never silently stop importing.
