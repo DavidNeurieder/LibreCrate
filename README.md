@@ -28,7 +28,8 @@ Encrypted document vault for Android, Linux, macOS, and Windows — stores, view
 - **Reading position**: Remembers last page for PDFs and comics, last location for EPUBs; shows "Page X of Y" / "% read" on cards
 - **Full-text search**: FTS5 search across title, author, description, and extracted document text, with highlighted snippets
 - **Import**: Share intents (single or multiple) and SAF file picker (bulk import)
-- **Backup**: Single encrypted `.librecrate-backup` file via SAF, verified by your password
+- **Thumbnails**: generated automatically for PDFs, EPUBs, PKPass files, comics, and images — including documents restored from older backups that did not include one
+- **Backup**: Single encrypted `.librecrate-backup` file via SAF, verified by your password; importing merges into an existing library, preserves thumbnails stored in the backup, and recreates any that are missing
 - **Cross-platform backup**: Backups created on Android can be restored on desktop and vice versa
 - **F-Droid only**: No Google Play Services, Firebase, Crashlytics, or AdMob
 
@@ -37,7 +38,7 @@ Encrypted document vault for Android, Linux, macOS, and Windows — stores, view
 - **Iced-based native UI** with vault creation, unlock, document library, and settings
 - **Multi-file import**: Drag-and-drop or file picker for bulk document import
 - **Collections & Tags**: Organize documents into collections and tag them
-- **Backup/Restore**: Export and import encrypted backups from the GUI
+- **Backup/Restore**: Export and import encrypted backups from the GUI; imports merge into the existing library and recreate missing thumbnails
 - **Password change**: Change vault password from the settings screen
 - **Settings**: Theme selection, vault info, and security options
 
