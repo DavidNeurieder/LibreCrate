@@ -1,13 +1,76 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
 }
 
+// Resolve the NDK that the build environment actually provides. Some build
+// servers (including F-Droid) preinstall a specific NDK and point `ndk.dir` at
+// it. Hardcoding a different revision makes AGP fail with CXX1104 before the
+// Rust task below ever runs, so prefer the configured NDK and only fall back to
+// the revision we develop against.
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties().apply {
+    if (localPropertiesFile.isFile) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun localPropertyFile(key: String): File? {
+    val value = localProperties.getProperty(key)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val candidate = File(value)
+    return if (candidate.isAbsolute) candidate else localPropertiesFile.parentFile.resolve(value)
+}
+
+fun ndkRevision(dir: File): String? {
+    val sourceProperties = dir.resolve("source.properties")
+    if (!sourceProperties.isFile) return null
+    return Properties().apply {
+        sourceProperties.inputStream().use { load(it) }
+    }.getProperty("Pkg.Revision")?.trim()?.takeIf { it.isNotEmpty() }
+}
+
+fun installedNdks(ndkParent: File?): List<File> =
+    ndkParent?.takeIf { it.isDirectory }?.listFiles()
+        ?.filter { it.isDirectory && ndkRevision(it) != null }
+        ?.sortedByDescending { it.name }
+        .orEmpty()
+
+val sdkDirs = sequenceOf(
+    localPropertyFile("sdk.dir"),
+    System.getenv("ANDROID_HOME")?.let(::File),
+    System.getenv("ANDROID_SDK_ROOT")?.let(::File),
+    File(System.getProperty("user.home"), "Android/Sdk"),
+    File("/opt/android-sdk"),
+    File("/usr/local/lib/android/sdk"),
+    File("/builds/fdroid/buildserver"),
+).filterNotNull().filter { it.isDirectory }.distinct().toList()
+
+val detectedNdkDir: File? =
+    sequenceOf(
+        localPropertyFile("ndk.dir"),
+        System.getenv("ANDROID_NDK_HOME")?.let(::File),
+        System.getenv("ANDROID_NDK_ROOT")?.let(::File),
+        System.getenv("NDK_HOME")?.let(::File),
+    ).filterNotNull().firstOrNull { it.isDirectory }
+        ?: sdkDirs.asSequence()
+            .flatMap { installedNdks(File(it, "ndk")).asSequence() }
+            .firstOrNull()
+
+val detectedNdkVersion: String = detectedNdkDir?.let(::ndkRevision) ?: "28.2.13676358"
+
+logger.lifecycle(
+    "Using Android NDK $detectedNdkVersion" +
+        (detectedNdkDir?.let { " (${it.absolutePath})" } ?: " (not installed yet)")
+)
+
 android {
     namespace = "uniffi.vault_native"
     compileSdk = 36
 
-    ndkVersion = "28.2.13676358"
+    detectedNdkDir?.let { ndkPath = it.absolutePath }
+    ndkVersion = detectedNdkVersion
 
     defaultConfig {
         minSdk = 26
@@ -170,20 +233,33 @@ val buildAndroidRustLib by tasks.registering(Exec::class) {
 
     doFirst {
         val ndkDir = sequenceOf(
-            android.ndkDirectory.takeIf { it.exists() },
+            detectedNdkDir,
+            runCatching { android.ndkDirectory }.getOrNull(),
             System.getenv("ANDROID_NDK_HOME")?.let { file(it).takeIf { it.exists() } },
-            let {
-                val ndkParent = file("${System.getProperty("user.home")}/Android/Sdk/ndk")
-                if (ndkParent.isDirectory) ndkParent.listFiles()?.maxOrNull() else null
-            }?.takeIf { it.exists() },
-        ).firstOrNull() ?: throw GradleException(
-            "NDK not found. Set ANDROID_NDK_HOME or configure ndkVersion in build.gradle.kts."
-        )
-        val toolchainDir = ndkDir.resolve("toolchains/llvm/prebuilt/linux-x86_64")
-        if (!toolchainDir.exists()) {
-            toolchainDir.resolve("darwin-x86_64").takeIf { it.exists() }?.let { return@doFirst }
-            toolchainDir.resolve("darwin-aarch64").takeIf { it.exists() }?.let { return@doFirst }
-            throw GradleException("NDK toolchain not found at $toolchainDir. Install NDK r28c.")
+            System.getenv("ANDROID_NDK_ROOT")?.let { file(it).takeIf { it.exists() } },
+            System.getenv("NDK_HOME")?.let { file(it).takeIf { it.exists() } },
+        ).filterNotNull().firstOrNull { it.isDirectory }
+            ?: sdkDirs.asSequence()
+                .flatMap { installedNdks(File(it, "ndk")).asSequence() }
+                .firstOrNull()
+            ?: throw GradleException(
+                "NDK not found. Set ANDROID_NDK_HOME or configure ndk.dir/local.properties. " +
+                    "HOME=${System.getenv("HOME")}, user.home=${System.getProperty("user.home")}, " +
+                    "ANDROID_NDK_HOME=${System.getenv("ANDROID_NDK_HOME")}, " +
+                    "ANDROID_SDK_ROOT=${System.getenv("ANDROID_SDK_ROOT")}, " +
+                    "ANDROID_HOME=${System.getenv("ANDROID_HOME")}"
+            )
+        val prebuiltHost = when {
+            isMac && System.getProperty("os.arch").contains("aarch64") -> "darwin-aarch64"
+            isMac -> "darwin-x86_64"
+            else -> "linux-x86_64"
+        }
+        val toolchainDir = ndkDir.resolve("toolchains/llvm/prebuilt/$prebuiltHost")
+        if (!toolchainDir.isDirectory) {
+            throw GradleException(
+                "NDK toolchain not found at $toolchainDir " +
+                    "(NDK ${ndkRevision(ndkDir) ?: "unknown"} at ${ndkDir.absolutePath})."
+            )
         }
         val clang = toolchainDir.resolve("bin/aarch64-linux-android26-clang").absolutePath
         val clangxx = toolchainDir.resolve("bin/aarch64-linux-android26-clang++").absolutePath

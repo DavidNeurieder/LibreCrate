@@ -112,7 +112,7 @@ CurrentVersionCode: 12
 | Item | Value |
 |------|-------|
 | PDF rendering | Rust `mupdf` crate (compiles MuPDF from source via Cargo) |
-| NDK version | r28c |
+| NDK version | Auto-detected from `ndk.dir` / `ANDROID_NDK_*` / the SDK; the metadata requests r28c |
 | Rust version | Pinned to 1.94.0 via `vault-native/rust-toolchain.toml`; installed by Debian's `rustup` (`apt-get install rustup`) |
 | UniFFI version | 0.28 (library mode, no `.udl` file) |
 | Android target | `aarch64-linux-android` |
@@ -156,9 +156,14 @@ probes.
 ### Build fails on MuPDF
 
 The `mupdf` crate compiles MuPDF from source via its `build.rs`. On Android,
-this uses the NDK toolchain. Ensure `ndk:` version in the metadata matches
-your local NDK installation, and that `BINDGEN_EXTRA_CLANG_ARGS` includes
-the NDK sysroot (handled automatically by `vault-native-android/build.gradle.kts`).
+this uses the NDK toolchain. `vault-native-android/build.gradle.kts` resolves
+the NDK that is actually installed and sets `android.ndkVersion` to its
+`Pkg.Revision`, so a build server that preinstalls a different NDK (for
+example 26.1) still works: it checks `ndk.dir` in `local.properties` first,
+then `ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT` and `NDK_HOME`, then the NDK
+directories under the Android SDK. To force a specific NDK locally, set
+`ndk.dir` or one of those environment variables. `BINDGEN_EXTRA_CLANG_ARGS`
+is set automatically to include the chosen NDK's sysroot.
 
 ### `aarch64-linux-android-ranlib: not found` while building OpenSSL
 
