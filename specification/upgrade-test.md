@@ -1,7 +1,7 @@
 # Android upgrade test (v0.5.6 → current)
 
 ## Goal
-Validate an in-place upgrade preserves user data and the vault remains functional when upgrading from the last released version (v0.5.6) to the current build (0.6.0).
+Validate an in-place upgrade preserves user data and the vault remains functional when upgrading from the last released version (v0.5.6) to the current build (0.6.1).
 
 ## Scope
 - **APK-level upgrade** (real `adb install -r`) on an emulator/device.

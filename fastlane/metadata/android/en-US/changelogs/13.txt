@@ -1,0 +1,3 @@
+• Build fix: Android now uses the NDK provided by the build environment, so F-Droid builds succeed
+• No app behaviour changes
+• Version bumped to 0.6.1

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 (2026-11-02)
+
+### Build
+
+- **F-Droid builds now use the NDK supplied by the build server**: the Android module pinned NDK 28.2 while F-Droid supplies 26.1, so AGP aborted with `CXX1104` and `NDK is not installed` before the Rust library was compiled. The build now resolves `ndk.dir`, `ANDROID_NDK_HOME`/`ANDROID_NDK_ROOT`/`NDK_HOME`, or an SDK-installed NDK and uses its revision for both AGP and the Rust cross-compile; 28.2 remains the fallback when no NDK is installed. No app behaviour changed.
+
 ## 0.6.0 (2026-10-17)
 
 ### Security
