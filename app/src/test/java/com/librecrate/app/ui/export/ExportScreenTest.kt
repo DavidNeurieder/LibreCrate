@@ -3,6 +3,7 @@ package com.librecrate.app.ui.export
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -15,6 +16,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -116,17 +118,22 @@ class ExportScreenTest {
 
     @Test
     fun `export button is disabled when nothing selected`() {
-        coEvery { mockVault.listDocuments() } returns listOf(
-            Document(id = "1", title = "Doc One", fileName = "one.pdf"),
-        )
+        coEvery { mockVault.listDocuments() } coAnswers { awaitCancellation() }
         val viewModel = ExportViewModel(mockApp)
+        viewModel.setDocumentsForTest(
+            listOf(Document(id = "1", title = "Doc One", fileName = "one.pdf")),
+        )
 
         composeTestRule.setContent {
             MaterialTheme {
                 ExportScreen(onBack = {}, viewModel = viewModel)
             }
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule
+                .onAllNodesWithText("0 of 1 selected")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
 
         composeTestRule.onNodeWithText("0 of 1 selected").assertExists()
         composeTestRule.onNodeWithText("Export Selected (0)").assertExists()

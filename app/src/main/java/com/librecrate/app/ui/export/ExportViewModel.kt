@@ -51,6 +51,11 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    @androidx.annotation.VisibleForTesting
+    internal fun setDocumentsForTest(documents: List<Document>) {
+        _allDocuments.value = documents
+    }
+
     private fun observeSearch() {
         viewModelScope.launch {
             combine(_allDocuments, searchQuery) { docs, query ->
