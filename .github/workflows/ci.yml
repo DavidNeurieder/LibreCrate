@@ -86,7 +86,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/audit@v2
+      - uses: actions-rust-lang/audit@v1
         with:
           working-directory: vault-native
           deny: true
@@ -107,7 +107,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.94.0
         with:
           targets: aarch64-linux-android
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: vault-native
