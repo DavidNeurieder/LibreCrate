@@ -7,6 +7,7 @@ plugins {
 android {
     namespace = "com.librecrate.app"
     compileSdk = 36
+    ndkVersion = "28.2.13676358"
 
     dependenciesInfo {
         includeInApk = false

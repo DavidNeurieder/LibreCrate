@@ -45,13 +45,12 @@ Builds:
     sudo:
       - apt-get update
       - apt-get install -y build-essential clang libclang-dev perl rustup
-    ndk: r28c
+    ndk: 28.2.13676358
     prebuild:
-      # Rust: Debian trixie ships rustup (apt); pin the exact Rust toolchain
-      # (vault-native/rust-toolchain.toml pins channel 1.94.0 + targets).
+      # Rust: Debian trixie ships rustup (apt). Install the toolchain/targets from
+      # the repo pin (vault-native/rust-toolchain.toml) instead of hardcoding them here.
       # MuPDF is compiled from source by Cargo via the mupdf crate (no Java/srclib needed).
-      - rustup default 1.94.0
-      - rustup target add aarch64-linux-android
+      - cd ../vault-native && rustup show
       - test -x "$HOME/.cargo/bin/cargo"
     gradle:
       - yes
@@ -62,13 +61,12 @@ Builds:
     sudo:
       - apt-get update
       - apt-get install -y build-essential clang libclang-dev perl rustup
-    ndk: r28c
+    ndk: 28.2.13676358
     prebuild:
-      # Rust: Debian trixie ships rustup (apt); pin the exact Rust toolchain
-      # (vault-native/rust-toolchain.toml pins channel 1.94.0 + targets).
+      # Rust: Debian trixie ships rustup (apt). Install the toolchain/targets from
+      # the repo pin (vault-native/rust-toolchain.toml) instead of hardcoding them here.
       # MuPDF is compiled from source by Cargo via the mupdf crate (no Java/srclib needed).
-      - rustup default 1.94.0
-      - rustup target add aarch64-linux-android
+      - cd ../vault-native && rustup show
       - test -x "$HOME/.cargo/bin/cargo"
     gradle:
       - yes
@@ -79,13 +77,12 @@ Builds:
     sudo:
       - apt-get update
       - apt-get install -y build-essential clang libclang-dev perl rustup
-    ndk: r28c
+    ndk: 28.2.13676358
     prebuild:
-      # Rust: Debian trixie ships rustup (apt); pin the exact Rust toolchain
-      # (vault-native/rust-toolchain.toml pins channel 1.94.0 + targets).
+      # Rust: Debian trixie ships rustup (apt). Install the toolchain/targets from
+      # the repo pin (vault-native/rust-toolchain.toml) instead of hardcoding them here.
       # MuPDF is compiled from source by Cargo via the mupdf crate (no Java/srclib needed).
-      - rustup default 1.94.0
-      - rustup target add aarch64-linux-android
+      - cd ../vault-native && rustup show
       - test -x "$HOME/.cargo/bin/cargo"
     gradle:
       - yes
@@ -96,10 +93,10 @@ Builds:
     sudo:
       - apt-get update
       - apt-get install -y build-essential clang libclang-dev perl rustup
-    ndk: r28c
+    ndk: 28.2.13676358
     prebuild:
-      - rustup default 1.94.0
-      - rustup target add aarch64-linux-android
+      # Rust: install toolchain/targets from the repo pin (vault-native/rust-toolchain.toml).
+      - cd ../vault-native && rustup show
       - test -x "$HOME/.cargo/bin/cargo"
     gradle:
       - yes
@@ -116,7 +113,7 @@ CurrentVersionCode: 13
 ### Build flow
 
 1. F-Droid clones the repo at the specified `commit` tag
-2. `sudo` installs `rustup` from Debian (trixie); `prebuild` pins the Rust toolchain (1.94.0 + Android target) via rustup
+2. `sudo` installs `rustup` from Debian (trixie); `prebuild` installs the Rust toolchain/targets from the repo pin (`vault-native/rust-toolchain.toml`) via `cd ../vault-native && rustup show` (from `subdir: app`)
 3. Gradle's `assembleRelease` triggers:
    - Rust host build → UniFFI Kotlin bindings → Rust Android cross-compile → copy .so
    - APK compilation and minification
@@ -129,8 +126,8 @@ CurrentVersionCode: 13
 | Item | Value |
 |------|-------|
 | PDF rendering | Rust `mupdf` crate (compiles MuPDF from source via Cargo) |
-| NDK version | Auto-detected from `ndk.dir` / `ANDROID_NDK_*` / the SDK; the metadata requests r28c |
-| Rust version | Pinned to 1.94.0 via `vault-native/rust-toolchain.toml`; installed by Debian's `rustup` (`apt-get install rustup`) |
+| NDK version | Auto-detected from `ndk.dir` / `ANDROID_NDK_*` / the SDK; the metadata requests 28.2.13676358 |
+| Rust version | Pinned in-repo via `vault-native/rust-toolchain.toml` (installed via `cd ../vault-native && rustup show` in `prebuild`) |
 | UniFFI version | 0.28 (library mode, no `.udl` file) |
 | Android target | `aarch64-linux-android` |
 | Min API | 26 |
@@ -149,9 +146,9 @@ CurrentVersionCode: 13
 
 Ensure `rustup` is installed (the recipe's `sudo` block runs
 `apt-get install -y rustup` — available on Debian trixie, F-Droid's build
-box; it is not in bookworm) and that `rust-toolchain.toml` is present at the
-repo root. The `prebuild` `rustup default 1.94.0` step downloads the exact
-channel and the Android target from rust-lang.org.
+box; it is not in bookworm) and that `vault-native/rust-toolchain.toml` is
+present in the repo. The `prebuild` step runs `cd ../vault-native && rustup show`
+(from `subdir: app`), which downloads the pinned toolchain and targets from rust-lang.org.
 
 ### `command 'cargo'` not found
 
@@ -165,10 +162,9 @@ resolves the absolute `cargo` path itself and injects it into the task's
 `$HOME/.cargo/bin`, `${user.home}/.cargo/bin`, `/root/.cargo/bin`,
 `/home/vagrant/.cargo/bin`, `/home/fdroid/.cargo/bin`, `/usr/local/cargo/bin`.
 If none exist it fails with a `GradleException` listing the probed paths and
-`HOME`/`user.home`/`CARGO_HOME`. Make sure the `prebuild` `rustup default`
-step actually succeeded (the `test -x "$HOME/.cargo/bin/cargo"` line fails
-fast if not). `rustup default` creates the `~/.cargo/bin` shims that Gradle
-probes.
+`HOME`/`user.home`/`CARGO_HOME`. Make sure the `prebuild` `rustup show` step actually succeeded (the
+`test -x "$HOME/.cargo/bin/cargo"` line fails fast if not). rustup creates the
+`~/.cargo/bin` shims that Gradle probes.
 
 ### Build fails on MuPDF
 
@@ -221,7 +217,7 @@ Note the second filename is `.` (reuse the first file). Without this field
 ### APKs don't match (reproducibility failure)
 
 Common causes:
-- Different NDK version (check `ndk:` field)
+- Different NDK version (check `ndk:` field matches your installed NDK revision)
 - Different Rust toolchain version
 - `codegen-units` not set to 1 (check `vault-native/Cargo.toml`)
 - `mupdf` crate features differ (check `default-features` and `features` in `vault-native/core/Cargo.toml`)
