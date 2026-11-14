@@ -510,6 +510,7 @@ fn test_full_workflow() {
 /// Spawn the REPL with piped stdin, send lines, return combined output.
 fn repl(vault_dir: &Path, password: &str, commands: &[&str]) -> (bool, String, String) {
     let mut child = Command::new(bin())
+        .args(["repl", vault_dir.to_str().unwrap(), "-p", password])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -518,8 +519,6 @@ fn repl(vault_dir: &Path, password: &str, commands: &[&str]) -> (bool, String, S
 
     {
         let stdin = child.stdin.as_mut().unwrap();
-        writeln!(stdin, "{}", vault_dir.display()).unwrap();
-        writeln!(stdin, "{}", password).unwrap();
         for cmd in commands {
             writeln!(stdin, "{}", cmd).unwrap();
         }
@@ -587,18 +586,13 @@ fn test_repl_search() {
 fn test_repl_wrong_password_fails() {
     let d = v();
     init(d.path(), "correct");
-    let mut child = Command::new(bin())
+    let output = Command::new(bin())
+        .args(["repl", d.path().to_str().unwrap(), "-p", "wrong"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    {
-        let stdin = child.stdin.as_mut().unwrap();
-        writeln!(stdin, "{}", d.path().display()).unwrap();
-        writeln!(stdin, "wrong").unwrap();
-    }
-    let output = child.wait_with_output().unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success() || stderr.contains("Error") || stderr.contains("error"),
         "expected failure for wrong password: {}", stderr);

@@ -1,20 +1,13 @@
 use anyhow::Result;
+use std::path::PathBuf;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
 use crate::commands;
 use crate::session::Session;
 
-pub fn run() -> Result<()> {
-    let vault_dir = prompt_string("Vault: ")?;
-    if vault_dir.trim().is_empty() {
-        anyhow::bail!("vault directory required");
-    }
-    let vault_dir = std::path::PathBuf::from(vault_dir);
-
-    let password = prompt_password("Password: ")?;
-
-    let session = Session::open(vault_dir, &password)?;
+pub fn run(vault_dir: PathBuf, password: &str) -> Result<()> {
+    let session = Session::open(vault_dir, password)?;
 
     println!(
         "\nLibreCrate v0.1.0 — interactive mode\nType 'help' for commands, 'quit' to exit.\n"
@@ -146,25 +139,4 @@ fn parse_flag_opt(args: &[String], flag: &str) -> Option<String> {
     pos.and_then(|i| args.get(i + 1).cloned())
 }
 
-fn prompt_string(prompt: &str) -> Result<String> {
-    use std::io::Write;
-    eprint!("{}", prompt);
-    std::io::stderr().flush()?;
-    let mut buf = String::new();
-    std::io::stdin().read_line(&mut buf)?;
-    Ok(buf.trim_end().to_string())
-}
 
-fn prompt_password(prompt: &str) -> Result<String> {
-    use std::io::{self, Write, IsTerminal};
-    eprint!("{}", prompt);
-    io::stderr().flush()?;
-    if io::stdin().is_terminal() {
-        let password = rpassword::prompt_password("")?;
-        Ok(password)
-    } else {
-        let mut buf = String::new();
-        io::stdin().read_line(&mut buf)?;
-        Ok(buf.trim_end().to_string())
-    }
-}

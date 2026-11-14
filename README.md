@@ -167,10 +167,11 @@ cargo test --workspace
 ## CLI Usage
 
 ```sh
-# Launch interactive REPL
+# Show available commands
 librecrate
-# Vault: ~/my-vault
-# Password: ********
+
+# Launch interactive REPL (vault defaults to current directory)
+librecrate repl ~/my-vault -p "mypassword"
 # librecrate> list
 # librecrate> import ~/file.pdf
 # librecrate> search algorithm

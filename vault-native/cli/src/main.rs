@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
 
 mod commands;
@@ -11,7 +11,7 @@ use session::Session;
 #[command(name = "librecrate", about = "LibreCrate CLI")]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -32,6 +32,17 @@ enum Commands {
     Backup(BackupOneShot),
     /// Restore from a backup (merges into existing vault)
     Restore(RestoreOneShot),
+    /// Start interactive REPL
+    Repl(ReplArgs),
+}
+
+#[derive(Parser)]
+struct ReplArgs {
+    /// Vault directory (defaults to current directory)
+    dir: Option<PathBuf>,
+    /// Password (prompted if not provided)
+    #[arg(short, long)]
+    password: Option<String>,
 }
 
 // One-shot arg wrappers — password is optional, prompted if not provided
@@ -126,13 +137,14 @@ fn resolve_password(provided: Option<String>) -> anyhow::Result<String> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() <= 1 {
-        return repl::run();
-    }
-
     let cli = Cli::parse();
-    match cli.command {
+    let Some(command) = cli.command else {
+        Cli::command().print_help()?;
+        println!();
+        return Ok(());
+    };
+
+    match command {
         Commands::Init(args) => {
             let password = resolve_password(args.password)?;
             commands::init::run(commands::init::InitArgs {
@@ -181,6 +193,11 @@ fn main() -> anyhow::Result<()> {
                     backup_password: args.backup_password,
                 },
             )
+        }
+        Commands::Repl(args) => {
+            let dir = args.dir.unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+            let password = resolve_password(args.password)?;
+            repl::run(dir, &password)
         }
     }
 }
