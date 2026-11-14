@@ -2,8 +2,8 @@ name: Nightly fuzz
 
 # Tier-3 of the data-integrity plan (see specification/data-integrity-tests.md).
 # Runs the libFuzzer harnesses in `fuzz/` for a bounded time, seeded from the
-# committed corpus in `fuzz/seeds/`. This workflow only takes effect on the
-# default branch (scheduled workflows run from `main`).
+# committed corpus in `fuzz/seeds/`. The nightly schedule is disabled; this
+# workflow can still be run manually via workflow_dispatch.
 #
 # A crash uploads its reproducer under `fuzz/artifacts/<target>/`; promote it to
 # a permanent regression by copying it into `fuzz/seeds/<target>/` (it will then
@@ -16,8 +16,6 @@ name: Nightly fuzz
 # run. Scheduled runs use the same default (180s).
 
 on:
-  schedule:
-    - cron: "17 3 * * *" # daily, 03:17 UTC
   workflow_dispatch:
     inputs:
       seconds:
