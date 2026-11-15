@@ -113,6 +113,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses >/dev/null || true
+      - name: Install pinned Android NDK
+        run: |
+          ndk="$(sed -n 's/^librecrate\.ndkVersion=//p' gradle.properties)"
+          [ -n "$ndk" ] || { echo "::error::librecrate.ndkVersion missing from gradle.properties"; exit 1; }
+          sdkmanager "ndk;$ndk"
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
       - name: Verify reproducibility inputs
