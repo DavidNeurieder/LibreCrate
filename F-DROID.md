@@ -38,6 +38,22 @@ Binaries: https://github.com/DavidNeurieder/LibreCrate/releases/download/v%v/Lib
 AllowedAPKSigningKeys: 11f860ee7ac19b8d992a52bf114a491f9b8b598091b7a5e94ce775b50e6e69fa
 
 Builds:
+  - versionName: 0.6.2
+    versionCode: 14
+    commit: v0.6.2
+    subdir: app
+    sudo:
+      - apt-get update
+      - apt-get install -y build-essential clang libclang-dev perl rustup
+    ndk: 28.2.13676358
+    prebuild:
+      # Rust: Debian trixie ships rustup (apt). Install the toolchain/targets from
+      # the repo pin (vault-native/rust-toolchain.toml) instead of hardcoding them here.
+      # MuPDF is compiled from source by Cargo via the mupdf crate (no Java/srclib needed).
+      - cd ../vault-native && rustup show
+      - test -x "$HOME/.cargo/bin/cargo"
+    gradle:
+      - yes
   - versionName: 0.6.1
     versionCode: 13
     commit: v0.6.1
@@ -104,8 +120,8 @@ Builds:
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: app/build.gradle.kts|versionCode\s=\s(\d+)|.|versionName\s=\s"(.*)"
-CurrentVersion: 0.6.1
-CurrentVersionCode: 13
+CurrentVersion: 0.6.2
+CurrentVersionCode: 14
 ```
 
 ## How it works

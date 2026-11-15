@@ -1,0 +1,4 @@
+• Reproducible builds: local and F-Droid release APKs now match byte for byte
+• Security: bundled libraries updated to fix known vulnerabilities
+• Stability: export-screen unit test made deterministic
+• Version bumped to 0.6.2
