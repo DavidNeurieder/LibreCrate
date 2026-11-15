@@ -88,6 +88,47 @@ apksigner verify --print-certs app-release.apk
 
 The signed APK is at `app-release.apk` in the repo root.
 
+### Reproducible Android build
+
+Release APKs must be reproducible so F-Droid can verify them. Build from a
+**clean** work tree at the tagged commit with:
+
+- JDK 17
+- Gradle 8.7 via `./gradlew` (never a system Gradle)
+- Android NDK `28.2.13676358` (pinned in `gradle.properties`)
+- Rust `1.94.0` and the targets from `vault-native/rust-toolchain.toml`
+
+`SOURCE_DATE_EPOCH` is taken from the commit timestamp automatically. Do not
+export it yourself unless you are reproducing an older artifact:
+`LIBRECRATE_SOURCE_DATE_EPOCH` overrides it.
+
+Verify a build before publishing:
+
+```bash
+# 1. Build twice from a clean tree and compare the unsigned APKs
+rm -rf /tmp/librecrate-cargo-target
+./gradlew clean assembleRelease
+cp app/build/outputs/apk/release/app-release-unsigned.apk /tmp/local-1.apk
+rm -rf /tmp/librecrate-cargo-target
+./gradlew clean assembleRelease
+scripts/compare_apks.sh \
+  /tmp/local-1.apk \
+  app/build/outputs/apk/release/app-release-unsigned.apk
+
+# 2. Inspect the native library for machine-specific paths
+unzip -p app/build/outputs/apk/release/app-release-unsigned.apk \
+  lib/arm64-v8a/libvault_native.so > /tmp/libvault_native.so
+strings /tmp/libvault_native.so | grep -E 'built on:|compiler:|ENGINESDIR|MODULESDIR'
+
+# 3. Confirm the Gradle version recorded in the APK
+grep buildSystemVersion \
+  app/build/kotlinToolingMetadata/kotlin-tooling-metadata.json
+```
+
+The `compiler:`/`ENGINESDIR`/`MODULESDIR` lines must not contain absolute
+paths, and the metadata must say `"8.7"`. Compare against an F-Droid build with
+`scripts/compare_apks.sh`; differences are reported per file.
+
 ## Step 3: Build desktop binaries
 
 ### Option A: Tarball (recommended)

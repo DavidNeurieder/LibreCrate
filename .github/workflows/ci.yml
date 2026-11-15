@@ -115,6 +115,22 @@ jobs:
         run: yes | sdkmanager --licenses >/dev/null || true
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
+      - name: Verify reproducibility inputs
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          unzip -p "$apk" lib/arm64-v8a/libvault_native.so > /tmp/libvault_native.so
+          if strings /tmp/libvault_native.so | grep -E '(/home/|/builds/|/workspace/|/Users/|/tmp/librecrate-cargo-target)'; then
+            echo "::error::libvault_native.so contains absolute build paths"
+            exit 1
+          fi
+          metadata=app/build/kotlinToolingMetadata/kotlin-tooling-metadata.json
+          actual=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["buildSystemVersion"])' "$metadata")
+          expected=$(sed -n 's/.*gradle-\(.*\)-bin.zip.*/\1/p' gradle/wrapper/gradle-wrapper.properties)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::kotlin-tooling-metadata.json reports Gradle $actual, wrapper pins $expected"
+            exit 1
+          fi
       - name: JVM unit tests
         run: ./gradlew testDebugUnitTest
       - name: Lint (debug variant)
