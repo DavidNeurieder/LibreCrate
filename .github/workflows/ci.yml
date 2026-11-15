@@ -119,7 +119,7 @@ jobs:
           [ -n "$ndk" ] || { echo "::error::librecrate.ndkVersion missing from gradle.properties"; exit 1; }
           sdkmanager "ndk;$ndk"
       - name: Assemble debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug :app:buildKotlinToolingMetadata --stacktrace
       - name: Verify reproducibility inputs
         run: |
           set -euo pipefail
