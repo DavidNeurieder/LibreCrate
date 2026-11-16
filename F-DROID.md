@@ -38,6 +38,22 @@ Binaries: https://github.com/DavidNeurieder/LibreCrate/releases/download/v%v/Lib
 AllowedAPKSigningKeys: 11f860ee7ac19b8d992a52bf114a491f9b8b598091b7a5e94ce775b50e6e69fa
 
 Builds:
+  - versionName: 0.6.2
+    versionCode: 14
+    commit: v0.6.2
+    subdir: app
+    sudo:
+      - apt-get update
+      - apt-get install -y build-essential clang libclang-dev perl rustup
+    ndk: 28.2.13676358
+    prebuild:
+      # Rust: Debian trixie ships rustup (apt). Install the toolchain/targets from
+      # the repo pin (vault-native/rust-toolchain.toml) instead of hardcoding them here.
+      # MuPDF is compiled from source by Cargo via the mupdf crate (no Java/srclib needed).
+      - cd ../vault-native && rustup show
+      - test -x "$HOME/.cargo/bin/cargo"
+    gradle:
+      - yes
   - versionName: 0.6.1
     versionCode: 13
     commit: v0.6.1
@@ -104,8 +120,8 @@ Builds:
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: app/build.gradle.kts|versionCode\s=\s(\d+)|.|versionName\s=\s"(.*)"
-CurrentVersion: 0.6.1
-CurrentVersionCode: 13
+CurrentVersion: 0.6.2
+CurrentVersionCode: 14
 ```
 
 ## How it works
@@ -216,12 +232,67 @@ Note the second filename is `.` (reuse the first file). Without this field
 
 ### APKs don't match (reproducibility failure)
 
-Common causes:
-- Different NDK version (check `ndk:` field matches your installed NDK revision)
-- Different Rust toolchain version
-- `codegen-units` not set to 1 (check `vault-native/Cargo.toml`)
-- `mupdf` crate features differ (check `default-features` and `features` in `vault-native/core/Cargo.toml`)
-- Embedded build paths (F-Droid uses `/builds/fdroid/fdroiddata/build/...`)
-- ZIP ordering differences (use `./gradlew assembleRelease`, not Android Studio)
+The build tries hard to be reproducible across F-Droid and local machines:
 
-Run `diffoscope` on both APKs to identify differences.
+- `SOURCE_DATE_EPOCH` is derived from the checked-out commit inside
+  `vault-native-android/build.gradle.kts`, **not** from F-Droid's exported
+  value. F-Droid computes `SOURCE_DATE_EPOCH` before it checks out the build
+  commit, so its value can belong to an older HEAD. Trusting it would make the
+  same commit produce different binaries depending on repository state.
+- Vendored OpenSSL is patched in the cargo registry before compilation:
+  `buildinfo.h` no longer records the absolute NDK compiler path, and OpenSSL
+  is configured with a stable prefix and installed via `DESTDIR`. This removes
+  `compiler: /home/...` and `ENGINESDIR`/`MODULESDIR` paths from
+  `libvault_native.so`.
+- The NDK revision is pinned once in `gradle.properties`
+  (`librecrate.ndkVersion`) and used by both Android modules. The Rust task
+  refuses to build with a different revision.
+- Gradle is pinned to 8.7 with a distribution checksum. The Kotlin tooling
+  metadata records this version, so a different Gradle changes the APK.
+
+Check the native library:
+
+```bash
+unzip -p app/build/outputs/apk/release/app-release-unsigned.apk \
+  lib/arm64-v8a/libvault_native.so > /tmp/libvault_native.so
+strings /tmp/libvault_native.so | grep -E 'built on:|compiler:|ENGINESDIR|MODULESDIR'
+```
+
+`built on:` must be the commit timestamp and the other lines must not contain
+`/home/`, `/builds/`, `/workspace/`, or a Cargo `OUT_DIR`. Check that the
+Kotlin metadata matches the wrapper:
+
+```bash
+grep buildSystemVersion app/build/kotlinToolingMetadata/kotlin-tooling-metadata.json
+```
+
+To reproduce an older artifact, override the commit timestamp explicitly, for
+example the `v0.6.1` build:
+
+```bash
+LIBRECRATE_SOURCE_DATE_EPOCH=1793608861 ./gradlew assembleRelease
+```
+
+Changing the epoch or the OpenSSL patches invalidates the cached vendored
+OpenSSL build automatically.
+
+Other common causes:
+- Different Rust toolchain version (the repository pins it in
+  `vault-native/rust-toolchain.toml`)
+- `codegen-units` not set to 1 (check `vault-native/Cargo.toml`)
+- `mupdf` crate features differ (check `default-features` and `features` in
+  `vault-native/core/Cargo.toml`)
+- Building from a dirty work tree
+- ZIP ordering differences (use `./gradlew assembleRelease`, not Android
+  Studio)
+
+Compare two APKs by content, ignoring v1 signature files:
+
+```bash
+scripts/compare_apks.sh app-release-unsigned.apk \
+  /path/to/fdroid/app-release-unsigned.apk
+```
+
+Run `diffoscope` on both APKs for a detailed report when the script reports a
+mismatch.
+

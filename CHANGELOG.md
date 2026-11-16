@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.2 (2026-11-15)
+
+### Build
+
+- **Reproducible Android builds**: `SOURCE_DATE_EPOCH` is now derived from the checked-out commit instead of F-Droid's pre-checkout value, the vendored OpenSSL build no longer embeds absolute NDK/Cargo paths (`compiler:`, `ENGINESDIR`, `MODULESDIR`), and the NDK is pinned in `gradle.properties` for both Android modules. Gradle 8.7 is pinned with a distribution checksum, CI rejects absolute build paths in `libvault_native.so` and Gradle-version drift in the Kotlin tooling metadata, and `scripts/compare_apks.sh` compares two APKs by content. See `F-DROID.md` and `RELEASING.md`.
+- **Dependency security updates**: `ctutils` 0.4.3 → 0.4.8 (`RUSTSEC-2026-0385`), `rusqlite` 0.40 → 0.42 (`RUSTSEC-2026-0459`, SQLCipher 4.20.0 / SQLite 3.54.1) and `zip` 9.0.2 → 9.0.5 (critical parser differential). CI now uses `actions-rust-lang/audit@v1`.
+
 ## 0.6.1 (2026-11-02)
 
 ### Build
